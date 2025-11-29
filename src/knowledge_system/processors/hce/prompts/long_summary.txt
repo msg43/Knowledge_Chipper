@@ -97,3 +97,5 @@ The discussion employs several analytical frameworks, most notably the Phillips 
 ---
 
 Generate a comprehensive 3-5 paragraph summary following the structure and guidelines above. Write in clear, analytical prose that integrates all the knowledge elements into a cohesive narrative.
+
+**IMPORTANT:** Return ONLY plain text paragraphs separated by blank lines. Do NOT return JSON format, dictionary format, or structured data. Write natural prose paragraphs.

@@ -85,6 +85,15 @@ Complete inventory of all files in the Knowledge Chipper codebase with descripti
 - `TEST_INFRASTRUCTURE_FIXES_SUMMARY.md` - Summary of test infrastructure improvements
 - `TEST_RUN_REPORT_2025_11_10.md` - Test run report from November 10, 2025
 
+### Documentation - Web-Canonical Architecture (November 2025)
+
+- `ARCHITECTURE_WEB_CANONICAL.md` - Complete architecture documentation for web-canonical system (see Architecture and Systems section)
+- `VERCEL_ENV_SETUP.md` - Guide for adding SUPABASE_SERVICE_ROLE_KEY environment variable to Vercel deployment
+- `MIGRATION_CHECK.md` - Diagnosis guide for missing database migration columns (device_id, source_id, etc.) with verification steps
+- `READY_TO_TEST.md` - Testing guide for web-canonical architecture end-to-end workflow
+- `QUICK_START.md` - Quick start guide for testing web-canonical upload functionality
+- `DEPLOYMENT_STATUS.md` - Deployment status tracking for GetReceipts backend with web-canonical support
+
 ### Documentation - Batch Processing
 
 - `BATCH_7000_M2_ULTRA_128GB_OPTIMIZED.md` - Optimization strategy for processing 7000 videos on M2 Ultra hardware
@@ -111,6 +120,7 @@ Complete inventory of all files in the Knowledge Chipper codebase with descripti
 ### Documentation - Architecture and Systems
 
 - `docs/FILE_ORGANIZATION.md` - Comprehensive guide to output file organization: explains directory structure (transcripts/, summaries/, moc/, exports/), file naming conventions, relationship between transcript and summary files, database as source of truth, and how to find/regenerate files. Addresses common confusion about where files are saved and why they don't overwrite each other.
+- `ARCHITECTURE_WEB_CANONICAL.md` - Complete architecture documentation for web-canonical implementation where GetReceipts Supabase is single source of truth and Knowledge_Chipper acts as ephemeral processor. Documents philosophy, workflows, database schemas, user experience, API endpoints, and rollback instructions.
 - `VESTIGIAL_CODE_ANALYSIS.md` - Comprehensive analysis of unused/vestigial code from pre-unified-pipeline architecture, including old extraction modules (people.py, glossary.py, concepts.py, skim.py), unused prompt files (judge_high/low variants), and unimplemented features (relations, contradictions). Documents architecture evolution and provides removal recommendations.
 - `VESTIGIAL_CODE_REMOVAL_COMPLETE.md` - Completion documentation for vestigial code cleanup: moved 4 old extraction modules and 12 unused prompt files to _deprecated/, updated __init__.py, verified all imports still work. Includes before/after architecture comparison, verification tests, and rollback plan.
 - `VESTIGIAL_PROMPT_PICKER_REMOVED.md` - Documentation of removal of non-functional prompt file picker from Summarization tab
@@ -191,6 +201,7 @@ Complete inventory of all files in the Knowledge Chipper codebase with descripti
 
 - `analyze_code.py` - Code analysis utility script
 - `check_cookie_persistence.py` - Script to check cookie persistence functionality
+- `check_schema.py` - Script to check which tables exist in GetReceipts Supabase database, diagnoses missing schema migrations
 - `find_syntax_error.py` - Utility script to locate Python syntax errors in codebase
 - `monitor_gui_tests.sh` - Shell script to monitor and report on GUI test execution
 - `test_cookie_functionality.py` - Test script for cookie-based YouTube authentication
@@ -199,6 +210,7 @@ Complete inventory of all files in the Knowledge Chipper codebase with descripti
 - `test_multi_account_downloads.py` - Test script for multi-account download functionality
 - `test_summarize_tab_refresh.py` - Test script for Summarize tab refresh functionality
 - `test_summarize_tab_selection.py` - Test script for Summarize tab selection functionality
+- `test_web_canonical_upload.py` - Automated test script for web-canonical upload workflow (device auth + upload)
 - `debug_flagship_model.py` - Utility script for debugging the flagship model
 
 ### Hidden/Configuration Directories
@@ -344,6 +356,7 @@ Comprehensive project documentation (128+ files).
 - `DEPENDENCY_UPDATE_STRATEGY.md` - Strategy for dependency updates
 - `DATABASE_SERVICE_LIFECYCLE.md` - Database service lifecycle management
 - `DATABASE_RECORD_DUPLICATION_AUDIT.md` - Audit of database record duplication issues
+- `DATABASE_SCHEMA_USER_NOTES_FIX.md` - November 20, 2025 fix for missing user_notes column in claims table causing Review tab crash. Added automatic incremental migration system to apply schema additions on startup
 - `DIST_FOLDER_CLEANUP.md` - Cleanup procedures for distribution folder
 - `CLEANUP_COMPLETE_SUMMARY.md` - Summary of completed cleanup tasks
 
@@ -371,13 +384,13 @@ Comprehensive project documentation (128+ files).
 
 ## knowledge_chipper_oauth/
 
-OAuth authentication system for GetReceipts integration.
+OAuth authentication and device-based integration system for GetReceipts.
 
 - `README.md` - Documentation for OAuth authentication system
 - `requirements_oauth.txt` - Python dependencies for OAuth server
-- `getreceipts_auth.py` - GetReceipts OAuth authentication handler
+- `getreceipts_auth.py` - Happy-style device authentication handler (auto-generated UUID + secret key, stores in ~/.getreceipts/device_auth.json)
 - `getreceipts_config.py` - GetReceipts OAuth configuration
-- `getreceipts_uploader.py` - GetReceipts upload service
+- `getreceipts_uploader.py` - **REWRITTEN Nov 2025:** HTTP API-based uploader (500+ lines → ~200 lines, -213 net). Uses HTTP requests to /api/knowledge-chipper/upload instead of Supabase SDK to bypass RLS policies. Cleaner code, better error handling.
 - `integration_example.py` - Integration example code
 - `manual_callback_test.py` - Manual OAuth callback testing script
 
@@ -630,7 +643,7 @@ Main application tabs (17 total).
 - `introduction_tab.py` - Introduction and welcome tab with feature overview
 - `monitor_tab.py` - System monitoring and diagnostics tab
 - `process_tab.py` - Processing pipeline control tab
-- `prompts_tab.py` - Prompt template management tab
+- `prompts_tab.py` - Prompt template management tab with dynamic prompt selection display for Unified Miner (shows content-type-specific, selectivity-based, and fallback prompts) and standard assignment for Flagship Evaluator and Skimmer
 - `question_review_tab.py` - Question mapping review and approval tab (NEW: Nov 2025)
 - `queue_tab.py` - Queue tab for real-time pipeline status visualization
 - `review_tab_system2.py` - Review tab for System 2 processing results and claim evaluation
@@ -715,7 +728,7 @@ Hybrid Claim Extraction system.
 - `temporal_numeric.py` - Temporal and numeric data extraction
 - `temporality.py` - Temporality analysis for claims
 - `types.py` - Type definitions for HCE system (EpisodeBundle, ScoredClaim, PipelineOutputs, etc.)
-- `unified_miner.py` - **ACTIVE:** Unified mining engine that extracts all entity types (claims, jargon, people, concepts) in a single pass
+- `unified_miner.py` - **ACTIVE:** Unified mining engine that extracts all entity types (claims, jargon, people, concepts) in a single pass; now supports injecting synced refinements from GetReceipts.org to prevent previously-identified extraction mistakes
 - `unified_pipeline.py` - **ACTIVE:** Main HCE pipeline orchestrating mining → evaluation → summarization → categorization
 
 ##### PROCESSORS/HCE/EVALUATORS/
@@ -780,6 +793,7 @@ High-level service layer.
 
 - `__init__.py` - Services module initialization
 - `claims_upload_service.py` - Upload claims to cloud storage
+- `device_auth.py` - Device authentication for GetReceipts.org integration (Happy-style auto-auth)
 - `download_base.py` - Base download service class
 - `download_scheduler.py` - Schedule and manage downloads
 - `file_generation.py` - Generate output files from database
@@ -787,6 +801,7 @@ High-level service layer.
 - `oauth_callback_server.py` - OAuth callback server for authentication
 - `podcast_episode_searcher.py` - Search for podcast episodes
 - `podcast_rss_downloader.py` - Download podcast episodes from RSS feeds
+- `prompt_sync.py` - **NEW:** Syncs approved prompt refinements from GetReceipts.org to local files; refinements are bad_example entries that prevent previously-identified extraction mistakes
 - `queue_snapshot_service.py` - Queue snapshot service for pipeline status
 - `session_based_scheduler.py` - Session-based download scheduler for anti-bot
 - `speaker_learning_service.py` - Speaker learning and adaptation service

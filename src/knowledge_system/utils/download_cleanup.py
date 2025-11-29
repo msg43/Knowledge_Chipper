@@ -33,9 +33,9 @@ class DownloadCleanupService:
             "timestamp": datetime.now().isoformat(),
             "orphaned_files_found": [],
             "missing_audio_files": [],
-            "incomplete_videos": [],
-            "failed_videos": [],
-            "videos_needing_retry": [],
+            "incomplete_downloads": [],
+            "failed_downloads": [],
+            "downloads_needing_retry": [],
             "actions_taken": [],
         }
 
@@ -56,14 +56,14 @@ class DownloadCleanupService:
         # Step 2: Find orphaned audio files (not in database)
         self._find_orphaned_files()
 
-        # Step 3: Identify incomplete videos
-        self._identify_incomplete_videos()
+        # Step 3: Identify incomplete downloads
+        self._identify_incomplete_downloads()
 
-        # Step 4: Get failed videos (exceeded retry limit)
-        self._get_failed_videos()
+        # Step 4: Get failed downloads (exceeded retry limit)
+        self._get_failed_downloads()
 
-        # Step 5: Get videos needing retry
-        self._get_videos_needing_retry()
+        # Step 5: Get downloads needing retry
+        self._get_downloads_needing_retry()
 
         # Generate summary
         self._generate_summary()
@@ -80,8 +80,8 @@ class DownloadCleanupService:
 
                 from ..database import MediaSource
 
-                # Get all videos with audio_file_path set (claim-centric schema doesn't track audio_downloaded)
-                videos_with_audio = (
+                # Get all audio files with audio_file_path set (claim-centric schema doesn't track audio_downloaded)
+                audio_downloads = (
                     session.query(MediaSource)
                     .filter(MediaSource.audio_file_path.isnot(None))
                     .all()
@@ -91,38 +91,38 @@ class DownloadCleanupService:
                 # Older entries are likely from moved/deleted files or old output directories
                 cutoff_date = datetime.now() - timedelta(days=30)
 
-                for video in videos_with_audio:
-                    audio_path = Path(video.audio_file_path)
+                for download in audio_downloads:
+                    audio_path = Path(download.audio_file_path)
                     if not audio_path.exists():
                         # Skip test files and temporary paths
-                        if "/tmp/" in str(audio_path) or "test_" in video.source_id:
+                        if "/tmp/" in str(audio_path) or "test_" in download.source_id:
                             logger.debug(
-                                f"Skipping test/temp file: {video.source_id} -> {video.audio_file_path}"
+                                f"Skipping test/temp file: {download.source_id} -> {download.audio_file_path}"
                             )
                             continue
 
                         # Only warn about recent entries (last 30 days)
-                        if video.processed_at and video.processed_at < cutoff_date:
+                        if download.processed_at and download.processed_at < cutoff_date:
                             logger.debug(
-                                f"Skipping old entry (>{cutoff_date.date()}): {video.source_id} -> {video.audio_file_path}"
+                                f"Skipping old entry (>{cutoff_date.date()}): {download.source_id} -> {download.audio_file_path}"
                             )
                             continue
 
                         logger.warning(
-                            f"Audio file missing for {video.source_id}: {video.audio_file_path}"
+                            f"Audio file missing for {download.source_id}: {download.audio_file_path}"
                         )
                         self.cleanup_report["missing_audio_files"].append(
                             {
-                                "source_id": video.source_id,
-                                "title": video.title,
-                                "url": video.url,
-                                "expected_path": video.audio_file_path,
+                                "source_id": download.source_id,
+                                "title": download.title,
+                                "url": download.url,
+                                "expected_path": download.audio_file_path,
                             }
                         )
                         # Note: Retry tracking not available in claim-centric schema
 
                 logger.info(
-                    f"Validated {len(videos_with_audio)} videos with audio paths. "
+                    f"Validated {len(audio_downloads)} audio files with paths. "
                     f"Found {len(self.cleanup_report['missing_audio_files'])} missing files (recent only, ignoring test/old entries)."
                 )
 
@@ -182,71 +182,71 @@ class DownloadCleanupService:
         except Exception as e:
             logger.error(f"Error finding orphaned files: {e}")
 
-    def _identify_incomplete_videos(self):
-        """Identify videos with partial downloads (missing audio or metadata)."""
-        logger.info("Identifying incomplete videos...")
+    def _identify_incomplete_downloads(self):
+        """Identify downloads with partial completion (missing audio or metadata)."""
+        logger.info("Identifying incomplete downloads...")
 
         try:
             incomplete = self.db_service.get_incomplete_videos()
 
-            for video in incomplete:
-                self.cleanup_report["incomplete_videos"].append(
+            for download in incomplete:
+                self.cleanup_report["incomplete_downloads"].append(
                     {
-                        "source_id": video.source_id,
-                        "title": video.title,
-                        "url": video.url,
+                        "source_id": download.source_id,
+                        "title": download.title,
+                        "url": download.url,
                         # Note: Completion tracking columns not available in claim-centric schema
                     }
                 )
 
-            logger.info(f"Found {len(incomplete)} incomplete videos")
+            logger.info(f"Found {len(incomplete)} incomplete downloads")
 
         except Exception as e:
-            logger.error(f"Error identifying incomplete videos: {e}")
+            logger.error(f"Error identifying incomplete downloads: {e}")
 
-    def _get_failed_videos(self):
-        """Get videos that exceeded max retry attempts."""
-        logger.info("Getting failed videos (exceeded retry limit)...")
+    def _get_failed_downloads(self):
+        """Get downloads that exceeded max retry attempts."""
+        logger.info("Getting failed downloads (exceeded retry limit)...")
 
         try:
             failed = self.db_service.get_failed_videos()
 
-            for video in failed:
-                self.cleanup_report["failed_videos"].append(
+            for download in failed:
+                self.cleanup_report["failed_downloads"].append(
                     {
-                        "source_id": video.source_id,
-                        "title": video.title,
-                        "url": video.url,
+                        "source_id": download.source_id,
+                        "title": download.title,
+                        "url": download.url,
                         # Note: Retry tracking columns not available in claim-centric schema
                     }
                 )
 
-            logger.info(f"Found {len(failed)} failed videos (exceeded retry limit)")
+            logger.info(f"Found {len(failed)} failed downloads (exceeded retry limit)")
 
         except Exception as e:
-            logger.error(f"Error getting failed videos: {e}")
+            logger.error(f"Error getting failed downloads: {e}")
 
-    def _get_videos_needing_retry(self):
-        """Get videos that need retry (haven't exceeded limit yet)."""
-        logger.info("Getting videos needing retry...")
+    def _get_downloads_needing_retry(self):
+        """Get downloads that need retry (haven't exceeded limit yet)."""
+        logger.info("Getting downloads needing retry...")
 
         try:
             needing_retry = self.db_service.get_videos_needing_retry()
 
-            for video in needing_retry:
-                self.cleanup_report["videos_needing_retry"].append(
+            for download in needing_retry:
+                self.cleanup_report["downloads_needing_retry"].append(
                     {
-                        "source_id": video.source_id,
-                        "title": video.title,
-                        "url": video.url,
+                        "source_id": download.source_id,
+                        "title": download.title,
+                        "url": download.url,
                         # Note: Retry tracking columns not available in claim-centric schema
                     }
                 )
 
-            logger.info(f"Found {len(needing_retry)} videos needing retry")
+            logger.info(f"Found {len(needing_retry)} downloads needing retry")
 
         except Exception as e:
-            logger.error(f"Error getting videos needing retry: {e}")
+            logger.error(f"Error getting downloads needing retry: {e}")
 
     def _generate_summary(self):
         """Generate and log summary of cleanup results."""
@@ -260,13 +260,13 @@ class DownloadCleanupService:
             f"Orphaned audio files: {len(self.cleanup_report['orphaned_files_found'])}"
         )
         logger.info(
-            f"Incomplete videos: {len(self.cleanup_report['incomplete_videos'])}"
+            f"Incomplete downloads: {len(self.cleanup_report['incomplete_downloads'])}"
         )
         logger.info(
-            f"Videos needing retry: {len(self.cleanup_report['videos_needing_retry'])}"
+            f"Downloads needing retry: {len(self.cleanup_report['downloads_needing_retry'])}"
         )
         logger.info(
-            f"Failed videos (max retries): {len(self.cleanup_report['failed_videos'])}"
+            f"Failed downloads (max retries): {len(self.cleanup_report['failed_downloads'])}"
         )
         logger.info(f"Actions taken: {len(self.cleanup_report['actions_taken'])}")
         logger.info("=" * 80)
@@ -295,12 +295,12 @@ class DownloadCleanupService:
 
     def get_failed_urls_for_retry(self) -> list[str]:
         """
-        Get list of URLs for failed videos that user can retry manually.
+        Get list of URLs for failed downloads that user can retry manually.
 
         Returns:
-            List of URLs for failed videos
+            List of URLs for failed downloads
         """
-        return [video["url"] for video in self.cleanup_report["failed_videos"]]
+        return [download["url"] for download in self.cleanup_report["failed_downloads"]]
 
     def save_failed_urls_to_file(self, output_path: Path | None = None) -> Path | None:
         """
@@ -328,7 +328,7 @@ class DownloadCleanupService:
                 f.write("# Failed Download URLs - Ready for Retry\n")
                 f.write(f"# Generated: {datetime.now().isoformat()}\n")
                 f.write(
-                    f"# Total: {len(failed_urls)} videos exceeded max retry attempts\n"
+                    f"# Total: {len(failed_urls)} downloads exceeded max retry attempts\n"
                 )
                 f.write("#\n")
                 f.write(

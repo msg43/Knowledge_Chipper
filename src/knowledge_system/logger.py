@@ -243,12 +243,22 @@ class LogContext:
 
 
 # Initialize logging on module import
+_logging_initialized = False
+
+
 def initialize_logging() -> None:
-    """Initialize logging with default configuration."""
+    """Initialize logging with default configuration (idempotent)."""
+    global _logging_initialized
+
+    # Skip if already initialized (prevent duplicate handlers)
+    if _logging_initialized:
+        return
+
     try:
         setup_logging()
         configure_third_party_logging()
         logger.info("Logging system initialized")
+        _logging_initialized = True
     except Exception as e:
         # Fallback to basic logging if setup fails
         logging.basicConfig(

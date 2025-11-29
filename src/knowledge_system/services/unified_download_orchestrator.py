@@ -143,6 +143,10 @@ class UnifiedDownloadOrchestrator:
 
         if not urls_to_process:
             logger.info("✅ All URLs already downloaded, nothing to do")
+            if self.progress_callback:
+                self.progress_callback(
+                    f"✅ Good News: All {len(self.youtube_urls)} URL(s) have been previously transcribed and are already available for summarization"
+                )
             return []
 
         # Step 2: Map YouTube URLs to podcast RSS feeds (if enabled)

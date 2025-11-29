@@ -304,17 +304,18 @@ class MainWindow(QMainWindow):
         self._apply_dark_theme()
 
     def _create_tabs(self) -> None:
-        """Create System 2 tabs per SYSTEM_2_IMPLEMENTATION_GUIDE.md specification."""
-        # System 2 has exactly 8 tabs in this order:
-        # 1. Introduction
-        # 2. Transcribe (includes auto-process checkbox)
-        # 3. Prompts (prompt and schema management)
-        # 4. Summarize
-        # 5. Queue (pipeline status visualization)
-        # 6. Review (spreadsheet editor with export options)
-        # 7. Monitor (renamed from File Watcher)
-        # 8. Settings (includes web authentication)
+        """Create System 2 tabs - Web-Canonical Mode (Phase 3).
 
+        Desktop is now a processor-only interface. Review and curation
+        happen on getreceipts.org. This streamlines the desktop to:
+        - Introduction (getting started)
+        - Transcribe (download/transcribe media)
+        - Prompts (AI configuration)
+        - Summarize (extract claims)
+        - Queue (pipeline monitoring)
+        - Monitor (file watching automation)
+        - Settings (configuration)
+        """
         # 1. Introduction tab - conditionally shown based on user preference
         self.introduction_tab = IntroductionTab(self)
         self.introduction_tab.navigate_to_tab.connect(self._navigate_to_tab)
@@ -349,31 +350,28 @@ class MainWindow(QMainWindow):
         self.queue_tab = QueueTab(self)
         self.tabs.addTab(self.queue_tab, "Queue")
 
-        # 6. Review tab (spreadsheet editor)
-        try:
-            from .tabs.review_tab_system2 import ReviewTabSystem2
+        # WEB-CANONICAL MODE: Review and Questions tabs hidden
+        # These features are now available on getreceipts.org/dashboard
+        # Desktop focuses on processing; web handles review/curation
 
-            review_tab = ReviewTabSystem2(self)
-            self.tabs.addTab(review_tab, "Review")
-        except ImportError as e:
-            logger.error(f"System 2 Review tab not available: {e}")
-            # Create placeholder
-            placeholder = QLabel("Review tab not available")
-            placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            self.tabs.addTab(placeholder, "Review")
+        # NOTE: Review and Questions tabs code removed - users should use web interface
+        # To restore these tabs, uncomment the sections below:
 
-        # 6.5. Question Review tab
-        try:
-            from .tabs.question_review_tab import QuestionReviewTab
+        # # 6. Review tab (spreadsheet editor) - HIDDEN IN WEB-CANONICAL MODE
+        # try:
+        #     from .tabs.review_tab_system2 import ReviewTabSystem2
+        #     review_tab = ReviewTabSystem2(self)
+        #     self.tabs.addTab(review_tab, "Review")
+        # except ImportError as e:
+        #     logger.error(f"System 2 Review tab not available: {e}")
 
-            question_review_tab = QuestionReviewTab(self)
-            self.tabs.addTab(question_review_tab, "Questions")
-        except ImportError as e:
-            logger.error(f"Question Review tab not available: {e}")
-            # Create placeholder
-            placeholder = QLabel("Question Review tab not available")
-            placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            self.tabs.addTab(placeholder, "Questions")
+        # # 6.5. Question Review tab - HIDDEN IN WEB-CANONICAL MODE
+        # try:
+        #     from .tabs.question_review_tab import QuestionReviewTab
+        #     question_review_tab = QuestionReviewTab(self)
+        #     self.tabs.addTab(question_review_tab, "Questions")
+        # except ImportError as e:
+        #     logger.error(f"Question Review tab not available: {e}")
 
         # 7. Monitor tab (renamed from File Watcher)
         monitor_tab = MonitorTab(self)

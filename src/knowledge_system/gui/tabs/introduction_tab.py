@@ -87,12 +87,12 @@ class IntroductionTab(BaseTab):
             <br>• <b>Documents:</b> Research papers, articles, reports (PDF, Word, Markdown)
             <br>• <b>RSS Feeds:</b> Automatically monitor and process new episodes
 
-            <br><br><b>🌟 What You Get:</b>
-            <br>• <b>Smart Summaries:</b> Not just "what was discussed" but the specific claims being made
-            <br>• <b>Speaker Tracking:</b> Know who said what, even in multi-speaker content
-            <br>• <b>Searchable Database:</b> Find claims across all your content instantly
-            <br>• <b>Quality Scores:</b> Each claim rated for importance, novelty, and confidence
-            <br>• <b>Export Options:</b> Markdown, CSV, or integrate with Obsidian vaults
+            <br><br><b>🌟 How It Works (Desktop + Web):</b>
+            <br>• <b>Desktop App:</b> Processes files locally (transcribe, extract claims, score them)
+            <br>• <b>Auto-Upload:</b> Claims automatically sync to GetReceipts.org (enabled by default)
+            <br>• <b>Web App:</b> Review, edit, search, and curate your claims at getreceipts.org
+            <br>• <b>Smart Sync:</b> Once uploaded, claims disappear from desktop (web is the source of truth)
+            <br>• <b>Multi-Device:</b> Link multiple devices to one account using claim codes
 
             <br><br><b>💡 Perfect For:</b> Research, learning, content creation, meeting analysis, or building
             a personal knowledge base from audio/video sources.
@@ -136,13 +136,18 @@ class IntroductionTab(BaseTab):
             <br>1. <b>Transcribe</b> → Add YouTube URL, local file, or document
             <br>2. Check <b>"Process automatically through entire pipeline"</b> for one-click processing
             <br>3. Click <b>Start Transcription</b> and wait for completion
-            <br>4. Review results in the <b>Review</b> tab or export from <b>Summarize</b> tab
+            <br>4. Claims are automatically uploaded to GetReceipts.org (if auto-upload is enabled)
 
-            <br><br><b>✅ That's it!</b> The system handles transcription, speaker identification, claim extraction,
-            scoring, and database storage automatically.
+            <br><br><b>Step 4: Review on the Web</b>
+            <br>• Go to <b>getreceipts.org/dashboard</b> to see your uploaded claims
+            <br>• Search, filter, edit, and organize your claims in the web interface
+            <br>• Link your device to your account using the claim code from Settings tab
 
-            <br><br><b>💡 Pro Tip:</b> Enable "Check for updates on startup" in Settings to get the latest features
-            automatically. Updates are lightning-fast thanks to intelligent component caching.
+            <br><br><b>✅ That's it!</b> The desktop app handles processing, and the web app handles review and curation.
+            Once uploaded, claims disappear from desktop (web is the canonical source).
+
+            <br><br><b>💡 Pro Tip:</b> Auto-upload is enabled by default. You can disable it in Settings if you prefer
+            manual uploads, but the web interface is where you'll do most of your review and editing.
             """
         )
 
@@ -204,26 +209,11 @@ class IntroductionTab(BaseTab):
             <br><b>Output files:</b> Markdown summaries, CSV exports, and database entries you can review/edit
             <br><b>Time estimate:</b> ~30-90 seconds per 10,000 words, depending on AI model speed
 
-            <br><br><b style="color: #007acc;">5. Review</b> - Your Claims Dashboard (This is Where You Spend Time!)
-            <br><b>What you'll do:</b> Browse, search, edit, and export all your extracted claims in one place
-            <br><b>The interface:</b> Spreadsheet-style table with color-coded rows
-            <br>• <b>Green rows = Tier A:</b> Most important claims (high importance/novelty scores)
-            <br>• <b>Blue rows = Tier B:</b> Significant supporting claims
-            <br>• <b>Red rows = Tier C:</b> Background details and context
-            <br><b>Key features:</b>
-            <br>• <b>Filter by episode:</b> See claims from a specific video/podcast/document
-            <br>• <b>Filter by tier:</b> Show only Tier A to see the "best of the best"
-            <br>• <b>Filter by type:</b> Show only factual claims, or causal claims, etc.
-            <br>• <b>Search text:</b> Find claims containing specific words or topics
-            <br>• <b>Sort by scores:</b> Find highest importance, novelty, or confidence claims
-            <br>• <b>Edit anything:</b> Click a claim to edit text, adjust scores, change tier or type
-            <br>• <b>Real-time save:</b> Changes save to database immediately (or batch save if you prefer)
-            <br><b>Practical uses:</b>
-            <br>• Find all claims about "machine learning" across 100 podcast episodes
-            <br>• Export Tier A claims from 10 research papers for your literature review
-            <br>• Quality check: review AI's work and fix any mistakes
-            <br>• Share insights: export filtered claims to CSV → paste into your notes or reports
-            <br><b>Export options:</b> CSV (works in Excel, Google Sheets, Notion, Airtable)
+            <br><br><b style="color: #007acc;">5. Queue</b> - Monitor Processing Pipeline
+            <br><b>What you'll do:</b> Watch your files as they move through the processing pipeline
+            <br><b>What you'll see:</b> Real-time status of transcription, speaker detection, and claim extraction
+            <br><b>When to use:</b> Check progress on long-running jobs, see if anything got stuck
+            <br><b>Note:</b> This is for monitoring - actual review happens on the web at getreceipts.org
 
             <br><br><b style="color: #007acc;">6. Monitor</b> - Automated Background Processing
             <br><b>What you'll do:</b> Set up a folder for automatic monitoring, then forget about it
@@ -237,7 +227,8 @@ class IntroductionTab(BaseTab):
             <br>• New file appears → System waits 5 seconds (ensures file is complete)
             <br>• Automatic transcription with speaker detection
             <br>• Automatic claim extraction and scoring
-            <br>• Results saved to database → view anytime in Review tab
+            <br>• Automatic upload to GetReceipts.org (if enabled)
+            <br>• View results on web at getreceipts.org/dashboard
             <br><b>Perfect scenarios:</b>
             <br>• <b>Podcast RSS feeds:</b> Your podcast app downloads episodes → Monitor auto-processes them
             <br>• <b>Regular meetings:</b> Meeting recordings saved to a folder → auto-transcribed with speaker labels
@@ -249,7 +240,10 @@ class IntroductionTab(BaseTab):
             <br><b>What you'll do:</b> Configure API keys, install AI models, and set preferences
             <br><b>Required:</b> Choose local AI (free via Ollama) or cloud AI (paid via OpenAI/Anthropic)
             <br><b>Optional:</b> Add PacketStream credentials if you want to process YouTube videos
-            <br><b>When to revisit:</b> To install new models, update the app, or change API keys
+            <br><b>Device Linking:</b> Get your claim code here to link this device to your GetReceipts account
+            <br>• <b>Auto-upload:</b> Enabled by default - claims automatically sync to web after processing
+            <br>• <b>Claim code:</b> Use this code on getreceipts.org/dashboard to link your device
+            <br><b>When to revisit:</b> To install new models, update the app, change API keys, or link/unlink devices
             """
         )
 
@@ -440,13 +434,15 @@ class IntroductionTab(BaseTab):
             <br>2. Open <b>Transcribe</b> tab → paste URL or drag in the MP3 file
             <br>3. Check <b>"Process automatically through entire pipeline"</b> (this is the magic checkbox!)
             <br>4. Click <b>Start Transcription</b> and grab coffee ☕ (takes 5-15 minutes depending on file length)
-            <br>5. When done, open <b>Review</b> tab
-            <br>6. Click the <b>Tier filter dropdown</b> → select "A" to show only the most important claims
-            <br>7. You'll see 10-20 green-highlighted rows with the key insights
-            <br>8. Click any claim to read the full text and see its scores
-            <br>9. Optional: Export these Tier A claims to CSV to paste into your notes
+            <br>5. Claims are automatically uploaded to GetReceipts.org (if auto-upload is enabled)
+            <br>6. Go to <b>getreceipts.org/dashboard</b> to see your claims
+            <br>7. Use the <b>Tier filter</b> → select "A" to show only the most important claims
+            <br>8. You'll see 10-20 Tier A claims with the key insights
+            <br>9. Click any claim to read the full text, edit it, or see its scores
+            <br>10. Export filtered claims to CSV if needed
             <br><br><b>What you'll see:</b> Claims like "The guest argues that AI regulation should prioritize safety over
             innovation (Importance: 9/10, Novelty: 7/10)" - the essence of 2 hours distilled into a few minutes of reading.
+            <br><b>Where:</b> All review and editing happens on the web - desktop just processes and uploads.
 
             <br><br><b>Example 2: "I downloaded 50 podcast episodes and need summaries of all of them"</b>
             <br><br>1. Put all MP3 files in one folder
@@ -454,25 +450,25 @@ class IntroductionTab(BaseTab):
             <br>3. Check <b>"Process automatically"</b> and <b>"Enable Speaker Diarization"</b>
             <br>4. Click <b>Start Transcription</b> → the app processes all 50 files (this will take a while!)
             <br>5. Go get lunch or do other work 🍔 (expect 2-4 hours for 50 episodes depending on your AI setup)
-            <br>6. Come back → open <b>Review</b> tab
-            <br>7. Use the <b>Episode filter</b> dropdown to browse individual episodes, or leave it on "All"
+            <br>6. Claims automatically upload to GetReceipts.org as they're processed
+            <br>7. Go to <b>getreceipts.org/dashboard</b> → all your claims are there
             <br>8. Use the <b>Search box</b> → type "climate change" to find all claims mentioning that topic across
             all 50 episodes
             <br>9. Filter to <b>Tier A</b> and <b>sort by Importance</b> to see the most critical insights across the
             entire series
             <br>10. Export the filtered results to CSV for your research database
-            <br><br><b>Result:</b> Instead of 50+ hours of listening, you have a searchable database where you can
-            find any topic in seconds.
+            <br><br><b>Result:</b> Instead of 50+ hours of listening, you have a searchable database on the web where you can
+            find any topic in seconds. Desktop processes, web stores and organizes.
 
             <br><br><b>Example 3: "I have a research paper (PDF) and need to extract the key findings"</b>
             <br><br>1. Open <b>Transcribe</b> tab → drag and drop your PDF
             <br>2. Check <b>"Process automatically"</b>
             <br>3. Click <b>Start Transcription</b> (yes, same button for PDFs!)
-            <br>4. Wait for processing to finish
-            <br>5. Open <b>Review</b> tab → filter to show factual claims only
+            <br>4. Wait for processing to finish → claims automatically upload to web
+            <br>5. Go to <b>getreceipts.org/dashboard</b> → filter to show factual claims only
             <br>6. Export to CSV to paste into your literature review spreadsheet
             <br><br><b>What you'll get:</b> Every significant claim from the paper, scored and categorized,
-            ready to cite or compare with other papers.
+            ready to cite or compare with other papers. All stored and searchable on the web.
 
             <br><br><b>Example 4: "I want my podcast RSS feed to auto-process every new episode"</b>
             <br><br><b>Initial Setup (One Time):</b>
@@ -488,10 +484,10 @@ class IntroductionTab(BaseTab):
             <br>• Monitor waits 30 seconds to ensure download is complete
             <br>• Automatic transcription with speaker detection
             <br>• Automatic claim extraction and scoring
-            <br>• Results appear in Review tab database
+            <br>• Automatic upload to GetReceipts.org
             <br>• You get a notification (optional in Settings)
             <br><br><b>Your Weekly Routine:</b>
-            <br>• Open <b>Review</b> tab → filter to claims from the last 7 days
+            <br>• Go to <b>getreceipts.org/dashboard</b> → filter to claims from the last 7 days
             <br>• Scan Tier A claims to catch the most important insights
             <br>• Search for topics you're tracking across all episodes
             <br><br><b>Perfect for:</b> News podcasts, industry updates, or educational series - stay current without
@@ -500,13 +496,12 @@ class IntroductionTab(BaseTab):
             <br><br><b>Example 5: "I recorded a meeting and need to know who said what"</b>
             <br><br>1. Open <b>Transcribe</b> tab → drag in your meeting recording (MP4, MOV, etc.)
             <br>2. Make sure <b>"Enable Speaker Diarization"</b> is checked
-            <br>3. Don't check auto-process this time (we'll do Summarize manually)
+            <br>3. Check <b>"Process automatically"</b> to extract claims automatically
             <br>4. Click <b>Start Transcription</b> and wait for completion
-            <br>5. Check the transcript file → speakers labeled as Speaker 0, Speaker 1, etc.
-            <br>6. Open <b>Summarize</b> tab → select the transcript
-            <br>7. Click <b>Start Analysis</b> to extract claims
-            <br>8. Open <b>Review</b> tab → see which speaker made which claims
-            <br><br><b>Bonus:</b> Export the claims with speaker labels to share meeting notes with your team.
+            <br>5. Claims automatically upload to GetReceipts.org with speaker labels
+            <br>6. Go to <b>getreceipts.org/dashboard</b> → see which speaker made which claims
+            <br>7. Edit speaker names on the web if needed (assign real names to Speaker 0, Speaker 1, etc.)
+            <br><br><b>Bonus:</b> Export the claims with speaker labels from the web to share meeting notes with your team.
 
             <br><br><b>💡 Quick Tips for Success:</b>
             <br>• <b>First time?</b> Start with one short video/audio file (5-10 min) to see how it works
@@ -514,14 +509,16 @@ class IntroductionTab(BaseTab):
             <br>• <b>Want faster processing?</b> Use cloud models (OpenAI/Anthropic) instead of local Ollama
             <br>• <b>Understanding the scores:</b> Importance = how significant, Novelty = how unique/surprising,
             Confidence = how reliable
-            <br>• <b>Low on disk space?</b> The Review tab is your database - you can delete transcript files after processing
-            <br>• <b>Finding too many low-value claims?</b> Filter to Tier A only in Review tab to see just the best stuff
-            <br>• <b>Need claims in another app?</b> Export CSV from Review tab → works in Excel, Notion, Airtable, etc.
+            <br>• <b>Auto-upload enabled?</b> Claims automatically sync to getreceipts.org - that's where you review and edit
+            <br>• <b>Finding too many low-value claims?</b> Filter to Tier A only on the web to see just the best stuff
+            <br>• <b>Need claims in another app?</b> Export CSV from getreceipts.org/dashboard → works in Excel, Notion, Airtable, etc.
             <br>• <b>Want specialized extraction?</b> Edit prompts in Prompts tab (e.g., focus on statistics, prioritize
             medical claims, extract business metrics)
             <br>• <b>Experiment with models:</b> In Summarize tab, try different Miner/Flagship combinations - larger models
             = better quality but slower
             <br>• <b>Monitor vs Manual:</b> Use Monitor for ongoing series (podcasts, courses), use Transcribe for one-off processing
+            <br>• <b>Link your device:</b> Get your claim code from Settings → use it on getreceipts.org/dashboard to link multiple devices
+            <br>• <b>Desktop vs Web:</b> Desktop processes files, web stores and organizes claims. Once uploaded, claims disappear from desktop.
             """
         )
 

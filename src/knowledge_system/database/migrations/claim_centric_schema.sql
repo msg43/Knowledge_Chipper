@@ -141,7 +141,7 @@ CREATE TABLE IF NOT EXISTS claims (
     evaluator_notes TEXT,
 
     -- Verification workflow
-    verification_status TEXT CHECK (verification_status IN ('unverified', 'verified', 'disputed', 'false')) DEFAULT 'unverified',
+    verification_status TEXT CHECK (verification_status IN ('unverified', 'verified', 'disputed', 'false', 'unverifiable')) DEFAULT 'unverified',
     verification_source TEXT,
     verification_notes TEXT,
 
@@ -149,6 +149,7 @@ CREATE TABLE IF NOT EXISTS claims (
     flagged_for_review BOOLEAN DEFAULT 0,
     reviewed_by TEXT,
     reviewed_at DATETIME,
+    user_notes TEXT,
 
     -- Temporality analysis
     temporality_score INTEGER CHECK (temporality_score IN (1, 2, 3, 4, 5)) DEFAULT 3,
@@ -175,26 +176,28 @@ CREATE INDEX idx_claims_domain ON claims(domain);
 CREATE INDEX idx_claims_verification ON claims(verification_status);
 CREATE INDEX idx_claims_flagged ON claims(flagged_for_review) WHERE flagged_for_review = 1;
 CREATE INDEX idx_claims_created ON claims(created_at);
+CREATE INDEX idx_claims_user_notes ON claims(user_notes) WHERE user_notes IS NOT NULL;
 
 -- ============================================================================
 -- EVIDENCE & CONTEXT
 -- ============================================================================
 
 -- Evidence spans: Supporting quotes for claims
+-- Uses canonical field names matching HCE schema and GetReceipts API
 CREATE TABLE IF NOT EXISTS evidence_spans (
     evidence_id INTEGER PRIMARY KEY AUTOINCREMENT,
     claim_id TEXT NOT NULL,
     segment_id TEXT,  -- Optional (only for episode sources)
-    sequence INTEGER NOT NULL,
+    seq INTEGER NOT NULL,  -- Canonical: matches HCE schema and GetReceipts API
 
-    -- Precise quote
-    start_time TEXT,
-    end_time TEXT,
+    -- Precise quote - canonical field names
+    t0 TEXT,  -- Canonical: matches HCE schema and GetReceipts API
+    t1 TEXT,  -- Canonical: matches HCE schema and GetReceipts API
     quote TEXT,
 
-    -- Extended context
-    context_start_time TEXT,
-    context_end_time TEXT,
+    -- Extended context - canonical field names
+    context_t0 TEXT,  -- Canonical: matches HCE schema and GetReceipts API
+    context_t1 TEXT,  -- Canonical: matches HCE schema and GetReceipts API
     context_text TEXT,
     context_type TEXT DEFAULT 'exact' CHECK (context_type IN ('exact', 'extended', 'segment')),
 

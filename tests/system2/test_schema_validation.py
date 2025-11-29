@@ -261,3 +261,51 @@ class TestSchemaValidation:
         assert repaired["jargon"] == original["jargon"]
         assert repaired["people"] == original["people"]
         assert repaired["mental_models"] == original["mental_models"]
+
+    def test_repair_invalid_entity_type(self):
+        """Test repair fixes invalid entity_type values in people array."""
+        invalid_output = {
+            "claims": [],
+            "jargon": [],
+            "people": [
+                {
+                    "name": "World War II",
+                    "normalized_name": "World War II",
+                    "entity_type": "event",  # Invalid - should be "person" or "organization"
+                    "mentions": [
+                        {
+                            "segment_id": "seg_001",
+                            "surface_form": "World War II",
+                            "quote": "During World War II",
+                            "t0": "00:00:00",
+                            "t1": "00:00:05",
+                        }
+                    ],
+                },
+                {
+                    "name": "New York",
+                    "normalized_name": "New York",
+                    "entity_type": "place",  # Invalid - should be "person" or "organization"
+                    "mentions": [
+                        {
+                            "segment_id": "seg_001",
+                            "surface_form": "New York",
+                            "quote": "in New York",
+                            "t0": "00:00:10",
+                            "t1": "00:00:15",
+                        }
+                    ],
+                },
+            ],
+            "mental_models": [],
+        }
+
+        repaired, is_valid, errors = repair_and_validate_miner_output(invalid_output)
+
+        assert is_valid, f"Repair failed: {errors}"
+        # Check that invalid entity_type values were repaired
+        assert repaired["people"][0]["entity_type"] == "person"  # "event" -> "person"
+        assert repaired["people"][1]["entity_type"] == "organization"  # "place" -> "organization"
+        # Check that other fields are preserved
+        assert repaired["people"][0]["name"] == "World War II"
+        assert repaired["people"][1]["name"] == "New York"

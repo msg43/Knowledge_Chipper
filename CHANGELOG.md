@@ -5,6 +5,62 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Entity Refinement Sync**: Desktop app automatically syncs prompt improvements from GetReceipts.org
+
+  **How It Works:**
+  1. Review and reject incorrect entities on the web at `getreceipts.org/dashboard/entities`
+  2. The web generates AI-powered prompt improvements from your rejections
+  3. Desktop app automatically fetches and applies these improvements
+  4. Future extractions benefit from learned patterns
+  
+  **User Benefit:** When you reject "US President" as a person on the web, the desktop app learns to skip similar titles like "CEO", "Secretary of State", etc. in future extractions.
+  
+  **Technical Details:**
+  - New service: `src/knowledge_system/services/prompt_sync.py`
+  - Refinements stored in: `~/Library/Application Support/Knowledge Chipper/refinements/`
+  - Files: `person_refinements.txt`, `jargon_refinements.txt`, `concept_refinements.txt`
+  - Modified `unified_miner.py` to inject synced refinements as `<bad_example>` entries
+  - Sync happens automatically when device authentication is enabled
+- **Web-Canonical Architecture with Ephemeral Local Database**: Implemented complete web-canonical architecture where GetReceipts web database (Supabase) is the single source of truth and the desktop Knowledge_Chipper acts as an ephemeral processor. Desktop claims are marked `hidden=1` after successful upload and no longer appear in local views, forcing users to the web for editing and viewing canonical data.
+- **Happy-Style Device Authentication**: Auto-generated device authentication using UUID + cryptographically secure secret key (no user interaction required). Device credentials stored in `~/.getreceipts/device_auth.json` and bcrypt-hashed on backend for security.
+- **HTTP API-Based Uploader**: Completely rewrote `knowledge_chipper_oauth/getreceipts_uploader.py` (500+ lines → ~200 lines, net -213 lines) to use HTTP requests to `/api/knowledge-chipper/upload` instead of Supabase Python SDK, bypassing RLS policies and simplifying code.
+- **Device Provenance Tracking**: All uploaded data tagged with `device_id` for attribution. Database tracks which Knowledge_Chipper device created each claim, person, concept, jargon entry, episode, milestone, evidence span, and relation.
+- **Claim Version Tracking**: Reprocessed claims auto-increment `version` field and link to previous version via `replaces_claim_id`, enabling full reprocessing history tracking.
+- **Device Authentication API Endpoint**: Created `/api/knowledge-chipper/device-auth` endpoint that registers new devices or verifies existing devices using bcrypt key verification.
+- **Database Migrations for Device Tracking**: Created comprehensive migrations adding `device_id`, `source_id`, `uploaded_at`, `version`, and `replaces_claim_id` columns to all relevant tables in GetReceipts Supabase schema.
+- **Safe Rollback Strategy**: Created two git branches for easy rollback: `feature/desktop-canonical` (commit a582767, safe rollback point) and `feature/web-canonical-ephemeral` (commit 738ef9f, experimental implementation).
+- **Comprehensive Testing Scripts**: Added `test_web_canonical_upload.py` for automated upload testing and `check_schema.py` for verifying Supabase schema state.
+- **Complete Documentation Suite**: Created comprehensive documentation including `ARCHITECTURE_WEB_CANONICAL.md` (complete architecture guide), `VERCEL_ENV_SETUP.md` (environment variable setup), `MIGRATION_CHECK.md` (schema diagnosis), `READY_TO_TEST.md`, `QUICK_START.md`, and `DEPLOYMENT_STATUS.md`.
+
+### Changed
+- **Claims Upload Service - Ephemeral Behavior**: Modified `src/knowledge_system/services/claims_upload_service.py` to add `hidden` column support and `hide_uploaded_claims()` method. Claims marked uploaded are now hidden from local views, implementing ephemeral-local architecture.
+- **Cloud Uploads Tab - Auto-Hide After Upload**: Modified `src/knowledge_system/gui/tabs/cloud_uploads_tab.py` to automatically hide uploaded claims after successful upload, moving them to web-canonical storage.
+- **Upload Mechanism - SDK to HTTP API**: Switched from Supabase Python SDK (subject to RLS policies) to direct HTTP API requests using service role key internally. Cleaner code, better error handling, bypasses RLS.
+- **Backend Upload Endpoint**: Enhanced `/api/knowledge-chipper/upload` with canonical deduplication, fuzzy matching, entity codes, and extraction tracking (discovered during testing - was rewritten independently).
+
+### Fixed
+- **Linting Error on Git Push**: Fixed unescaped apostrophe in `src/app/claim/page.tsx` line 185 (`Don't` → `Don&apos;t`).
+- **Missing bcryptjs Dependency**: Added bcryptjs and @types/bcryptjs to GetReceipts package.json for device key hashing.
+- **RLS Policy Blocking Uploads**: Resolved Row Level Security errors by switching from direct Supabase SDK calls to HTTP API endpoints that use service role key internally.
+- **Missing SUPABASE_SERVICE_ROLE_KEY**: Added environment variable to Vercel deployment for upload endpoint authentication.
+- **Device Not Registered Error**: Implemented device-auth endpoint call before first upload to register device credentials.
+- **Missing device_id Columns**: Created focused re-run migration `001b_add_device_columns_RERUN.sql` to fix incomplete initial migration where CREATE TABLE succeeded but ALTER TABLE statements didn't persist.
+
+### Technical Details
+- **Architecture Pattern**: One-way upload flow (no sync complexity), web is always current
+- **Offline Capability**: Desktop can still view local claims until uploaded, then hidden
+- **Reprocessing Workflow**: Users can reprocess transcripts with upgraded LLM models, creating versioned claims that replace previous versions
+- **Git Strategy**: `feature/desktop-canonical` preserves original architecture, `feature/web-canonical-ephemeral` contains experimental implementation
+- **Code Reduction**: Net -213 lines in uploader rewrite (500+ → ~200 lines)
+- **Security**: Device keys never transmitted in plain text after initial registration, bcrypt-hashed (10 rounds) on backend
+- **Database Schema**: Uses `IF NOT EXISTS` for safe re-run migrations, devices table tracks last_seen_at and optional user_id for claiming devices
+
+### Fixed
+- **Database Schema: Missing user_notes Column**: Fixed `sqlite3.OperationalError` where Review tab failed to load claims due to missing `user_notes` column in the claims table. Applied the `2025_11_16_add_user_notes_to_claims.sql` migration to add the column and index. Updated `DatabaseService` to automatically apply incremental migrations on startup, preventing this issue from occurring on fresh installations or after database resets.
+
 ## [3.5.3] - 2025-11-11
 
 ### Fixed

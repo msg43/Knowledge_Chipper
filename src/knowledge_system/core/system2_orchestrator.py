@@ -17,6 +17,7 @@ from ..database import DatabaseService
 from ..database.system2_models import Job, JobRun, LLMRequest, LLMResponse
 from ..errors import ErrorCode, KnowledgeSystemError
 from ..utils.id_generation import create_deterministic_id
+from .processing_config import CHUNKING
 
 logger = logging.getLogger(__name__)
 
@@ -624,7 +625,7 @@ This content was analyzed using Hybrid Claim Extraction (HCE).
                 summary_text=summary_text,
                 summary_metadata_json={
                     "source_id": source_id,
-                    "mining_timestamp": datetime.utcnow().isoformat(),
+                    "mining_timestamp": datetime.now().isoformat(),
                 },
                 processing_type="hce",
                 hce_data_json=hce_data_json,
@@ -640,7 +641,7 @@ This content was analyzed using Hybrid Claim Extraction (HCE).
                 summary_length=len(summary_text),
                 compression_ratio=0.0,
                 processing_time_seconds=0.0,  # Could be tracked
-                created_at=datetime.utcnow(),
+                created_at=datetime.now(),
                 template_used="HCE Mining",
             )
             session.add(summary)
@@ -734,7 +735,7 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
                 summary_text=summary_text,
                 summary_metadata_json={
                     "source_id": source_id,
-                    "mining_timestamp": datetime.utcnow().isoformat(),
+                    "mining_timestamp": datetime.now().isoformat(),
                     "tier_distribution": {
                         "A": len([c for c in pipeline_outputs.claims if c.tier == "A"]),
                         "B": len([c for c in pipeline_outputs.claims if c.tier == "B"]),
@@ -761,7 +762,7 @@ This content was analyzed using Hybrid Claim Extraction (HCE) with parallel proc
                 summary_length=len(summary_text),
                 compression_ratio=0.0,
                 processing_time_seconds=0.0,
-                created_at=datetime.utcnow(),
+                created_at=datetime.now(),
                 template_used="HCE Unified Pipeline",
             )
             session.add(summary)

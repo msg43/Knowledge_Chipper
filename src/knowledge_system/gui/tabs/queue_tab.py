@@ -16,6 +16,7 @@ from PyQt6.QtWidgets import (
     QLabel,
     QLineEdit,
     QPushButton,
+    QSpinBox,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -130,6 +131,26 @@ class QueueTab(BaseTab):
         self.search_box.textChanged.connect(self._on_search_changed)
         filter_layout.addWidget(self.search_box)
 
+        # Queue refresh interval
+        filter_layout.addWidget(QLabel("Refresh:"))
+        self.refresh_interval_spin = QSpinBox()
+        self.refresh_interval_spin.setRange(1, 60)
+        self.refresh_interval_spin.setSuffix("s")
+        self.refresh_interval_spin.setToolTip(
+            "How often the queue refreshes automatically.\n"
+            "• Lower values: More responsive but higher CPU usage\n"
+            "• Higher values: Less CPU usage but delayed updates\n"
+            "• Recommended: 5-10 seconds"
+        )
+        # Load saved value
+        saved_interval = self.gui_settings.get_value(
+            "Processing", "queue_refresh_interval", 5
+        )
+        self.refresh_interval_spin.setValue(saved_interval)
+        # Connect to update timer when changed
+        self.refresh_interval_spin.valueChanged.connect(self._on_refresh_interval_changed)
+        filter_layout.addWidget(self.refresh_interval_spin)
+
         filter_layout.addStretch()
         layout.addLayout(filter_layout)
 
@@ -225,6 +246,20 @@ class QueueTab(BaseTab):
         # Update timer when settings change
         self._last_refresh_interval = refresh_interval
 
+    def _on_refresh_interval_changed(self, value: int):
+        """Handle refresh interval change from the spinbox."""
+        # Save to settings
+        self.gui_settings.set_value("Processing", "queue_refresh_interval", value)
+        
+        # Update timer immediately
+        if hasattr(self, "refresh_timer") and self.refresh_timer is not None:
+            self.refresh_timer.stop()
+            self.refresh_timer.start(value * 1000)
+            self._last_refresh_interval = value
+            self.log_message(
+                f"Queue refresh interval updated to {value} seconds"
+            )
+
     def _check_refresh_interval(self):
         """Check if refresh interval has changed in settings."""
         # Skip if timer not yet initialized
@@ -243,6 +278,11 @@ class QueueTab(BaseTab):
             self.refresh_timer.stop()
             self.refresh_timer.start(current_interval * 1000)
             self._last_refresh_interval = current_interval
+            # Update spinbox if it exists
+            if hasattr(self, "refresh_interval_spin") and self.refresh_interval_spin:
+                self.refresh_interval_spin.blockSignals(True)
+                self.refresh_interval_spin.setValue(current_interval)
+                self.refresh_interval_spin.blockSignals(False)
             self.log_message(
                 f"Queue refresh interval updated to {current_interval} seconds"
             )

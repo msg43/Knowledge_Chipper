@@ -54,11 +54,12 @@ class ClaimSearchWorker(QThread):
             with self.db.get_session() as session:
                 from knowledge_system.database import MediaSource, Summary
 
-                # Get HCE summaries
+                # Get HCE summaries (recognize both "hce" and "hce_unified")
+                # Note: For "hce_unified", hce_data_json may be None (data in claims table)
                 hce_summaries = (
                     session.query(Summary)
                     .filter(
-                        Summary.processing_type == "hce",
+                        Summary.processing_type.in_(("hce", "hce_unified")),
                         Summary.hce_data_json.isnot(None),
                     )
                     .all()
@@ -530,7 +531,8 @@ class ClaimSearchTab(BaseTab):
                 summary = (
                     session.query(Summary)
                     .filter(
-                        Summary.source_id == source_id, Summary.processing_type == "hce"
+                        Summary.source_id == source_id,
+                        Summary.processing_type.in_(("hce", "hce_unified")),
                     )
                     .first()
                 )

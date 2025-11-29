@@ -1,5 +1,8 @@
 """
 Unified Miner for extracting claims, jargon, people, and mental models in a single pass.
+
+Supports prompt refinements synced from GetReceipts.org - these are bad_example entries
+that get injected into extraction prompts to prevent previously-identified classes of mistakes.
 """
 
 import json
@@ -14,6 +17,74 @@ from .schema_validator import repair_and_validate_miner_output, validate_miner_o
 from .types import EpisodeBundle, Segment
 
 logger = get_logger(__name__)
+
+
+def _inject_refinements_into_template(template: str, refinements: dict[str, str]) -> str:
+    """
+    Inject synced refinements into the prompt template.
+    
+    Refinements are inserted just before the closing tags for each entity type:
+    - </bad_people> for person refinements
+    - </bad_jargon> for jargon refinements  
+    - </bad_mental_models> for concept refinements
+    
+    Args:
+        template: The original prompt template
+        refinements: Dict mapping entity_type to refinements XML content
+        
+    Returns:
+        Template with refinements injected
+    """
+    modified_template = template
+    
+    # Mapping from entity type to the closing tag where we inject
+    injection_points = {
+        "person": "</bad_people>",
+        "jargon": "</bad_jargon>",
+        "concept": "</bad_mental_models>",
+    }
+    
+    injection_count = 0
+    for entity_type, closing_tag in injection_points.items():
+        refinement_content = refinements.get(entity_type, "").strip()
+        if refinement_content and closing_tag in modified_template:
+            # Insert refinements before the closing tag
+            # Add a comment indicating these are synced refinements
+            injection = f"\n  <!-- Synced refinements from GetReceipts.org -->\n{refinement_content}\n  "
+            modified_template = modified_template.replace(
+                closing_tag,
+                f"{injection}{closing_tag}"
+            )
+            injection_count += 1
+            logger.debug(f"Injected {entity_type} refinements into prompt")
+    
+    if injection_count > 0:
+        logger.info(f"📝 Injected refinements for {injection_count} entity types into prompt")
+    
+    return modified_template
+
+
+def _load_refinements() -> dict[str, str]:
+    """
+    Load refinements from the prompt sync service.
+    
+    Returns:
+        Dict mapping entity_type to refinements content, or empty dict if unavailable
+    """
+    try:
+        from ...services.prompt_sync import get_prompt_sync_service
+        sync_service = get_prompt_sync_service()
+        
+        if sync_service.has_refinements():
+            refinements = sync_service.get_all_refinements()
+            total = sum(1 for v in refinements.values() if v.strip())
+            if total > 0:
+                logger.debug(f"Loaded refinements for {total} entity types")
+            return refinements
+    except Exception as e:
+        logger.debug(f"Could not load refinements (non-fatal): {e}")
+    
+    return {}
 
 
 class UnifiedMinerOutput:
@@ -98,6 +169,13 @@ class UnifiedMiner:
                 raise FileNotFoundError(f"No unified miner prompt found")
 
         self.template = prompt_path.read_text()
+        
+        # Load and inject synced refinements from GetReceipts.org
+        # These are bad_example entries that prevent previously-identified mistakes
+        refinements = _load_refinements()
+        if refinements:
+            self.template = _inject_refinements_into_template(self.template, refinements)
+        
         logger.info(
             f"UnifiedMiner initialized with {selectivity} selectivity"
             + (f" and {content_type} content type" if content_type else "")
@@ -123,6 +201,8 @@ class UnifiedMiner:
         full_prompt = f"{self.template}\n\nSEGMENT TO ANALYZE:\n{json.dumps(segment_data, indent=2)}"
 
         try:
+            # Notify user that LLM processing is starting (helps explain the long wait)
+            logger.info(f"⏳ Requesting LLM analysis for segment {segment.segment_id}...")
             logger.debug(f"📤 Sending LLM request for segment {segment.segment_id}")
             # Try structured JSON generation first (for Ollama models)
             raw_result = None
@@ -221,8 +301,9 @@ class UnifiedMiner:
                     {"claims": [], "jargon": [], "people": [], "mental_models": []}
                 )
 
+            # More user-friendly logging (segment_id can be technical like "chunk_0000")
             logger.info(
-                f"✅ Segment {segment.segment_id} mining complete: "
+                f"✅ Segment mining complete: "
                 f"{len(output.claims)} claims, {len(output.jargon)} jargon, "
                 f"{len(output.people)} people, {len(output.mental_models)} concepts"
             )
@@ -262,11 +343,12 @@ class UnifiedMiner:
         # If max_workers is None, auto-calculate optimal workers
         if max_workers == 1:
             outputs = []
-            for segment in episode.segments:
+            total_segments = len(episode.segments)
+            for i, segment in enumerate(episode.segments, 1):
                 output = self.mine_segment(segment)
                 outputs.append(output)
                 if progress_callback:
-                    progress_callback(f"Processed segment {segment.segment_id}")
+                    progress_callback(f"Processed segment {i} of {total_segments}")
             return outputs
 
         # Use parallel processing (max_workers=None means auto-calculate)

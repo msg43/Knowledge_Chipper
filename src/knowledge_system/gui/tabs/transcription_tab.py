@@ -1039,8 +1039,9 @@ class EnhancedTranscriptionWorker(QThread):
                         0,
                     )
                 else:
+                    # No failed URLs and no files = everything was already transcribed
                     self.transcription_step_updated.emit(
-                        "⚠️ No files available for transcription", 0
+                        "✅ Good News: All URLs have been previously transcribed and are already available for summarization", 0
                     )
 
                 # Combine failed URLs and failed files for comprehensive error reporting
@@ -1397,6 +1398,65 @@ class EnhancedTranscriptionWorker(QThread):
                     except Exception as e:
                         logger.debug(f"Could not retrieve video metadata: {e}")
                         # Not fatal - continue without metadata
+
+                    # Check if transcript already exists in database for this source
+                    if source_id:
+                        try:
+                            existing_transcripts = db_service.get_transcripts_for_video(source_id)
+                            if existing_transcripts:
+                                # Validate that the transcript is not corrupted
+                                # Check the most recent transcript for quality
+                                latest_transcript = existing_transcripts[0]  # Already sorted by created_at desc
+
+                                # Validation checks:
+                                # 1. Has actual text content
+                                has_text = latest_transcript.transcript_text and len(latest_transcript.transcript_text.strip()) > 0
+                                # 2. Has segments (timestamped data)
+                                has_segments = latest_transcript.transcript_segments_json and len(latest_transcript.transcript_segments_json) > 0
+                                # 3. Segment count matches (basic sanity check)
+                                segment_count_valid = latest_transcript.segment_count is None or latest_transcript.segment_count > 0
+                                # 4. Not suspiciously short (less than 10 chars suggests corruption)
+                                min_length_ok = len(latest_transcript.transcript_text or "") >= 10
+
+                                is_valid = has_text and has_segments and segment_count_valid and min_length_ok
+
+                                if is_valid:
+                                    logger.info(
+                                        f"♻️ Valid transcript found for {source_id} ({file_name}) - "
+                                        f"{len(latest_transcript.transcript_text)} chars, "
+                                        f"{latest_transcript.segment_count or len(latest_transcript.transcript_segments_json)} segments, "
+                                        f"language: {latest_transcript.language}"
+                                    )
+                                    self.transcription_step_updated.emit(
+                                        f"♻️ Reusing existing transcript for {file_name} (validated, already in database)", 100
+                                    )
+                                    self.completed_count += 1
+                                    self.successful_files.append({
+                                        "file": file_name,
+                                        "source_id": source_id,
+                                        "status": "reused_existing_transcript",
+                                        "transcript_count": len(existing_transcripts),
+                                        "transcript_language": latest_transcript.language,
+                                        "transcript_length": len(latest_transcript.transcript_text or "")
+                                    })
+                                    self.file_completed.emit(i + 1, self.total_files)
+                                    continue  # Skip to next file
+                                else:
+                                    # Transcript exists but appears corrupted - re-transcribe
+                                    logger.warning(
+                                        f"⚠️ Transcript exists for {source_id} but appears corrupted "
+                                        f"(has_text={has_text}, has_segments={has_segments}, "
+                                        f"segment_count_valid={segment_count_valid}, min_length_ok={min_length_ok}). "
+                                        f"Re-transcribing..."
+                                    )
+                                    self.transcription_step_updated.emit(
+                                        f"⚠️ Existing transcript appears corrupted, re-transcribing {file_name}...", 0
+                                    )
+                            else:
+                                logger.debug(f"No existing transcript found for {source_id}, proceeding with transcription")
+                        except Exception as transcript_check_error:
+                            logger.warning(f"Failed to check for existing transcript: {transcript_check_error}")
+                            # Continue with transcription on error
 
                     # Enable GUI mode for speaker assignment dialog (unless in testing mode)
                     import os

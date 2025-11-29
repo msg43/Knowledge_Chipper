@@ -199,6 +199,10 @@ class QueueSnapshotService:
                     for stage_status in source.stage_statuses:
                         snapshot.add_stage_status(stage_status)
 
+                    # Enrich with authoritative data from Summary/Transcript tables
+                    # This ensures status reflects actual completion even if SourceStageStatus is stale
+                    self._enrich_snapshot(snapshot, session)
+
                     snapshots.append(snapshot)
 
                 result = (snapshots, total_count)
@@ -350,7 +354,108 @@ class QueueSnapshotService:
         return time.time() - self._cache_timestamp < self._cache_ttl
 
     def _enrich_snapshot(self, snapshot: QueueSnapshot, session):
-        """Add additional context to snapshot from related tables."""
+        """Add additional context to snapshot from related tables.
+        
+        This method syncs status from authoritative sources (MediaSource, Summary, Transcript tables)
+        to ensure the queue displays accurate status even if SourceStageStatus is stale.
+        """
+        # Check download status from MediaSource (authoritative source)
+        # The source is already loaded in the snapshot, so we can check audio_downloaded directly
+        if snapshot.source.audio_downloaded:
+            # Override status if audio is downloaded (authoritative source)
+            # This fixes cases where SourceStageStatus is stale or shows "queued"
+            if "download" not in snapshot.stage_statuses:
+                # Create synthetic stage status from MediaSource
+                snapshot.stage_statuses["download"] = type(
+                    "obj",
+                    (object,),
+                    {
+                        "stage": "download",
+                        "status": "completed",
+                        "progress_percent": 100.0,
+                        "started_at": snapshot.source.created_at,
+                        "completed_at": snapshot.source.created_at,
+                        "metadata_json": {
+                            "audio_file_path": snapshot.source.audio_file_path,
+                            "audio_file_size_bytes": snapshot.source.audio_file_size_bytes,
+                            "audio_format": snapshot.source.audio_format,
+                            "synced_from_media_source": True,
+                        },
+                    },
+                )()
+            else:
+                # Update existing status to completed if audio is downloaded
+                existing = snapshot.stage_statuses["download"]
+                if existing.status not in ("completed", "not_applicable", "skipped"):
+                    existing.status = "completed"
+                    existing.progress_percent = 100.0
+                    if not existing.completed_at:
+                        existing.completed_at = snapshot.source.created_at
+                    # Sync to database so future queries don't need enrichment
+                    try:
+                        self.db_service.upsert_stage_status(
+                            source_id=snapshot.source_id,
+                            stage="download",
+                            status="completed",
+                            progress_percent=100.0,
+                            metadata={
+                                "audio_file_path": snapshot.source.audio_file_path,
+                                "audio_file_size_bytes": snapshot.source.audio_file_size_bytes,
+                                "audio_format": snapshot.source.audio_format,
+                                "synced_from_media_source": True,
+                            },
+                        )
+                    except Exception as e:
+                        logger.warning(
+                            f"Failed to sync download status to database for {snapshot.source_id}: {e}"
+                        )
+        elif snapshot.source.max_retries_exceeded:
+            # Handle failed downloads
+            if "download" not in snapshot.stage_statuses:
+                # Create synthetic stage status for failed download
+                snapshot.stage_statuses["download"] = type(
+                    "obj",
+                    (object,),
+                    {
+                        "stage": "download",
+                        "status": "failed",
+                        "progress_percent": 0.0,
+                        "started_at": snapshot.source.first_failure_at or snapshot.source.created_at,
+                        "completed_at": snapshot.source.last_retry_at,
+                        "metadata_json": {
+                            "failure_reason": snapshot.source.failure_reason,
+                            "retry_count": snapshot.source.retry_count,
+                            "synced_from_media_source": True,
+                        },
+                    },
+                )()
+            else:
+                # Update existing status to failed if max retries exceeded
+                existing = snapshot.stage_statuses["download"]
+                if existing.status not in ("failed", "completed"):
+                    existing.status = "failed"
+                    if snapshot.source.failure_reason:
+                        if not existing.metadata_json:
+                            existing.metadata_json = {}
+                        existing.metadata_json["failure_reason"] = snapshot.source.failure_reason
+                        existing.metadata_json["retry_count"] = snapshot.source.retry_count
+                    # Sync to database
+                    try:
+                        self.db_service.upsert_stage_status(
+                            source_id=snapshot.source_id,
+                            stage="download",
+                            status="failed",
+                            metadata={
+                                "failure_reason": snapshot.source.failure_reason,
+                                "retry_count": snapshot.source.retry_count,
+                                "synced_from_media_source": True,
+                            },
+                        )
+                    except Exception as e:
+                        logger.warning(
+                            f"Failed to sync failed download status to database for {snapshot.source_id}: {e}"
+                        )
+        
         # Check for transcript
         transcript = (
             session.query(Transcript)
@@ -358,23 +463,34 @@ class QueueSnapshotService:
             .first()
         )
 
-        if transcript and "transcription" not in snapshot.stage_statuses:
-            # Create synthetic stage status from transcript
-            snapshot.stage_statuses["transcription"] = type(
-                "obj",
-                (object,),
-                {
-                    "stage": "transcription",
-                    "status": "completed",
-                    "progress_percent": 100.0,
-                    "started_at": transcript.created_at,
-                    "completed_at": transcript.created_at,
-                    "metadata_json": {
-                        "whisper_model": transcript.whisper_model,
-                        "processing_time_seconds": transcript.processing_time_seconds,
+        if transcript:
+            # Override status if transcript exists (authoritative source)
+            # This fixes cases where SourceStageStatus is stale
+            if "transcription" not in snapshot.stage_statuses:
+                # Create synthetic stage status from transcript
+                snapshot.stage_statuses["transcription"] = type(
+                    "obj",
+                    (object,),
+                    {
+                        "stage": "transcription",
+                        "status": "completed",
+                        "progress_percent": 100.0,
+                        "started_at": transcript.created_at,
+                        "completed_at": transcript.created_at,
+                        "metadata_json": {
+                            "whisper_model": transcript.whisper_model,
+                            "processing_time_seconds": transcript.processing_time_seconds,
+                        },
                     },
-                },
-            )()
+                )()
+            else:
+                # Update existing status to completed if transcript exists
+                existing = snapshot.stage_statuses["transcription"]
+                if existing.status != "completed":
+                    existing.status = "completed"
+                    existing.progress_percent = 100.0
+                    if not existing.completed_at:
+                        existing.completed_at = transcript.created_at
 
         # Check for summary
         summary = (
@@ -383,22 +499,57 @@ class QueueSnapshotService:
             .first()
         )
 
-        if summary and "summarization" not in snapshot.stage_statuses:
-            # Create synthetic stage status from summary
-            snapshot.stage_statuses["summarization"] = type(
-                "obj",
-                (object,),
-                {
-                    "stage": "summarization",
-                    "status": "completed",
-                    "progress_percent": 100.0,
-                    "started_at": summary.created_at,
-                    "completed_at": summary.created_at,
-                    "metadata_json": {
-                        "llm_provider": summary.llm_provider,
-                        "llm_model": summary.llm_model,
-                        "total_tokens": summary.total_tokens,
-                        "processing_cost": summary.processing_cost,
+        if summary:
+            # Override status if summary exists (authoritative source)
+            # This fixes cases where SourceStageStatus is stale or shows "queued"
+            if "summarization" not in snapshot.stage_statuses:
+                # Create synthetic stage status from summary
+                snapshot.stage_statuses["summarization"] = type(
+                    "obj",
+                    (object,),
+                    {
+                        "stage": "summarization",
+                        "status": "completed",
+                        "progress_percent": 100.0,
+                        "started_at": summary.created_at,
+                        "completed_at": summary.created_at,
+                        "metadata_json": {
+                            "llm_provider": summary.llm_provider,
+                            "llm_model": summary.llm_model,
+                            "total_tokens": summary.total_tokens,
+                            "processing_cost": summary.processing_cost,
+                        },
                     },
-                },
-            )()
+                )()
+            else:
+                # Update existing status to completed if summary exists
+                existing = snapshot.stage_statuses["summarization"]
+                if existing.status != "completed":
+                    existing.status = "completed"
+                    existing.progress_percent = 100.0
+                    if not existing.completed_at:
+                        existing.completed_at = summary.created_at
+                    # Sync to database so future queries don't need enrichment
+                    try:
+                        self.db_service.upsert_stage_status(
+                            source_id=snapshot.source_id,
+                            stage="summarization",
+                            status="completed",
+                            progress_percent=100.0,
+                            metadata={
+                                "llm_provider": summary.llm_provider,
+                                "llm_model": summary.llm_model,
+                                "total_tokens": summary.total_tokens,
+                                "processing_cost": summary.processing_cost,
+                                "synced_from_summary_table": True,
+                                "summary_created_at": summary.created_at.isoformat() if summary.created_at else None,
+                            },
+                        )
+                    except Exception as e:
+                        logger.warning(
+                            f"Failed to sync summarization status to database for {snapshot.source_id}: {e}"
+                        )
+        
+        # Recalculate derived fields after all enrichment is complete
+        # This ensures overall_status and current_stage reflect the updated stage statuses
+        snapshot._update_derived_fields()

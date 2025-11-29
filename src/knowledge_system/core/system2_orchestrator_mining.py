@@ -391,18 +391,20 @@ async def process_mine_with_unified_pipeline(
 
         # 9b. Create Summary record in summaries table for markdown generation
         # This is required for generate_summary_markdown() to work
+        summary_record_created = False
         try:
             summary_id = orchestrator._create_summary_from_pipeline_outputs(
                 source_id, pipeline_outputs, config
             )
             logger.info(f"✅ Summary record created: {summary_id}")
+            summary_record_created = True
         except Exception as e:
             logger.error(f"❌ Failed to create summary record: {e}")
+            logger.warning(f"⚠️ Summary markdown generation may fail without summary record")
             # Continue anyway - we have the data in episodes table
 
-        # 10. Append summary data to transcript markdown file
-        # This appends claims, people, concepts directly to the existing transcript file
-        # instead of creating a separate summary file
+        # 10. Generate summary markdown file
+        # First try to append to existing transcript file, then fall back to standalone summary
         summary_file_path = None
         try:
             from ..services.file_generation import FileGenerationService
@@ -410,21 +412,42 @@ async def process_mine_with_unified_pipeline(
             output_dir = config.get("output_dir")
             if output_dir:
                 file_gen = FileGenerationService(output_dir=Path(output_dir))
+                logger.info(f"📁 Using output directory: {output_dir}")
             else:
                 file_gen = FileGenerationService()
+                logger.info(f"📁 Using default output directory: {file_gen.output_dir}")
 
-            # Append summary data to transcript file
+            # Try to append summary data to existing transcript file
             summary_file_path = file_gen.append_summary_to_transcript(source_id)
 
             if summary_file_path:
                 logger.info(f"✅ Summary appended to transcript: {summary_file_path}")
             else:
-                logger.warning(
-                    f"⚠️ Failed to append summary to transcript for {source_id}"
-                )
+                # No transcript file found - generate standalone summary file from database
+                logger.info(f"📝 No transcript file found for {source_id}, generating standalone summary file...")
+                logger.info(f"📁 Output directory: {file_gen.output_dir}, summaries_dir: {file_gen.summaries_dir}")
+                
+                # Check if summary record was created (needed for generate_summary_markdown)
+                if not summary_record_created:
+                    logger.warning(f"⚠️ Summary record was not created - generate_summary_markdown() may fail")
+                    logger.info(f"💡 Summary data exists in episodes table but markdown generation requires summaries table entry")
+                
+                summary_file_path = file_gen.generate_summary_markdown(source_id)
+                
+                if summary_file_path:
+                    logger.info(f"✅ Summary file generated successfully: {summary_file_path}")
+                else:
+                    logger.error(
+                        f"❌ Failed to generate summary file for {source_id}"
+                    )
+                    if not summary_record_created:
+                        logger.error(f"   Reason: Summary record was not created in summaries table")
+                    logger.error(f"   Check logs above for details")
 
         except Exception as e:
             logger.error(f"❌ Summary file generation failed: {e}")
+            import traceback
+            logger.debug(traceback.format_exc())
 
         # 11. Finalize checkpoint
         if orchestrator.progress_callback:

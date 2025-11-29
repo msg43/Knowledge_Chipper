@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from getreceipts_uploader import GetReceiptsUploader
+    from knowledge_chipper_oauth.getreceipts_uploader import GetReceiptsUploader
 
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtWidgets import (
@@ -36,6 +36,7 @@ from PyQt6.QtWidgets import (
 from ...logger import get_logger
 from ...services.claims_upload_service import ClaimsUploadService, ClaimUploadData
 from ...services.device_auth import get_device_auth
+from ...utils.claim_code import generate_claim_code, format_claim_code
 from ..components.base_tab import BaseTab
 
 
@@ -111,16 +112,22 @@ class DatabaseUploadWorker(QThread):
         seen_episodes = set()
 
         for claim in self.claims_data:
+            source_id = claim.source_id
+            
             # Add episode data (if not already added)
-            if claim.episode_data and claim.source_id not in seen_episodes:
-                session_data["episodes"].append(claim.episode_data)
-                seen_episodes.add(claim.source_id)
+            if claim.episode_data and source_id not in seen_episodes:
+                episode_data = dict(claim.episode_data)
+                # Ensure source_id is set (GetReceipts accepts source_id or episode_id)
+                if 'source_id' not in episode_data:
+                    episode_data['source_id'] = source_id
+                session_data["episodes"].append(episode_data)
+                seen_episodes.add(source_id)
 
             # Add claim data
             claim_dict = {
                 "claim_id": claim.claim_id,
                 "canonical": claim.canonical,
-                "source_id": claim.source_id,
+                "source_id": source_id,  # GetReceipts now accepts source_id
                 "claim_type": claim.claim_type,
                 "tier": claim.tier,
                 "scores_json": claim.scores_json,
@@ -233,10 +240,27 @@ class CloudUploadsTab(BaseTab):
         self.auto_upload_checkbox.stateChanged.connect(self._toggle_auto_upload)
         layout.addWidget(self.auto_upload_checkbox)
 
-        # Device ID display (for debugging/verification)
+        # Claim code display (primary - for device linking)
         creds = self.device_auth.get_credentials()
+        claim_code = generate_claim_code(creds['device_id'])
+        formatted_code = format_claim_code(claim_code)
+
+        claim_code_label = QLabel(
+            f"🔗 <b>Claim Code: {formatted_code}</b><br>"
+            f"<small>Go to <a href='https://getreceipts.org/claim'>getreceipts.org/claim</a> "
+            f"to link your devices</small>"
+        )
+        claim_code_label.setOpenExternalLinks(True)
+        claim_code_label.setWordWrap(True)
+        claim_code_label.setStyleSheet(
+            "color: #2196F3; font-size: 13px; margin-top: 8px; padding: 8px; "
+            "background-color: #E3F2FD; border: 1px solid #2196F3; border-radius: 4px;"
+        )
+        layout.addWidget(claim_code_label)
+
+        # Device ID display (for debugging/verification - smaller, less prominent)
         device_id_display = QLabel(f"Device ID: {creds['device_id'][:16]}...")
-        device_id_display.setStyleSheet("color: #999; font-size: 10px; margin-top: 8px;")
+        device_id_display.setStyleSheet("color: #999; font-size: 9px; margin-top: 4px;")
         device_id_display.setWordWrap(True)
         layout.addWidget(device_id_display)
 

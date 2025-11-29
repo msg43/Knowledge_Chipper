@@ -500,10 +500,10 @@ class FileGenerationService:
                         break
 
                 if not transcript_path:
-                    logger.error(
-                        f"No transcript markdown file found for {source_id} in {self.output_dir}"
+                    logger.info(
+                        f"No transcript markdown file found for {source_id} in {self.output_dir} (will generate standalone summary)"
                     )
-                    logger.error(f"Tried patterns: {search_patterns}")
+                    logger.debug(f"Tried patterns: {search_patterns}")
                     return None
 
             # Read existing transcript content
@@ -695,12 +695,16 @@ class FileGenerationService:
                 logger.error(f"Summary {summary_id} not found")
                 return None
 
-            # Check if this is HCE-processed summary
-            is_hce = summary.processing_type == "hce"
+            # Check if this is HCE-processed summary (recognize both "hce" and "hce_unified")
+            is_hce = summary.processing_type in ("hce", "hce_unified")
             # Note: hce_data_json is a JSONEncodedType field, already deserialized to dict
             hce_data = summary.hce_data_json if summary.hce_data_json else None
+            
+            # If processing_type is "hce_unified" but hce_data_json is None, load from database
+            if is_hce and not hce_data and summary.processing_type == "hce_unified":
+                hce_data = self._load_hce_data_from_database(source_id)
 
-            # Generate YAML frontmatter
+            # Generate YAML frontmatter matching template structure
             frontmatter = {
                 "title": f"Summary of {video.title}",
                 "source_id": video.source_id,
@@ -709,25 +713,68 @@ class FileGenerationService:
                 "processing_type": summary.processing_type,
                 "llm_provider": summary.llm_provider,
                 "llm_model": summary.llm_model,
-                "processing_cost": summary.processing_cost,
-                "total_tokens": summary.total_tokens,
-                "compression_ratio": summary.compression_ratio,
+                "processing_cost": summary.processing_cost or 0,
+                "total_tokens": summary.total_tokens or 0,
+                "compression_ratio": summary.compression_ratio or 0,
                 "created_at": (
                     summary.created_at.isoformat() if summary.created_at else None
                 ),
-                "template_used": summary.template_used,
+                "template_used": summary.template_used or "HCE Unified Pipeline",
+                "Processing Cost": str(summary.processing_cost or 0),
+                "processing_time": str(int(summary.processing_time_seconds or 0)) if summary.processing_time_seconds else "0",
             }
+
+            # Add mining_timestamp (use created_at)
+            if summary.created_at:
+                frontmatter["mining_timestamp"] = summary.created_at.isoformat()
 
             # Add HCE-specific metadata
             if is_hce and hce_data:
-                frontmatter["claims_extracted"] = len(hce_data.get("claims", []))
-                frontmatter["people_found"] = len(hce_data.get("people", []))
-                frontmatter["concepts_found"] = len(hce_data.get("concepts", []))
-                frontmatter["relations_found"] = len(hce_data.get("relations", []))
+                claims = hce_data.get("claims", [])
+                people = hce_data.get("people", [])
+                concepts = hce_data.get("concepts", [])
+                jargon = hce_data.get("jargon", [])
+                relations = hce_data.get("relations", [])
+                
+                frontmatter["claims_extracted"] = len(claims)
+                frontmatter["people_found"] = len(people)
+                frontmatter["concepts_found"] = len(concepts)
+                frontmatter["relations_found"] = len(relations)
+                
+                # Calculate tier distribution
+                tier_a = len([c for c in claims if c.get("tier") == "A"])
+                tier_b = len([c for c in claims if c.get("tier") == "B"])
+                tier_c = len([c for c in claims if c.get("tier") == "C"])
+                frontmatter["tier_distribution"] = {"A": tier_a, "B": tier_b, "C": tier_c}
+                
+                # Check for evidence spans, categories, relations
+                has_evidence = any(c.get("evidence") for c in claims)
+                frontmatter["has_evidence_spans"] = has_evidence
+                frontmatter["has_categories"] = bool(concepts)  # Using concepts as categories
+                frontmatter["has_relations"] = bool(relations)
+            else:
+                frontmatter["claims_extracted"] = 0
+                frontmatter["people_found"] = 0
+                frontmatter["concepts_found"] = 0
+                frontmatter["relations_found"] = 0
+                frontmatter["tier_distribution"] = {"A": 0, "B": 0, "C": 0}
+                frontmatter["has_evidence_spans"] = False
+                frontmatter["has_categories"] = False
+                frontmatter["has_relations"] = False
 
             # Add summary metadata if available
             if summary.summary_metadata_json:
                 frontmatter.update(summary.summary_metadata_json)
+
+            # Generate tags for YAML frontmatter (filter out unwanted tags)
+            # Tags to avoid: #claim-analysis, #hce-processed, #high-confidence, #medium-confidence, #video/...
+            tags = []
+            
+            # Only add meaningful, user-focused tags here if needed
+            # For now, we keep tags minimal - users can add their own tags
+            
+            # Add tags to frontmatter (empty list by default, users can add their own)
+            frontmatter["tags"] = tags
 
             # Generate markdown content
             if is_hce and hce_data:
@@ -980,20 +1027,60 @@ class FileGenerationService:
             return results
 
     # Helper methods
+    def _format_evidence_as_hyperlink(
+        self, quote: str, start_time: str, source_id: str | None
+    ) -> str:
+        """
+        Format evidence quote as a hyperlink to YouTube video at timestamp.
+        
+        Args:
+            quote: The quote text to display
+            start_time: Start time as string (e.g., "203.56")
+            source_id: Source ID (YouTube video ID if applicable)
+            
+        Returns:
+            Markdown formatted quote as hyperlink if YouTube, otherwise just quoted text
+        """
+        # Check if source_id is a YouTube video ID (11 characters)
+        is_youtube = (
+            source_id
+            and isinstance(source_id, str)
+            and len(source_id) == 11
+            and source_id != "youtube_video"
+        )
+        
+        # Try to parse start_time to get timestamp
+        timestamp_seconds = None
+        if start_time:
+            try:
+                # Convert string to float, then to int for YouTube timestamp
+                timestamp_seconds = int(float(start_time))
+            except (ValueError, TypeError):
+                pass
+        
+        # Format as hyperlink if YouTube
+        if is_youtube:
+            if timestamp_seconds is not None:
+                # YouTube URL with timestamp
+                youtube_url = f"https://www.youtube.com/watch?v={source_id}&t={timestamp_seconds}s"
+            else:
+                # YouTube URL without timestamp
+                youtube_url = f"https://www.youtube.com/watch?v={source_id}"
+            return f'["{quote}"]({youtube_url})'
+        else:
+            # Just return quoted text if not YouTube
+            return f'"{quote}"'
+    
     def _generate_hce_markdown(self, video, summary, hce_data, frontmatter) -> str:
-        """Generate enhanced HCE-specific markdown content."""
+        """Generate enhanced HCE-specific markdown content matching template structure."""
 
         # Extract claim data
         claims = hce_data.get("claims", [])
         people = hce_data.get("people", [])
         concepts = hce_data.get("concepts", [])
+        jargon = hce_data.get("jargon", [])
         relations = hce_data.get("relations", [])
         contradictions = hce_data.get("contradictions", [])
-
-        # Categorize claims by tier
-        tier_a_claims = [c for c in claims if c.get("tier") == "A"]
-        tier_b_claims = [c for c in claims if c.get("tier") == "B"]
-        _tier_c_claims = [c for c in claims if c.get("tier") == "C"]
 
         # Generate markdown content with proper YAML frontmatter
         yaml_frontmatter = yaml.dump(frontmatter, default_flow_style=False)
@@ -1001,169 +1088,651 @@ class FileGenerationService:
         markdown_content = f"""---
 {yaml_frontmatter}---
 
-# Claim Analysis: {video.title}
-
-**Original Video:** [{video.url}]({video.url})
-**Analyzed by:** {summary.llm_model} ({summary.llm_provider})
-**Processing Cost:** ${summary.processing_cost:.4f} ({summary.total_tokens:,} tokens)
-**Claims Extracted:** {len(claims)} | **Relations Mapped:** {len(relations)} | **Contradictions:** {len(contradictions)}
-
 ## Executive Summary
 
 """
 
-        # Generate executive summary from A-tier claims
-        if tier_a_claims:
-            markdown_content += "**Key High-Confidence Claims:**\n\n"
-            for i, claim in enumerate(tier_a_claims[:5], 1):  # Top 5 A-tier claims
-                canonical = claim.get("canonical", "")
-                markdown_content += f"{i}. {canonical}\n"
-
-            markdown_content += "\n"
-        else:
-            markdown_content += (
-                "*No high-confidence (Tier A) claims were identified.*\n\n"
-            )
-
-        # Add traditional summary if available
+        # Use summary_text as the executive summary (comprehensive paragraph format)
         if summary.summary_text:
-            markdown_content += f"**Generated Summary:** {summary.summary_text}\n\n"
+            # Clean up JSON formatting if present
+            summary_text = self._clean_summary_text(summary.summary_text)
+            markdown_content += f"{summary_text}\n\n"
+        else:
+            markdown_content += "*No summary text available.*\n\n"
 
-        markdown_content += "## Key Claims by Category\n\n"
+        markdown_content += "## CLAIMS\n\n"
 
-        # Tier A Claims
-        if tier_a_claims:
-            markdown_content += "### 🥇 Tier A Claims (High Confidence)\n\n"
-            for claim in tier_a_claims:
+        # 🔧 FIX: Group claims by speaker
+        # First, get speaker info for each claim by looking up segments from evidence
+        claims_by_speaker = {}  # speaker_name -> list of (claim, claim_index)
+        claims_without_speaker = []  # Claims that couldn't be linked to a speaker
+        
+        try:
+            # Query database to get speaker info for evidence segments
+            from ..database.models import EvidenceSpan, Segment
+            
+            # Get source_id from video object
+            source_id = getattr(video, 'source_id', None) or getattr(video, 'id', None)
+            
+            with self.db_service.get_session() as session:
+                # Build a mapping of segment_id -> speaker
+                segment_speakers = {}
+                
+                # Get all unique segment IDs from evidence
+                all_segment_ids = set()
+                for claim in claims:
+                    evidence = claim.get("evidence", [])
+                    for ev in evidence:
+                        if isinstance(ev, dict):
+                            segment_id = ev.get("segment_id")
+                            if segment_id and segment_id != "unknown":
+                                all_segment_ids.add(segment_id)
+                
+                # Query segments to get speaker info
+                # Note: segment_id format may be "source_id_segment_id" or just "segment_id"
+                if all_segment_ids:
+                    # Try exact match first
+                    segments = session.query(Segment).filter(
+                        Segment.segment_id.in_(all_segment_ids)
+                    ).all()
+                    
+                    # Also try matching by source_id if we have it
+                    if source_id:
+                        # For segments that might be stored as just the segment part
+                        # (without source_id prefix), query by source_id
+                        segments_by_source = session.query(Segment).filter(
+                            Segment.source_id == source_id
+                        ).all()
+                        
+                        # Build mapping for both formats
+                        for seg in segments_by_source:
+                            # Match if segment_id matches exactly or matches the suffix
+                            for ev_seg_id in all_segment_ids:
+                                if (ev_seg_id == seg.segment_id or 
+                                    ev_seg_id.endswith(f"_{seg.segment_id}") or
+                                    seg.segment_id in ev_seg_id):
+                                    if seg.speaker:
+                                        segment_speakers[ev_seg_id] = seg.speaker
+                    
+                    # Also add exact matches
+                    for seg in segments:
+                        if seg.speaker:
+                            segment_speakers[seg.segment_id] = seg.speaker
+                
+                # Group claims by speaker
+                for i, claim in enumerate(claims, 1):
+                    canonical = claim.get("canonical", "")
+                    evidence = claim.get("evidence", [])
+                    
+                    # Find speakers from evidence segments
+                    speakers_found = set()
+                    for ev in evidence:
+                        if isinstance(ev, dict):
+                            segment_id = ev.get("segment_id")
+                            if segment_id and segment_id in segment_speakers:
+                                speakers_found.add(segment_speakers[segment_id])
+                    
+                    if speakers_found:
+                        # If multiple speakers, use the first one (or could use most common)
+                        speaker = sorted(speakers_found)[0]
+                        if speaker not in claims_by_speaker:
+                            claims_by_speaker[speaker] = []
+                        claims_by_speaker[speaker].append((claim, i))
+                    else:
+                        # No speaker found - add to unassigned
+                        claims_without_speaker.append((claim, i))
+        
+        except Exception as e:
+            logger.warning(f"Failed to group claims by speaker: {e}")
+            # Fallback: treat all claims as unassigned
+            claims_without_speaker = [(claim, i+1) for i, claim in enumerate(claims)]
+            claims_by_speaker = {}
+
+        # Generate claims grouped by speaker
+        claim_counter = 1
+        
+        # Output claims by speaker (sorted alphabetically)
+        for speaker in sorted(claims_by_speaker.keys()):
+            speaker_claims = claims_by_speaker[speaker]
+            markdown_content += f"### Claims by {speaker}\n\n"
+            
+            for claim, original_index in speaker_claims:
                 canonical = claim.get("canonical", "")
-                claim_type = claim.get("claim_type", "General")
-                evidence = claim.get("evidence", [])
-
-                markdown_content += f"**{canonical}**\n"
+                claim_type = claim.get("claim_type", "factual")
+                tier = claim.get("tier", "C")
+                tier_label = {
+                    "A": "High Confidence",
+                    "B": "Medium Confidence",
+                    "C": "Low Confidence"
+                }.get(tier, "Unknown")
+                
+                markdown_content += f"#### {claim_counter}. {canonical}\n"
                 markdown_content += f"- *Type:* {claim_type}\n"
+                markdown_content += f"- *Tier:* {tier} ({tier_label})\n\n"
+                
+                # Evidence section with detailed structure
+                evidence = claim.get("evidence", [])
                 if evidence:
-                    markdown_content += (
-                        f"- *Evidence:* {len(evidence)} supporting points\n"
-                    )
-                markdown_content += "\n"
-
-        # Tier B Claims
-        if tier_b_claims:
-            markdown_content += "### 🥈 Tier B Claims (Medium Confidence)\n\n"
-            for claim in tier_b_claims[:10]:  # Limit to 10 for readability
+                    markdown_content += "##### Evidence\n"
+                    for j, ev in enumerate(evidence, 1):
+                        # Handle both dict and string evidence formats
+                        if isinstance(ev, dict):
+                            text = ev.get("text", ev.get("quote", ""))
+                            quote = ev.get("quote", text)
+                            start_time = ev.get("start_time", "")
+                            end_time = ev.get("end_time", "")
+                            segment_id = ev.get("segment_id", "unknown")
+                        else:
+                            # Legacy string format
+                            text = str(ev)
+                            quote = text
+                            start_time = ""
+                            end_time = ""
+                            segment_id = "unknown"
+                        
+                        # Format as hyperlink to YouTube timestamp (if applicable)
+                        formatted_quote = self._format_evidence_as_hyperlink(
+                            quote, start_time, source_id
+                        )
+                        markdown_content += f"{j}. {formatted_quote}\n"
+                    markdown_content += "\n"
+                else:
+                    markdown_content += "\n"
+                
+                claim_counter += 1
+            
+            markdown_content += "\n"
+        
+        # Output claims without speaker assignment
+        if claims_without_speaker:
+            markdown_content += f"### Claims (Speaker Unknown)\n\n"
+            for claim, original_index in claims_without_speaker:
                 canonical = claim.get("canonical", "")
-                claim_type = claim.get("claim_type", "General")
-                markdown_content += f"- **{canonical}** *(Type: {claim_type})*\n"
-
-            if len(tier_b_claims) > 10:
-                markdown_content += (
-                    f"\n*...and {len(tier_b_claims) - 10} more Tier B claims*\n"
-                )
+                claim_type = claim.get("claim_type", "factual")
+                tier = claim.get("tier", "C")
+                tier_label = {
+                    "A": "High Confidence",
+                    "B": "Medium Confidence",
+                    "C": "Low Confidence"
+                }.get(tier, "Unknown")
+                
+                markdown_content += f"#### {claim_counter}. {canonical}\n"
+                markdown_content += f"- *Type:* {claim_type}\n"
+                markdown_content += f"- *Tier:* {tier} ({tier_label})\n\n"
+                
+                # Evidence section
+                evidence = claim.get("evidence", [])
+                if evidence:
+                    markdown_content += "##### Evidence\n"
+                    for j, ev in enumerate(evidence, 1):
+                        if isinstance(ev, dict):
+                            text = ev.get("text", ev.get("quote", ""))
+                            quote = ev.get("quote", text)
+                            start_time = ev.get("start_time", "")
+                            end_time = ev.get("end_time", "")
+                            segment_id = ev.get("segment_id", "unknown")
+                        else:
+                            text = str(ev)
+                            quote = text
+                            start_time = ""
+                            end_time = ""
+                            segment_id = "unknown"
+                        
+                        # Format as hyperlink to YouTube timestamp (if applicable)
+                        formatted_quote = self._format_evidence_as_hyperlink(
+                            quote, start_time, source_id
+                        )
+                        markdown_content += f"{j}. {formatted_quote}\n"
+                    markdown_content += "\n"
+                else:
+                    markdown_content += "\n"
+                
+                claim_counter += 1
+            
             markdown_content += "\n"
 
-        # People, Concepts, and Jargon sections
+        markdown_content += "## PEOPLE\n\n"
         if people:
-            markdown_content += "## People\n\n"
-            for person in people[:20]:  # Limit for readability
-                name = person.get("name", "")
+            for person in people:
+                name = person.get("name", "") or person.get("normalized_name", "") or person.get("surface", "")
                 description = person.get("description", "")
-                markdown_content += f"- **{name}**"
-                if description:
-                    markdown_content += f": {description}"
-                markdown_content += "\n"
-            markdown_content += "\n"
+                if name:
+                    markdown_content += f"- **{name}**"
+                    if description:
+                        markdown_content += f": {description}"
+                    markdown_content += "\n"
+        else:
+            markdown_content += "*No people identified in this content.*\n"
+        markdown_content += "\n"
 
+        markdown_content += "## JARGON\n\n"
+        if jargon:
+            for term in jargon:
+                term_name = term.get("term", "")
+                definition = term.get("definition", "")
+                domain = term.get("domain", "")
+                if term_name:
+                    markdown_content += f"- **{term_name}**"
+                    if domain:
+                        markdown_content += f" ({domain})"
+                    if definition:
+                        markdown_content += f": {definition}"
+                    markdown_content += "\n"
+        else:
+            markdown_content += "*No jargon or technical terms identified in this content.*\n"
+        markdown_content += "\n"
+
+        markdown_content += "## CONCEPTS\n\n"
         if concepts:
-            markdown_content += "## Concepts\n\n"
-            for concept in concepts[:20]:
+            for concept in concepts:
                 name = concept.get("name", "")
                 description = concept.get("description", "")
-                markdown_content += f"- **{name}**"
-                if description:
-                    markdown_content += f": {description}"
-                markdown_content += "\n"
-            markdown_content += "\n"
-
-        # Evidence Citations
-        if any(claim.get("evidence") for claim in claims):
-            markdown_content += "## Evidence Citations\n\n"
-            claims_with_evidence = [
-                c for c in tier_a_claims + tier_b_claims if c.get("evidence")
-            ]
-
-            for claim in claims_with_evidence[:10]:  # Top 10 claims with evidence
-                canonical = claim.get("canonical", "")
-                evidence = claim.get("evidence", [])
-
-                markdown_content += f"**{canonical}**\n"
-                for i, ev in enumerate(evidence[:3], 1):  # Top 3 evidence points
-                    markdown_content += f"{i}. {ev}\n"
-                markdown_content += "\n"
-
-        # Relations and Contradictions
-        if contradictions:
-            markdown_content += "## Contradictions Detected\n\n"
-            for i, contradiction in enumerate(contradictions[:5], 1):
-                claim1 = contradiction.get("claim1", {}).get("canonical", "")
-                claim2 = contradiction.get("claim2", {}).get("canonical", "")
-                markdown_content += f"{i}. **Claim:** {claim1}\n"
-                markdown_content += f"   **Contradicts:** {claim2}\n\n"
-
-        # Add Obsidian-compatible tags and links
-        markdown_content += "## Tags\n\n"
-
-        # Generate Obsidian tags from concepts and claim types
-        obsidian_tags = set()
-
-        # Claim-centric schema doesn't have tags_json, so no hashtags from database
-
-        # Add video-related tags
-        obsidian_tags.add(f"#video/{video.source_id}")
-        obsidian_tags.add("#claim-analysis")
-        obsidian_tags.add("#hce-processed")
-
-        # Add concept tags
-        for concept in concepts[:15]:  # Limit to prevent tag overload
-            name = concept.get("name", "").strip()
-            if name:
-                # Clean tag name for Obsidian compatibility
-                tag_name = name.replace(" ", "-").replace("/", "-").lower()
-                tag_name = "".join(c for c in tag_name if c.isalnum() or c in "-_")
-                if tag_name:
-                    obsidian_tags.add(f"#concept/{tag_name}")
-
-        # Add tier tags based on what was found
-        if tier_a_claims:
-            obsidian_tags.add("#high-confidence")
-        if tier_b_claims:
-            obsidian_tags.add("#medium-confidence")
-        if contradictions:
-            obsidian_tags.add("#contradictions")
-        if relations:
-            obsidian_tags.add("#relations")
-
-        # Output tags
-        if obsidian_tags:
-            # Format tags in a clean line
-            markdown_content += " ".join(sorted(obsidian_tags))
-            markdown_content += "\n\n"
-
-        # Add Obsidian-style wikilinks for people
-        if people:
-            markdown_content += "## Related People\n\n"
-            for person in people[:10]:
-                name = person.get("name", "").strip()
+                definition = concept.get("definition", "")
                 if name:
-                    # Create Obsidian wikilink
-                    markdown_content += f"- [[{name}]]\n"
-            markdown_content += "\n"
+                    markdown_content += f"- **{name}**"
+                    if description:
+                        markdown_content += f": {description}"
+                    elif definition:
+                        markdown_content += f": {definition}"
+                    markdown_content += "\n"
+        else:
+            markdown_content += "*No concepts or mental models identified in this content.*\n"
+        markdown_content += "\n"
 
+        # Tags are now in YAML frontmatter, not here
+
+        # Footer
         markdown_content += f"""---
 *Generated from Knowledge System database on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*
 *Processed using HCE (Hybrid Claim Extractor) v2.0*
 """
 
         return markdown_content
+
+    def _load_hce_data_from_database(self, source_id: str) -> dict | None:
+        """
+        Load HCE data from database tables when hce_data_json is None.
+        
+        This reconstructs the hce_data dictionary format expected by _generate_hce_markdown()
+        from the claim-centric database tables.
+        
+        Args:
+            source_id: Source ID to load data for
+            
+        Returns:
+            Dictionary with keys: claims, people, concepts, jargon, relations, contradictions
+            Returns None if no data found or error occurs
+        """
+        try:
+            from ..database.claim_store import ClaimStore
+            
+            claim_store = ClaimStore(self.db)
+            
+            # Load claims with evidence
+            claims_list = claim_store.get_claims_by_source(source_id, include_evidence=True)
+            
+            # Also load evidence spans directly to get segment_id
+            with self.db.get_session() as session:
+                from ..database.models import Claim, EvidenceSpan
+                
+                source_claims = session.query(Claim).filter_by(source_id=source_id).all()
+                claim_id_to_evidence = {}
+                for claim in source_claims:
+                    evidence_spans = (
+                        session.query(EvidenceSpan)
+                        .filter_by(claim_id=claim.claim_id)
+                        .order_by(EvidenceSpan.sequence)
+                        .all()
+                    )
+                    claim_id_to_evidence[claim.claim_id] = [
+                        {
+                            "quote": ev.quote or "",
+                            "start_time": ev.start_time or "",
+                            "end_time": ev.end_time or "",
+                            "segment_id": ev.segment_id or "unknown",
+                        }
+                        for ev in evidence_spans
+                    ]
+            
+            # Transform claims to expected format
+            claims = []
+            for claim_dict in claims_list:
+                claim_id = claim_dict.get("claim_id", "")
+                # Use evidence from database query (includes segment_id)
+                evidence_list = claim_id_to_evidence.get(claim_id, [])
+                
+                # Transform evidence format to match expected structure
+                evidence_list = [
+                    {
+                        "text": ev.get("quote", ""),  # Map "quote" to "text" for compatibility
+                        "quote": ev.get("quote", ""),  # Keep "quote" for compatibility
+                        "start_time": ev.get("start_time", ""),
+                        "end_time": ev.get("end_time", ""),
+                        "segment_id": ev.get("segment_id", "unknown"),
+                    }
+                    for ev in evidence_list
+                ]
+                
+                claim_data = {
+                    "claim_id": claim_id,
+                    "canonical": claim_dict.get("canonical", ""),
+                    "tier": claim_dict.get("tier", "C"),
+                    "claim_type": claim_dict.get("claim_type", "factual"),
+                    "evidence": evidence_list,
+                }
+                claims.append(claim_data)
+            
+            # Load people from database
+            people = []
+            with self.db.get_session() as session:
+                from ..database.models import Claim, ClaimPerson, Person, PersonEvidence
+                
+                # Get all claim IDs for this source
+                source_claims = session.query(Claim).filter_by(source_id=source_id).all()
+                claim_ids = [c.claim_id for c in source_claims]
+                
+                if claim_ids:
+                    # Get people linked to these claims via ClaimPerson (mentioned in claim text)
+                    claim_people = (
+                        session.query(ClaimPerson, Person)
+                        .join(Person, ClaimPerson.person_id == Person.person_id)
+                        .filter(ClaimPerson.claim_id.in_(claim_ids))
+                        .all()
+                    )
+                    
+                    # Also get people linked via PersonEvidence (mentioned in episode, linked to claims)
+                    evidence_people = (
+                        session.query(PersonEvidence, Person)
+                        .join(Person, PersonEvidence.person_id == Person.person_id)
+                        .filter(PersonEvidence.claim_id.in_(claim_ids))
+                        .all()
+                    )
+                    
+                    # Deduplicate by person_id (combine both sources)
+                    seen_person_ids = set()
+                    for cp, person in claim_people:
+                        if person.person_id not in seen_person_ids:
+                            people.append({
+                                "name": person.name or person.normalized_name or "",
+                                "description": person.description or "",
+                                "entity_type": person.entity_type or "person",
+                            })
+                            seen_person_ids.add(person.person_id)
+                    
+                    for pe, person in evidence_people:
+                        if person.person_id not in seen_person_ids:
+                            people.append({
+                                "name": person.name or person.normalized_name or "",
+                                "description": person.description or "",
+                                "entity_type": person.entity_type or "person",
+                            })
+                            seen_person_ids.add(person.person_id)
+                    
+                    logger.info(f"Loaded {len(people)} people from database for source {source_id}")
+                else:
+                    logger.warning(f"No claims found for source {source_id}, cannot load people/concepts/jargon")
+            
+            # Load concepts from database
+            concepts = []
+            with self.db.get_session() as session:
+                from ..database.models import ClaimConcept, Concept, ConceptEvidence
+                
+                if claim_ids:
+                    # Get concepts linked to these claims via ClaimConcept (mentioned in claim text)
+                    claim_concepts = (
+                        session.query(ClaimConcept, Concept)
+                        .join(Concept, ClaimConcept.concept_id == Concept.concept_id)
+                        .filter(ClaimConcept.claim_id.in_(claim_ids))
+                        .all()
+                    )
+                    
+                    # Also get concepts linked via ConceptEvidence (mentioned in episode, linked to claims)
+                    evidence_concepts = (
+                        session.query(ConceptEvidence, Concept)
+                        .join(Concept, ConceptEvidence.concept_id == Concept.concept_id)
+                        .filter(ConceptEvidence.claim_id.in_(claim_ids))
+                        .all()
+                    )
+                    
+                    # Deduplicate by concept_id (combine both sources)
+                    seen_concept_ids = set()
+                    for cc, concept in claim_concepts:
+                        if concept.concept_id not in seen_concept_ids:
+                            concepts.append({
+                                "name": concept.name,
+                                "description": concept.description or "",
+                                "definition": concept.definition or "",
+                            })
+                            seen_concept_ids.add(concept.concept_id)
+                    
+                    for ce, concept in evidence_concepts:
+                        if concept.concept_id not in seen_concept_ids:
+                            concepts.append({
+                                "name": concept.name,
+                                "description": concept.description or "",
+                                "definition": concept.definition or "",
+                            })
+                            seen_concept_ids.add(concept.concept_id)
+            
+            # Load jargon from database
+            jargon = []
+            with self.db.get_session() as session:
+                from ..database.models import ClaimJargon, JargonTerm, JargonEvidence
+                
+                if claim_ids:
+                    # Get jargon linked to these claims via ClaimJargon (mentioned in claim text)
+                    claim_jargon = (
+                        session.query(ClaimJargon, JargonTerm)
+                        .join(JargonTerm, ClaimJargon.jargon_id == JargonTerm.jargon_id)
+                        .filter(ClaimJargon.claim_id.in_(claim_ids))
+                        .all()
+                    )
+                    
+                    # Also get jargon linked via JargonEvidence (mentioned in episode, linked to claims)
+                    evidence_jargon = (
+                        session.query(JargonEvidence, JargonTerm)
+                        .join(JargonTerm, JargonEvidence.jargon_id == JargonTerm.jargon_id)
+                        .filter(JargonEvidence.claim_id.in_(claim_ids))
+                        .all()
+                    )
+                    
+                    # Deduplicate by jargon_id (combine both sources)
+                    seen_jargon_ids = set()
+                    for cj, jargon_term in claim_jargon:
+                        if jargon_term.jargon_id not in seen_jargon_ids:
+                            jargon.append({
+                                "term": jargon_term.term,
+                                "definition": jargon_term.definition or "",
+                                "domain": jargon_term.domain or "",
+                            })
+                            seen_jargon_ids.add(jargon_term.jargon_id)
+                    
+                    for je, jargon_term in evidence_jargon:
+                        if jargon_term.jargon_id not in seen_jargon_ids:
+                            jargon.append({
+                                "term": jargon_term.term,
+                                "definition": jargon_term.definition or "",
+                                "domain": jargon_term.domain or "",
+                            })
+                            seen_jargon_ids.add(jargon_term.jargon_id)
+            
+            # Load relations from database
+            relations = []
+            with self.db.get_session() as session:
+                from ..database.models import ClaimRelation
+                
+                if claim_ids:
+                    # Get relations where source or target is one of our claims
+                    claim_relations = (
+                        session.query(ClaimRelation)
+                        .filter(
+                            (ClaimRelation.source_claim_id.in_(claim_ids)) |
+                            (ClaimRelation.target_claim_id.in_(claim_ids))
+                        )
+                        .all()
+                    )
+                    
+                    for rel in claim_relations:
+                        relations.append({
+                            "source_claim_id": rel.source_claim_id,
+                            "target_claim_id": rel.target_claim_id,
+                            "type": rel.relation_type,
+                            "strength": rel.strength or 0.5,
+                            "rationale": rel.rationale or "",
+                        })
+            
+            # Contradictions are not stored separately - they're relations with type "contradicts"
+            contradictions = [
+                r for r in relations if r.get("type") == "contradicts"
+            ]
+            
+            logger.info(
+                f"Loaded HCE data from database: {len(claims)} claims, {len(people)} people, "
+                f"{len(concepts)} concepts, {len(jargon)} jargon, {len(relations)} relations"
+            )
+            
+            return {
+                "claims": claims,
+                "people": people,
+                "concepts": concepts,
+                "jargon": jargon,
+                "relations": relations,
+                "contradictions": contradictions,
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to load HCE data from database for {source_id}: {e}")
+            import traceback
+            logger.debug(traceback.format_exc())
+            return None
+
+    def _clean_summary_text(self, summary_text: str) -> str:
+        """
+        Clean summary text to remove JSON formatting and properly format paragraphs.
+        
+        Handles cases where summary_text might contain:
+        - JSON dict format like {'paragraph1': '...', 'paragraph2': '...'}
+        - Already formatted text with proper paragraphs
+        - Text with 'paragraph1': markers that need cleaning
+        """
+        if not summary_text:
+            return ""
+        
+        import ast
+        import json
+        import re
+        
+        # Check if it's JSON-like dict format
+        text = summary_text.strip()
+        
+        # Try to parse as JSON/dict if it starts with {
+        if text.startswith("{") and ("paragraph" in text.lower() or "'paragraph" in text or '"paragraph' in text):
+            try:
+                # Try JSON first (handles both single and double quotes)
+                try:
+                    summary_dict = json.loads(text)
+                except json.JSONDecodeError:
+                    # Try ast.literal_eval for Python dict format (handles single quotes)
+                    try:
+                        summary_dict = ast.literal_eval(text)
+                    except (ValueError, SyntaxError):
+                        # If both fail, try manual extraction
+                        summary_dict = None
+                
+                if isinstance(summary_dict, dict):
+                    # Extract paragraphs in order
+                    paragraphs = []
+                    # Look for paragraph1, paragraph2, etc. in order
+                    i = 1
+                    while True:
+                        # Try both 'paragraph1' and "paragraph1" keys
+                        key1 = f"paragraph{i}"
+                        key2 = f'paragraph{i}'
+                        para_text = None
+                        
+                        if key1 in summary_dict:
+                            para_text = summary_dict[key1]
+                        elif key2 in summary_dict:
+                            para_text = summary_dict[key2]
+                        
+                        if para_text:
+                            para_str = str(para_text).strip()
+                            if para_str:
+                                paragraphs.append(para_str)
+                            i += 1
+                        else:
+                            break
+                    
+                    # If no numbered paragraphs, try to extract all string values in order
+                    if not paragraphs:
+                        for key in sorted(summary_dict.keys()):
+                            value = summary_dict[key]
+                            if isinstance(value, str) and value.strip():
+                                paragraphs.append(value.strip())
+                    
+                    # Join with double newlines for proper paragraph breaks
+                    if paragraphs:
+                        return "\n\n".join(paragraphs)
+            except (ValueError, SyntaxError, json.JSONDecodeError) as e:
+                logger.debug(f"Failed to parse JSON dict format: {e}")
+                # If parsing fails, continue with text cleaning below
+                pass
+        
+        # Clean up text that has 'paragraph1': or 'paragraph2': markers inline
+        # Handle patterns like: 'paragraph1': 'text', 'paragraph2': 'text'
+        # Or: "paragraph1": "text", "paragraph2": "text"
+        # Or: paragraph1: text, paragraph2: text
+        
+        # First, try to extract paragraphs using regex
+        para_pattern = r'[\'"]?paragraph(\d+)[\'"]?\s*:\s*[\'"](.*?)[\'"]'
+        matches = re.findall(para_pattern, text, re.DOTALL | re.IGNORECASE)
+        if matches:
+            # Sort by paragraph number
+            sorted_matches = sorted(matches, key=lambda x: int(x[0]))
+            paragraphs = [m[1].strip() for m in sorted_matches if m[1].strip()]
+            if paragraphs:
+                return "\n\n".join(paragraphs)
+        
+        # Try pattern without quotes around text
+        para_pattern2 = r'[\'"]?paragraph(\d+)[\'"]?\s*:\s*([^\'"\n,}]+)'
+        matches2 = re.findall(para_pattern2, text, re.DOTALL | re.IGNORECASE)
+        if matches2:
+            sorted_matches2 = sorted(matches2, key=lambda x: int(x[0]))
+            paragraphs2 = [m[1].strip() for m in sorted_matches2 if m[1].strip()]
+            if paragraphs2:
+                return "\n\n".join(paragraphs2)
+        
+        # Remove patterns like 'paragraph1': or "paragraph1": at start of lines
+        text = re.sub(r'^[\'"]?paragraph\d+[\'"]?\s*:\s*', '', text, flags=re.MULTILINE | re.IGNORECASE)
+        # Remove trailing commas and quotes
+        text = re.sub(r',\s*$', '', text, flags=re.MULTILINE)
+        text = text.strip()
+        
+        # Remove surrounding braces if present
+        if text.startswith("{") and text.endswith("}"):
+            text = text[1:-1].strip()
+        
+        # Ensure proper paragraph breaks (double newlines between paragraphs)
+        # Split on single newlines that look like paragraph breaks
+        lines = text.split('\n')
+        cleaned_lines = []
+        for i, line in enumerate(lines):
+            line = line.strip()
+            if line:
+                cleaned_lines.append(line)
+            elif cleaned_lines and i < len(lines) - 1:
+                # Add paragraph break if next line has content
+                if lines[i + 1].strip():
+                    cleaned_lines.append("")
+        
+        result = "\n\n".join(cleaned_lines) if cleaned_lines else text
+        
+        # Final cleanup: remove any remaining JSON artifacts
+        result = re.sub(r'^[\'"]', '', result, flags=re.MULTILINE)  # Remove leading quotes
+        result = re.sub(r'[\'"]\s*$', '', result, flags=re.MULTILINE)  # Remove trailing quotes
+        result = re.sub(r',\s*$', '', result, flags=re.MULTILINE)  # Remove trailing commas
+        
+        return result.strip()
 
     def _sanitize_filename(self, filename: str) -> str:
         """Sanitize filename for filesystem compatibility."""
@@ -1499,8 +2068,8 @@ class FileGenerationService:
                 return None
 
             summaries = self.db.get_summaries_for_video(source_id)
-            # Filter for HCE summaries
-            hce_summaries = [s for s in summaries if s.processing_type == "hce"]
+            # Filter for HCE summaries (recognize both "hce" and "hce_unified")
+            hce_summaries = [s for s in summaries if s.processing_type in ("hce", "hce_unified")]
 
             if not hce_summaries:
                 logger.error(f"No HCE summaries found for video {source_id}")
@@ -1514,12 +2083,20 @@ class FileGenerationService:
             else:
                 summary = hce_summaries[0]
 
-            if not summary or not summary.hce_data_json:
+            if not summary:
+                logger.error(f"Summary {summary_id} not found")
+                return None
+            
+            # Load HCE data - try hce_data_json first, fall back to database for "hce_unified"
+            hce_data = summary.hce_data_json if summary.hce_data_json else None
+            if not hce_data and summary.processing_type == "hce_unified":
+                hce_data = self._load_hce_data_from_database(source_id)
+            
+            if not hce_data:
                 logger.error(f"HCE data not found for summary {summary_id}")
                 return None
 
             # Note: hce_data_json is a JSONEncodedType field, already deserialized to dict
-            hce_data = summary.hce_data_json
             claims = hce_data.get("claims", [])
 
             # Generate markdown content
@@ -1636,7 +2213,8 @@ class FileGenerationService:
                 return None
 
             summaries = self.db.get_summaries_for_video(source_id)
-            hce_summaries = [s for s in summaries if s.processing_type == "hce"]
+            # Filter for HCE summaries (recognize both "hce" and "hce_unified")
+            hce_summaries = [s for s in summaries if s.processing_type in ("hce", "hce_unified")]
 
             if not hce_summaries:
                 return None
@@ -1649,11 +2227,18 @@ class FileGenerationService:
                 )
             )
 
-            if not summary or not summary.hce_data_json:
+            if not summary:
+                return None
+            
+            # Load HCE data - try hce_data_json first, fall back to database for "hce_unified"
+            hce_data = summary.hce_data_json if summary.hce_data_json else None
+            if not hce_data and summary.processing_type == "hce_unified":
+                hce_data = self._load_hce_data_from_database(source_id)
+            
+            if not hce_data:
                 return None
 
             # Note: hce_data_json is a JSONEncodedType field, already deserialized to dict
-            hce_data = summary.hce_data_json
             claims = hce_data.get("claims", [])
 
             # Find contradictions
@@ -1727,7 +2312,8 @@ class FileGenerationService:
                 return None
 
             summaries = self.db.get_summaries_for_video(source_id)
-            hce_summaries = [s for s in summaries if s.processing_type == "hce"]
+            # Filter for HCE summaries (recognize both "hce" and "hce_unified")
+            hce_summaries = [s for s in summaries if s.processing_type in ("hce", "hce_unified")]
 
             if not hce_summaries:
                 return None
@@ -1740,11 +2326,18 @@ class FileGenerationService:
                 )
             )
 
-            if not summary or not summary.hce_data_json:
+            if not summary:
+                return None
+            
+            # Load HCE data - try hce_data_json first, fall back to database for "hce_unified"
+            hce_data = summary.hce_data_json if summary.hce_data_json else None
+            if not hce_data and summary.processing_type == "hce_unified":
+                hce_data = self._load_hce_data_from_database(source_id)
+            
+            if not hce_data:
                 return None
 
             # Note: hce_data_json is a JSONEncodedType field, already deserialized to dict
-            hce_data = summary.hce_data_json
             claims = hce_data.get("claims", [])
 
             # Generate evidence mapping

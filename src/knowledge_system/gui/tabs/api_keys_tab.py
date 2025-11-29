@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import Any
 
-from PyQt6.QtCore import Qt, QTimer, QUrl, pyqtSignal
+from PyQt6.QtCore import Qt, QThread, QTimer, QUrl, pyqtSignal
 from PyQt6.QtGui import QDesktopServices
 from PyQt6.QtWidgets import (
     QCheckBox,
@@ -30,6 +30,24 @@ from ..workers.ffmpeg_installer import FFmpegInstaller
 from ..workers.update_worker import UpdateWorker
 
 logger = get_logger(__name__)
+
+
+class DeviceClaimWorker(QThread):
+    """Worker thread to check device claim status without blocking UI."""
+
+    result_ready = pyqtSignal(dict)
+
+    def run(self):
+        """Perform the device claim check in background thread."""
+        try:
+            from ...services.device_auth import get_device_auth
+
+            device_auth = get_device_auth()
+            result = device_auth.check_if_claimed()
+            self.result_ready.emit(result)
+        except Exception as e:
+            logger.error(f"Error in device claim worker: {e}")
+            self.result_ready.emit({"linked": False})
 
 
 class APIKeysTab(BaseTab):
@@ -67,6 +85,10 @@ class APIKeysTab(BaseTab):
 
         self.gui_settings = get_gui_settings_manager()
         self.tab_name = "⚙️ Settings"
+
+        # Device claim polling timer
+        self.device_claim_timer: QTimer | None = None
+        self.device_claim_worker: QThread | None = None
 
         super().__init__(parent)
 
@@ -327,8 +349,78 @@ class APIKeysTab(BaseTab):
         )
         save_widget_layout.addWidget(save_btn)
 
-        # Add spacing to match the info icon (16px) + spacing (8px) = 24px total
+        # Add spacing after Save button
         save_widget_layout.addSpacing(24)
+
+        # Add checkboxes to the right of Save button
+        from ...services.device_auth import get_device_auth
+        device_auth = get_device_auth()
+        
+        self.auto_upload_checkbox = QCheckBox("Enable automatic upload after processing")
+        # Default to True (checked) - ensure setting is initialized if it doesn't exist
+        # Check if setting exists, if not, initialize it to True
+        if device_auth.settings.value("device/auto_upload") is None:
+            # No setting exists - initialize to True and save it
+            device_auth.set_enabled(True)
+        # Now get the value (will be True for new users, or saved preference for existing users)
+        self.auto_upload_checkbox.setChecked(device_auth.is_enabled())
+        self.auto_upload_checkbox.setToolTip(
+            "When enabled, claims will automatically sync to GetReceipts.org after summarization completes.\n"
+            "Uploaded claims will be hidden from local view (web is canonical source)."
+        )
+        self.auto_upload_checkbox.setStyleSheet(
+            """
+            QCheckBox {
+                font-size: 12px;
+                color: white;
+                font-weight: normal;
+                padding: 4px;
+            }
+            QCheckBox:hover {
+                color: white;
+            }
+            QCheckBox:checked {
+                color: white;
+            }
+        """
+        )
+        self.auto_upload_checkbox.stateChanged.connect(self._toggle_auto_upload)
+        save_widget_layout.addWidget(self.auto_upload_checkbox)
+
+        # Show Introduction Tab checkbox
+        self.show_intro_tab_checkbox = QCheckBox("Show Introduction Tab At Launch")
+        self.show_intro_tab_checkbox.setToolTip(
+            "When enabled, the Introduction tab will be visible when you launch the app.\n"
+            "When disabled, the Introduction tab will be hidden on all future launches.\n\n"
+            "• You can always re-enable this checkbox to show the Introduction tab again\n"
+            "• Useful if you're already familiar with the app and don't need the intro"
+        )
+        self.show_intro_tab_checkbox.setStyleSheet(
+            """
+            QCheckBox {
+                font-size: 12px;
+                color: white;
+                font-weight: normal;
+                padding: 4px;
+            }
+            QCheckBox:hover {
+                color: white;
+            }
+            QCheckBox:checked {
+                color: white;
+            }
+        """
+        )
+        # Load saved preference (default to True - show intro by default)
+        show_intro_enabled = self.gui_settings.get_checkbox_state(
+            self.tab_name, "show_introduction_tab", default=True
+        )
+        self.show_intro_tab_checkbox.setChecked(show_intro_enabled)
+        self.show_intro_tab_checkbox.stateChanged.connect(
+            self._on_show_intro_tab_changed
+        )
+        save_widget_layout.addWidget(self.show_intro_tab_checkbox)
+
         save_widget_layout.addStretch()  # Push everything to the left, matching API key field layout
 
         # Create container widget matching API key field structure
@@ -434,42 +526,6 @@ class APIKeysTab(BaseTab):
 
         update_section.addWidget(self.auto_update_checkbox)
 
-        # Show Introduction Tab checkbox
-        self.show_intro_tab_checkbox = QCheckBox("Show Introduction Tab At Launch")
-        self.show_intro_tab_checkbox.setToolTip(
-            "When enabled, the Introduction tab will be visible when you launch the app.\n"
-            "When disabled, the Introduction tab will be hidden on all future launches.\n\n"
-            "• You can always re-enable this checkbox to show the Introduction tab again\n"
-            "• Useful if you're already familiar with the app and don't need the intro"
-        )
-        # Use consistent styling
-        self.show_intro_tab_checkbox.setStyleSheet(
-            """
-            QCheckBox {
-                font-size: 12px;
-                color: #333;
-                font-weight: normal;
-                padding: 4px;
-            }
-            QCheckBox:hover {
-                color: #2196F3;
-            }
-            QCheckBox:checked {
-                color: #1976d2;
-            }
-        """
-        )
-        # Load saved preference (default to True - show intro by default)
-        show_intro_enabled = self.gui_settings.get_checkbox_state(
-            self.tab_name, "show_introduction_tab", default=True
-        )
-        self.show_intro_tab_checkbox.setChecked(show_intro_enabled)
-        self.show_intro_tab_checkbox.stateChanged.connect(
-            self._on_show_intro_tab_changed
-        )
-
-        update_section.addWidget(self.show_intro_tab_checkbox)
-
         # Speaker Attribution Editor button
         self.speaker_attribution_btn = QPushButton("🎤 Edit Speaker Mappings")
         self.speaker_attribution_btn.clicked.connect(
@@ -525,106 +581,218 @@ class APIKeysTab(BaseTab):
 
         # Settings Tests section removed per user request
 
-        # Processing & Monitoring section
-        processing_section = self._create_processing_section()
-        main_layout.addWidget(processing_section)
+        # Processing & Monitoring section removed - Queue Refresh Interval moved to Queue tab
 
         # Hardware Recommendations section - moved from Local Transcription tab
         # Hardware recommendations removed - now handled automatically during installation
 
         main_layout.addStretch()
 
-    def _create_processing_section(self) -> QGroupBox:
-        """Create processing & monitoring settings section."""
-        group = QGroupBox("Processing & Monitoring")
-        layout = QFormLayout(group)
-
-        # Queue refresh interval
-        self.queue_refresh_spin = QSpinBox()
-        self.queue_refresh_spin.setRange(1, 60)
-        self.queue_refresh_spin.setSuffix(" seconds")
-        self.queue_refresh_spin.setValue(5)  # Default 5 seconds
-        self.queue_refresh_spin.setToolTip(
-            "How often the Queue tab refreshes its display.\n"
-            "• Lower values: More responsive but higher CPU usage\n"
-            "• Higher values: Less CPU usage but delayed updates\n"
-            "• Recommended: 5-10 seconds for most use cases"
-        )
-
-        # Connect to save settings
-        self.queue_refresh_spin.valueChanged.connect(
-            lambda v: self.gui_settings.set_value(
-                "Processing", "queue_refresh_interval", v
-            )
-        )
-
-        # Load saved value
-        saved_interval = self.gui_settings.get_value(
-            "Processing", "queue_refresh_interval", 5
-        )
-        self.queue_refresh_spin.setValue(saved_interval)
-
-        layout.addRow("Queue Refresh Interval:", self.queue_refresh_spin)
-
-        # Add more processing/monitoring settings here in the future
-
-        return group
-
     def _create_web_auth_section(self) -> QGroupBox:
-        """Create authentication section for Skip The Podcast Web."""
-        group = QGroupBox("Skip The Podcast Web Sign In")
+        """Create authentication section for GetReceipts Web (Device Claiming)."""
+        from ...services.device_auth import get_device_auth
+
+        device_auth = get_device_auth()
+
+        group = QGroupBox("GetReceipts.org - Device Linking")
         layout = QVBoxLayout(group)
 
-        # Auth status
-        self.web_auth_status_label = QLabel("Not signed in")
-        self.web_auth_status_label.setStyleSheet("color: #666; font-style: italic;")
-        layout.addWidget(self.web_auth_status_label)
+        # Check if device is already linked
+        is_linked = device_auth.is_linked()
+        user_id = device_auth.get_user_id()
+        claim_code = device_auth.get_claim_code()
 
-        # Info text about OAuth flow
-        info_text = QLabel(
-            "🔐 Sign in via Skipthepodcast.com to enable web export functionality.\n"
-            "This will open your browser for secure authentication."
-        )
-        info_text.setWordWrap(True)
-        info_text.setStyleSheet(
-            "color: #666; font-style: italic; margin: 8px; padding: 8px; "
-            "background-color: #f5f5f5; border-radius: 4px;"
-        )
-        layout.addWidget(info_text)
+        # Link status
+        if is_linked:
+            status_label = QLabel(f"✅ Device Linked to User: {user_id[:8]}...")
+            status_label.setStyleSheet("color: #4caf50; font-weight: bold; font-size: 14px;")
+        else:
+            status_label = QLabel("⚠️ Device Not Linked")
+            status_label.setStyleSheet("color: #ff9800; font-weight: bold; font-size: 14px;")
+        layout.addWidget(status_label)
 
-        # Button layout
+        # Claim code display (large and prominent)
+        claim_code_container = QWidget()
+        claim_code_layout = QVBoxLayout(claim_code_container)
+        claim_code_layout.setContentsMargins(0, 10, 0, 10)
+
+        claim_code_label = QLabel("Your Claim Code:")
+        claim_code_label.setStyleSheet("font-size: 12px; color: #666;")
+        claim_code_layout.addWidget(claim_code_label)
+
+        # Use QLineEdit instead of QLabel so text is clearly visible and selectable
+        self.claim_code_display = QLineEdit(claim_code)
+        self.claim_code_display.setReadOnly(True)  # Read-only so it can't be edited but can be selected
+        self.claim_code_display.setEchoMode(QLineEdit.EchoMode.Normal)  # Ensure text is visible, not masked
+        from PyQt6.QtGui import QFont
+        claim_font = QFont("Courier", 32, QFont.Weight.Bold)
+        self.claim_code_display.setFont(claim_font)
+        self.claim_code_display.setStyleSheet(
+            "QLineEdit { "
+            "color: #2196F3; "
+            "background-color: #f0f8ff; "
+            "padding: 15px; "
+            "border: 2px solid #2196F3; "
+            "border-radius: 8px; "
+            "text-align: center; "
+            "}"
+        )
+        self.claim_code_display.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        claim_code_layout.addWidget(self.claim_code_display)
+
+        layout.addWidget(claim_code_container)
+
+        # Instructions
+        instructions = QLabel(
+            "📱 To link this desktop app to your web account:\n\n"
+            "1️⃣  Sign in at getreceipts.org/dashboard\n"
+            "2️⃣  Go to Settings → Link Desktop Device\n"
+            "3️⃣  Enter the claim code shown above\n\n"
+            "Once linked, all claims will upload to your account automatically."
+        )
+        instructions.setWordWrap(True)
+        instructions.setStyleSheet(
+            "color: #333; "
+            "font-size: 12px; "
+            "background-color: #f9f9f9; "
+            "padding: 12px; "
+            "border-radius: 6px; "
+            "margin: 10px 0;"
+        )
+        layout.addWidget(instructions)
+
+        # Buttons
         button_layout = QHBoxLayout()
 
-        # OAuth authentication button
-        self.web_oauth_btn = QPushButton("🌐 Sign In via Skipthepodcast.com")
-        self.web_oauth_btn.setStyleSheet(
-            "QPushButton { padding: 10px; font-size: 14px; background-color: #2196F3; color: white; border: none; border-radius: 6px; }"
-            "QPushButton:hover { background-color: #1976D2; }"
-            "QPushButton:disabled { background-color: #cccccc; }"
+        # Regenerate code button
+        regenerate_btn = QPushButton("🔄 Regenerate Code")
+        regenerate_btn.setToolTip(
+            "Generate a new claim code.\n\n"
+            "Use this if:\n"
+            "• You lost or forgot your current code\n"
+            "• You want to invalidate the old code for security\n"
+            "• You accidentally shared your code with someone\n\n"
+            "Note: The old code will stop working once regenerated."
         )
-        self.web_oauth_btn.clicked.connect(self._web_sign_in_with_oauth)
-        button_layout.addWidget(self.web_oauth_btn)
+        regenerate_btn.setStyleSheet(
+            "QPushButton { "
+            "background-color: #FF9800; "
+            "color: white; "
+            "font-weight: bold; "
+            "padding: 8px 16px; "
+            "font-size: 12px; "
+            "border-radius: 4px; "
+            "} "
+            "QPushButton:hover { background-color: #F57C00; }"
+        )
+        regenerate_btn.clicked.connect(self._regenerate_claim_code)
+        button_layout.addWidget(regenerate_btn)
 
-        # Sign out button
-        self.web_logout_btn = QPushButton("Sign Out")
-        self.web_logout_btn.setEnabled(False)
-        self.web_logout_btn.clicked.connect(self._web_sign_out)
-        button_layout.addWidget(self.web_logout_btn)
+        # Unlink button (only show if linked)
+        if is_linked:
+            unlink_btn = QPushButton("🔓 Unlink Device")
+            unlink_btn.setToolTip("Remove link to user account")
+            unlink_btn.setStyleSheet(
+                "QPushButton { "
+                "background-color: #f44336; "
+                "color: white; "
+                "font-weight: bold; "
+                "padding: 8px 16px; "
+                "font-size: 12px; "
+                "border-radius: 4px; "
+                "} "
+                "QPushButton:hover { background-color: #d32f2f; }"
+            )
+            unlink_btn.clicked.connect(self._unlink_device)
+            button_layout.addWidget(unlink_btn)
 
         button_layout.addStretch()
         layout.addLayout(button_layout)
 
-        # Initialize OAuth state
-        self._web_auth_user = None
-        self._web_uploader = None
-
-        # Note: OAuth authentication is handled in the Cloud Uploads tab
-        # This section is a placeholder for future direct OAuth integration
-        logger.info("Web auth UI initialized - OAuth handled via Cloud Uploads tab")
-        self.web_oauth_btn.setEnabled(False)
-        self.web_auth_status_label.setText("Use Cloud Uploads tab for authentication")
+        # Start polling for device link if not already linked
+        if not is_linked:
+            self._start_device_claim_polling()
 
         return group
+
+    def _start_device_claim_polling(self):
+        """Start polling to check if device has been claimed."""
+        if self.device_claim_timer is None:
+            self.device_claim_timer = QTimer()
+            self.device_claim_timer.timeout.connect(self._check_device_claim)
+            self.device_claim_timer.start(30000)  # Poll every 30 seconds
+            logger.info("Started device claim polling (every 30 seconds)")
+
+    def _stop_device_claim_polling(self):
+        """Stop polling for device claim."""
+        if self.device_claim_timer:
+            self.device_claim_timer.stop()
+            self.device_claim_timer = None
+            logger.info("Stopped device claim polling")
+
+        # Clean up any running worker thread
+        if self.device_claim_worker and self.device_claim_worker.isRunning():
+            self.device_claim_worker.quit()
+            self.device_claim_worker.wait()
+            self.device_claim_worker = None
+
+    def _check_device_claim(self):
+        """Check if device has been claimed by querying Supabase (non-blocking)."""
+        from ...services.device_auth import get_device_auth
+
+        device_auth = get_device_auth()
+
+        # If already linked, stop polling
+        if device_auth.is_linked():
+            self._stop_device_claim_polling()
+            return
+
+        # Don't start a new check if one is already in progress
+        if self.device_claim_worker and self.device_claim_worker.isRunning():
+            return
+
+        # Create worker thread to perform HTTP request without blocking UI
+        self.device_claim_worker = DeviceClaimWorker()
+        self.device_claim_worker.result_ready.connect(self._on_device_claim_result)
+        self.device_claim_worker.start()
+
+    def _on_device_claim_result(self, result: dict[str, any]):
+        """Handle the result from the device claim check worker."""
+        from ...services.device_auth import get_device_auth
+
+        device_auth = get_device_auth()
+
+        if result.get("linked"):
+            # Device has been claimed!
+            user_id = result.get("user_id")
+            device_name = result.get("device_name")
+
+            # Store the user_id locally
+            device_auth.set_user_id(user_id)
+
+            # Stop polling
+            self._stop_device_claim_polling()
+
+            # Log success
+            self.append_log(f"✅ Device linked to user account: {user_id[:8]}...")
+            if device_name:
+                self.append_log(f"   Device name: {device_name}")
+
+            # Show notification
+            QMessageBox.information(
+                self,
+                "Device Linked Successfully",
+                f"Your device has been successfully linked to your GetReceipts account!\n\n"
+                f"Device: {device_name or 'My Desktop Device'}\n"
+                f"User ID: {user_id[:8]}...\n\n"
+                "All future uploads will be associated with your account.",
+            )
+
+        # Always clean up worker thread (whether linked or not)
+        if self.device_claim_worker:
+            self.device_claim_worker.quit()
+            self.device_claim_worker.wait()
+            self.device_claim_worker = None
 
     def _refresh_web_auth_ui(self):
         """Refresh web auth UI based on current auth state."""
@@ -651,6 +819,76 @@ class APIKeysTab(BaseTab):
             "OAuth Sign Out",
             "Please use the 'Cloud Uploads' tab to sign out of Skipthepodcast.com.",
         )
+
+    def _regenerate_claim_code(self):
+        """Regenerate the device claim code."""
+        from ...services.device_auth import get_device_auth
+
+        reply = QMessageBox.question(
+            self,
+            "Regenerate Claim Code",
+            "Are you sure you want to generate a new claim code?\n\n"
+            "The current code will no longer work for linking this device.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+
+        if reply == QMessageBox.StandardButton.Yes:
+            device_auth = get_device_auth()
+            new_code = device_auth.regenerate_claim_code()
+            self.claim_code_display.setText(new_code)
+            self.append_log(f"Generated new claim code: {new_code}")
+
+            QMessageBox.information(
+                self,
+                "Claim Code Regenerated",
+                f"New claim code: {new_code}\n\n"
+                "Use this code on getreceipts.org/dashboard to link your device.",
+            )
+
+    def _unlink_device(self):
+        """Unlink device from user account."""
+        from ...services.device_auth import get_device_auth
+
+        reply = QMessageBox.warning(
+            self,
+            "Unlink Device",
+            "Are you sure you want to unlink this device from your user account?\n\n"
+            "After unlinking:\n"
+            "• Uploads will no longer be linked to your account\n"
+            "• You'll need to re-link using a new claim code\n"
+            "• Existing data on the web will remain unchanged",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+
+        if reply == QMessageBox.StandardButton.Yes:
+            device_auth = get_device_auth()
+            device_auth.unlink_device()
+            self.append_log("Device unlinked from user account")
+
+            # Refresh the UI to show unlinked state
+            # Note: This requires rebuilding the section, so suggest app restart
+            QMessageBox.information(
+                self,
+                "Device Unlinked",
+                "Device has been unlinked successfully.\n\n"
+                "Please restart the app to see the updated linking status.",
+            )
+
+    def _toggle_auto_upload(self, state: int) -> None:
+        """Toggle auto-upload setting when checkbox is changed."""
+        from ...services.device_auth import get_device_auth
+
+        device_auth = get_device_auth()
+        enabled = state == 2  # Qt.CheckState.Checked = 2
+
+        device_auth.set_enabled(enabled)
+
+        status = "enabled" if enabled else "disabled"
+        self.append_log(f"Auto-upload {status}")
+
+        logger.info(f"Auto-upload {status} via Settings tab")
 
     def _show_hf_token_help(self) -> None:
         """Show a popup with instructions to obtain a free Hugging Face token."""

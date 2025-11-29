@@ -98,13 +98,45 @@ class UnifiedHCEPipeline:
             ):
                 max_workers = 1  # Force sequential processing
 
+            # Track mining progress dynamically (30% → 55%)
+            import threading
+
+            total_segments = len(episode.segments)
+            segments_completed = 0
+            last_reported_percent = 30.0
+            progress_lock = threading.Lock()  # Thread-safe access to counters
+
+            def mining_progress_callback(msg: str):
+                """Report granular mining progress based on segment completion (thread-safe)."""
+                nonlocal segments_completed, last_reported_percent
+
+                # Thread-safe increment and progress calculation
+                with progress_lock:
+                    # Each progress callback indicates a segment completed
+                    if "Processed" in msg:
+                        segments_completed += 1
+
+                    # Calculate progress: 30% (start) + (25% * completion_ratio)
+                    if total_segments > 0:
+                        completion_ratio = segments_completed / total_segments
+                        percent = 30.0 + (25.0 * completion_ratio)
+                    else:
+                        percent = 40.0  # Fallback
+
+                    # Prevent backward progress (should not happen with lock, but defense in depth)
+                    if percent < last_reported_percent:
+                        return  # Skip this update
+
+                    last_reported_percent = percent
+
+                # Report progress outside lock (don't hold lock during I/O)
+                report_progress("Mining segments", percent, msg)
+
             miner_outputs = mine_episode_unified(
                 episode,
                 self.config.models.miner,
                 max_workers=max_workers,
-                progress_callback=lambda msg: report_progress(
-                    "Mining segments", 40.0, msg
-                ),
+                progress_callback=mining_progress_callback,
                 selectivity=self.config.miner_selectivity,  # NEW: Pass selectivity
                 content_type=self.config.content_type,  # Pass content type for prompt selection
             )
@@ -505,19 +537,46 @@ class UnifiedHCEPipeline:
             provider, model = parse_model_uri(flagship_model_uri)
 
             llm = create_system2_llm(provider=provider, model=model)
-            response = llm.generate_json(full_prompt)
+            
+            # Use regular text generation (complete), not JSON, for summary
+            # The prompt explicitly asks for plain text paragraphs, not JSON
+            # Using complete() ensures we get plain text prose, not structured data
+            response = llm.complete(full_prompt)
 
             # Extract text from response robustly
             try:
                 if isinstance(response, str):
                     summary_text = response
                 elif isinstance(response, dict):
-                    # Prefer a 'summary' field; otherwise serialize compactly
+                    # Prefer a 'summary' field
                     summary_text = response.get("summary")
+                    
+                    # If no 'summary' field, check for paragraph1, paragraph2, etc.
                     if summary_text is None:
-                        import json as _json
-
-                        summary_text = _json.dumps(response, ensure_ascii=False)
+                        paragraphs = []
+                        i = 1
+                        while True:
+                            key = f"paragraph{i}"
+                            if key in response:
+                                para = response[key]
+                                if isinstance(para, str) and para.strip():
+                                    paragraphs.append(para.strip())
+                                i += 1
+                            else:
+                                break
+                        
+                        if paragraphs:
+                            # Join paragraphs with double newlines
+                            summary_text = "\n\n".join(paragraphs)
+                        else:
+                            # Fallback: try to extract all string values
+                            string_values = [v for v in response.values() if isinstance(v, str) and v.strip()]
+                            if string_values:
+                                summary_text = "\n\n".join(string_values)
+                            else:
+                                # Last resort: serialize as JSON
+                                import json as _json
+                                summary_text = _json.dumps(response, ensure_ascii=False)
                 elif isinstance(response, list) and len(response) > 0:
                     summary_text = (
                         response[0]
@@ -531,7 +590,8 @@ class UnifiedHCEPipeline:
                     if isinstance(summary_text, str)
                     else str(summary_text)
                 )
-            except Exception:
+            except Exception as e:
+                logger.warning(f"Error parsing long summary response: {e}")
                 # As a last resort, stringify the entire object
                 return str(response)
 
@@ -677,20 +737,54 @@ class UnifiedHCEPipeline:
         # Process evaluated people (if evaluation succeeded)
         if people_evaluation:
             for eval_person in people_evaluation.get_accepted_people():
-                person_mention = PersonMention(
-                    source_id=episode.source_id,
-                    mention_id=f"person_{len(all_people):04d}",
-                    span_segment_id="unknown",
-                    t0="00:00",
-                    t1="00:00",
-                    surface=eval_person.canonical_name,
-                    normalized=eval_person.canonical_name,
-                    entity_type="person",
-                    role_description=eval_person.role
-                    if hasattr(eval_person, "role")
-                    else None,
-                )
-                all_people.append(person_mention)
+                # Find original person data from miner outputs to preserve mention details
+                # Check canonical_name and all name_variants to find matches
+                original_person_data = None
+                search_names = [eval_person.canonical_name] + eval_person.name_variants
+                
+                for output in miner_outputs:
+                    for person_data in output.people:
+                        if isinstance(person_data, dict):
+                            person_name = person_data.get("name", "")
+                            normalized_name = person_data.get("normalized_name", person_name)
+                            
+                            # Match by canonical name or any variant
+                            if (person_name.lower() in [n.lower() for n in search_names] or
+                                normalized_name.lower() in [n.lower() for n in search_names]):
+                                original_person_data = person_data
+                                break
+                    if original_person_data:
+                        break
+                
+                # Use original mentions if found, otherwise create a single mention
+                if original_person_data and original_person_data.get("mentions"):
+                    # Create PersonMention for each original mention to preserve segment/timestamp data
+                    for mention in original_person_data.get("mentions", []):
+                        person_mention = PersonMention(
+                            source_id=episode.source_id,
+                            mention_id=f"person_{len(all_people):04d}",
+                            span_segment_id=mention.get("segment_id", "unknown"),
+                            t0=mention.get("t0", "00:00"),
+                            t1=mention.get("t1", "00:00"),
+                            surface=mention.get("surface_form", eval_person.canonical_name),
+                            normalized=eval_person.canonical_name,
+                            entity_type=original_person_data.get("entity_type", "person"),
+                            confidence=original_person_data.get("confidence", 0.8),
+                        )
+                        all_people.append(person_mention)
+                else:
+                    # Fallback: create single mention if no original data found
+                    person_mention = PersonMention(
+                        source_id=episode.source_id,
+                        mention_id=f"person_{len(all_people):04d}",
+                        span_segment_id="unknown",
+                        t0="00:00",
+                        t1="00:00",
+                        surface=eval_person.canonical_name,
+                        normalized=eval_person.canonical_name,
+                        entity_type="person",
+                    )
+                    all_people.append(person_mention)
         else:
             # Fallback: Use raw miner outputs (no deduplication)
             for output in miner_outputs:

@@ -308,9 +308,28 @@ class SchemaValidator:
                         if "normalized_name" not in person:
                             person["normalized_name"] = person.get("name", "Unknown")
 
-                        # Ensure entity_type exists
+                        # Ensure entity_type exists and is valid
                         if "entity_type" not in person:
                             person["entity_type"] = "person"
+                        elif person["entity_type"] not in ["person", "organization"]:
+                            # Fix invalid entity_type values (e.g., "event", "concept", etc.)
+                            # Map common invalid values to valid ones
+                            entity_type_map = {
+                                "event": "person",  # Events shouldn't be in people array, but default to person
+                                "concept": "person",
+                                "place": "organization",  # Places often function like organizations
+                                "location": "organization",
+                                "thing": "organization",
+                                "object": "organization",
+                            }
+                            original_type = person["entity_type"]
+                            person["entity_type"] = entity_type_map.get(
+                                person["entity_type"], "person"
+                            )
+                            logger.debug(
+                                f"Repaired invalid entity_type '{original_type}' to '{person['entity_type']}' "
+                                f"for person '{person.get('name', 'unknown')}'"
+                            )
 
                         # Ensure confidence exists
                         if "confidence" not in person:

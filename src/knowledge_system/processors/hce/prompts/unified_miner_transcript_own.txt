@@ -121,15 +121,748 @@ Each person must include:
 - **entity_type**: "person" or "organization"
 - **role_or_description**: How they're described or their role
 - **confidence**: Confidence in identification (0.0-1.0)
+- **external_ids**: Object with "wikidata" and/or "wikipedia" keys (if mentioned)
 - **mentioned_by**: Which speaker(s) mentioned this person
 - **is_speaker**: Boolean - true if they are one of the transcript speakers
-- **evidence_spans**: Array with quotes mentioning this person
+- **mentions**: Array of all mentions of this person/org
+
+**IMPORTANT FOR PEOPLE MENTIONS:**
+Extract ALL mentions of the person/org across the segment. For each mention:
+- **segment_id**: The segment identifier (provided in input)
+- **surface_form**: How they were referred to in this mention
+- **speaker**: Which speaker mentioned them
+- **quote**: Quote showing the mention
+- **t0**: Start timestamp (MM:SS or HH:MM:SS)
+- **t1**: End timestamp (MM:SS or HH:MM:SS)
 
 Each mental model must include:
-- **model_name**: Name or brief description of the model
-- **description**: Detailed explanation of the framework
+- **name**: Name or title of the mental model
+- **definition**: Explanation of the model/framework
+- **aliases**: Array of alternative names (if any)
 - **advocated_by**: Which speaker promotes or uses this model
-- **evidence_spans**: Array with quotes demonstrating the model
+- **evidence_spans**: Array of all mentions/applications
+
+**IMPORTANT FOR MENTAL MODEL EVIDENCE:**
+Extract ALL mentions/applications of the model across the segment. For each evidence span:
+- **segment_id**: The segment identifier (provided in input)
+- **speaker**: Which speaker discussed the model
+- **quote**: Quote showing the discussion
+- **t0**: Start timestamp (MM:SS or HH:MM:SS)
+- **t1**: End timestamp (MM:SS or HH:MM:SS)
+- **context_text**: Extended context showing explanation/application
+
+## EXAMPLES BY TYPE
+
+### CLAIM EXAMPLES
+
+<claim_examples>
+  <example type="factual">
+    <input>
+      <segment_id>seg_001</segment_id>
+      <speaker>SPEAKER_00</speaker>
+      <text>Bitcoin's price dropped 15% yesterday, marking its worst single-day loss since March 2020.</text>
+      <t0>02:15</t0>
+      <t1>02:22</t1>
+    </input>
+    <good_extraction>
+{
+  "claim_text": "Bitcoin dropped 15% yesterday, marking its worst single-day loss since March 2020",
+  "claim_type": "factual",
+  "domain": "economics",
+  "stance": "asserts",
+  "speaker": "SPEAKER_00",
+  "evidence_spans": [
+    {
+      "segment_id": "seg_001",
+      "speaker": "SPEAKER_00",
+      "quote": "Bitcoin's price dropped 15% yesterday, marking its worst single-day loss since March 2020",
+      "t0": "02:15",
+      "t1": "02:22",
+      "context_text": "Looking at the markets, Bitcoin's price dropped 15% yesterday, marking its worst single-day loss since March 2020. This has shaken investor confidence.",
+      "context_type": "extended"
+    }
+  ]
+}
+    </good_extraction>
+    <explanation>Specific factual assertion with verifiable data, segment ID, speaker attribution, and context.</explanation>
+  </example>
+
+  <example type="causal">
+    <input>
+      <segment_id>seg_002</segment_id>
+      <speaker>SPEAKER_01</speaker>
+      <text>The reason inflation has remained stubborn is that supply chains are still disrupted from the pandemic, which keeps pushing prices higher.</text>
+      <t0>05:10</t0>
+      <t1>05:18</t1>
+    </input>
+    <good_extraction>
+{
+  "claim_text": "Supply chain disruptions from the pandemic cause persistent inflation by pushing prices higher",
+  "claim_type": "causal",
+  "domain": "economics",
+  "stance": "asserts",
+  "speaker": "SPEAKER_01",
+  "evidence_spans": [
+    {
+      "segment_id": "seg_002",
+      "speaker": "SPEAKER_01",
+      "quote": "The reason inflation has remained stubborn is that supply chains are still disrupted from the pandemic, which keeps pushing prices higher",
+      "t0": "05:10",
+      "t1": "05:18",
+      "context_text": "The reason inflation has remained stubborn is that supply chains are still disrupted from the pandemic, which keeps pushing prices higher.",
+      "context_type": "exact"
+    }
+  ]
+}
+    </good_extraction>
+    <explanation>Clear cause-and-effect relationship between supply chains and inflation, with speaker attribution.</explanation>
+  </example>
+
+  <example type="normative">
+    <input>
+      <segment_id>seg_003</segment_id>
+      <speaker>SPEAKER_00</speaker>
+      <text>Investors really need to diversify beyond tech stocks right now. It's too risky to have everything concentrated in one sector.</text>
+      <t0>08:30</t0>
+      <t1>08:38</t1>
+    </input>
+    <good_extraction>
+{
+  "claim_text": "Investors should diversify beyond tech stocks because concentration in one sector is too risky",
+  "claim_type": "normative",
+  "domain": "economics",
+  "stance": "asserts",
+  "speaker": "SPEAKER_00",
+  "evidence_spans": [
+    {
+      "segment_id": "seg_003",
+      "speaker": "SPEAKER_00",
+      "quote": "Investors really need to diversify beyond tech stocks right now. It's too risky to have everything concentrated in one sector",
+      "t0": "08:30",
+      "t1": "08:38",
+      "context_text": "Investors really need to diversify beyond tech stocks right now. It's too risky to have everything concentrated in one sector.",
+      "context_type": "exact"
+    }
+  ]
+}
+    </good_extraction>
+    <explanation>Value judgment and recommendation about what investors ought to do, attributed to speaker.</explanation>
+  </example>
+
+  <example type="forecast">
+    <input>
+      <segment_id>seg_004</segment_id>
+      <speaker>SPEAKER_01</speaker>
+      <text>I expect the Fed to cut rates by at least 50 basis points by the end of Q2, given the softening labor market data we're seeing.</text>
+      <t0>12:05</t0>
+      <t1>12:14</t1>
+    </input>
+    <good_extraction>
+{
+  "claim_text": "The Fed will cut rates by at least 50 basis points by end of Q2 due to softening labor market",
+  "claim_type": "forecast",
+  "domain": "economics",
+  "stance": "asserts",
+  "speaker": "SPEAKER_01",
+  "evidence_spans": [
+    {
+      "segment_id": "seg_004",
+      "speaker": "SPEAKER_01",
+      "quote": "I expect the Fed to cut rates by at least 50 basis points by the end of Q2, given the softening labor market data we're seeing",
+      "t0": "12:05",
+      "t1": "12:14",
+      "context_text": "I expect the Fed to cut rates by at least 50 basis points by the end of Q2, given the softening labor market data we're seeing.",
+      "context_type": "exact"
+    }
+  ]
+}
+    </good_extraction>
+    <explanation>Specific prediction about future events with reasoning, attributed to speaker.</explanation>
+  </example>
+
+  <example type="definition">
+    <input>
+      <segment_id>seg_005</segment_id>
+      <speaker>SPEAKER_00</speaker>
+      <text>What we call 'stagflation' is when you get high inflation combined with stagnant economic growth - it's the worst of both worlds.</text>
+      <t0>15:20</t0>
+      <t1>15:27</t1>
+    </input>
+    <good_extraction>
+{
+  "claim_text": "Stagflation is high inflation combined with stagnant economic growth",
+  "claim_type": "definition",
+  "domain": "economics",
+  "stance": "asserts",
+  "speaker": "SPEAKER_00",
+  "evidence_spans": [
+    {
+      "segment_id": "seg_005",
+      "speaker": "SPEAKER_00",
+      "quote": "What we call 'stagflation' is when you get high inflation combined with stagnant economic growth",
+      "t0": "15:20",
+      "t1": "15:27",
+      "context_text": "What we call 'stagflation' is when you get high inflation combined with stagnant economic growth - it's the worst of both worlds.",
+      "context_type": "extended"
+    }
+  ]
+}
+    </good_extraction>
+    <explanation>Technical definition being explained in context. Note: Only extract definitions of specialized terms, not obvious concepts. Speaker attribution shows who provided the definition.</explanation>
+  </example>
+</claim_examples>
+
+### STANCE EXAMPLES
+
+<stance_examples>
+  <example stance="asserts">
+    <input>
+      <speaker>SPEAKER_00</speaker>
+      <text>Electric vehicles will dominate the market within 10 years. The infrastructure is coming, battery tech is improving, and government mandates are accelerating adoption.</text>
+    </input>
+    <note>Speaker confidently presents claim as true with supporting reasoning. Use "asserts".</note>
+  </example>
+
+  <example stance="questions">
+    <input>
+      <speaker>SPEAKER_01</speaker>
+      <text>Some analysts believe AI will replace most knowledge workers, but I'm skeptical. Can these models really handle complex judgment calls? I'm not convinced.</text>
+    </input>
+    <note>Speaker expresses doubt or presents claim as questionable. Use "questions".</note>
+  </example>
+
+  <example stance="opposes">
+    <input>
+      <speaker>SPEAKER_00</speaker>
+      <text>People say printing money causes inflation, but that's not what we've seen in Japan over the past 20 years. They've had massive monetary expansion without significant inflation. The simple money supply theory just doesn't hold up empirically.</text>
+    </input>
+    <note>Speaker actively refutes or argues against the claim. Use "opposes".</note>
+  </example>
+
+  <example stance="neutral">
+    <input>
+      <speaker>SPEAKER_01</speaker>
+      <text>According to the Bank of England's recent report, higher interest rates reduce consumer spending. They cite several mechanisms through which this occurs.</text>
+    </input>
+    <note>Speaker reports claim without endorsing or questioning it. Use "neutral".</note>
+  </example>
+</stance_examples>
+
+### JARGON EXAMPLES
+
+<jargon_examples>
+  <good_example>
+    <input>
+      <segment_id>seg_006</segment_id>
+      <speaker>SPEAKER_00</speaker>
+      <text>The company used a series of SPVs - special purpose vehicles - to move debt off their balance sheet.</text>
+      <t0>03:45</t0>
+      <t1>03:52</t1>
+    </input>
+    <extraction>
+{
+  "term": "SPV (special purpose vehicle)",
+  "definition": "Legal entity created to isolate financial risk by moving assets or debt off a company's main balance sheet",
+  "domain": "economics",
+  "introduced_by": "SPEAKER_00",
+  "evidence_spans": [
+    {
+      "segment_id": "seg_006",
+      "speaker": "SPEAKER_00",
+      "quote": "The company used a series of SPVs - special purpose vehicles - to move debt off their balance sheet",
+      "t0": "03:45",
+      "t1": "03:52",
+      "context_text": "The company used a series of SPVs - special purpose vehicles - to move debt off their balance sheet."
+    }
+  ]
+}
+    </extraction>
+    <explanation>Technical financial term that general audiences wouldn't know. Speaker attribution shows who introduced/explained it.</explanation>
+  </good_example>
+
+  <good_example>
+    <input>
+      <segment_id>seg_007</segment_id>
+      <speaker>SPEAKER_01</speaker>
+      <text>The algorithm uses backpropagation to adjust the neural network weights during training.</text>
+      <t0>07:12</t0>
+      <t1>07:18</t1>
+    </input>
+    <extraction>
+{
+  "term": "backpropagation",
+  "definition": "Machine learning technique for adjusting neural network weights during training by propagating errors backward through the network",
+  "domain": "technology",
+  "introduced_by": "SPEAKER_01",
+  "evidence_spans": [
+    {
+      "segment_id": "seg_007",
+      "speaker": "SPEAKER_01",
+      "quote": "The algorithm uses backpropagation to adjust the neural network weights during training",
+      "t0": "07:12",
+      "t1": "07:18",
+      "context_text": "The algorithm uses backpropagation to adjust the neural network weights during training."
+    }
+  ]
+}
+    </extraction>
+    <explanation>Domain-specific ML term requiring specialized knowledge. Speaker attribution shows who used it.</explanation>
+  </good_example>
+
+  <bad_example>
+    <input>
+      <speaker>SPEAKER_00</speaker>
+      <text>The stock market went up today and investors were happy about the gains.</text>
+    </input>
+    <explanation>DON'T extract "stock market" or "investors" - these are common terms that general audiences understand. Only extract genuinely technical or specialized vocabulary.</explanation>
+  </bad_example>
+</jargon_examples>
+
+### PEOPLE EXAMPLES
+
+<people_examples>
+  <good_example>
+    <input>
+      <segment_id>seg_008</segment_id>
+      <speaker>SPEAKER_00</speaker>
+      <text>Warren Buffett has long advocated for index fund investing, arguing that most people can't beat the market.</text>
+      <t0>04:20</t0>
+      <t1>04:28</t1>
+    </input>
+    <extraction>
+{
+  "name": "Warren Buffett",
+  "normalized_name": "Warren Buffett",
+  "entity_type": "person",
+  "role_or_description": "Investor and advocate of index fund investing",
+  "confidence": 0.95,
+  "external_ids": {},
+  "mentioned_by": "SPEAKER_00",
+  "is_speaker": false,
+  "mentions": [
+    {
+      "segment_id": "seg_008",
+      "surface_form": "Warren Buffett",
+      "speaker": "SPEAKER_00",
+      "quote": "Warren Buffett has long advocated for index fund investing",
+      "t0": "04:20",
+      "t1": "04:25"
+    }
+  ]
+}
+    </extraction>
+    <explanation>Person whose ideas or actions are being discussed substantively. Speaker attribution shows who mentioned them.</explanation>
+  </good_example>
+
+  <good_example>
+    <input>
+      <segment_id>seg_009</segment_id>
+      <speaker>SPEAKER_01</speaker>
+      <text>Keynes believed that government spending could pull economies out of depression.</text>
+      <t0>09:15</t0>
+      <t1>09:22</t1>
+    </input>
+    <extraction>
+{
+  "name": "Keynes",
+  "normalized_name": "John Maynard Keynes",
+  "entity_type": "person",
+  "role_or_description": "Economist who advocated for government spending to combat depression",
+  "confidence": 0.9,
+  "external_ids": {},
+  "mentioned_by": "SPEAKER_01",
+  "is_speaker": false,
+  "mentions": [
+    {
+      "segment_id": "seg_009",
+      "surface_form": "Keynes",
+      "speaker": "SPEAKER_01",
+      "quote": "Keynes believed that government spending could pull economies out of depression",
+      "t0": "09:15",
+      "t1": "09:18"
+    }
+  ]
+}
+    </extraction>
+    <explanation>Historical figure whose ideas are relevant to the discussion. Speaker attribution shows who mentioned them.</explanation>
+  </good_example>
+
+  <bad_example>
+    <input>
+      <speaker>SPEAKER_00</speaker>
+      <text>I was talking to my friend Bob the other day and he mentioned something interesting about bonds.</text>
+    </input>
+    <explanation>DON'T extract "Bob" - casual mention without substantive discussion. Only extract people whose ideas, work, or actions are meaningfully discussed.</explanation>
+  </bad_example>
+
+  <bad_example>
+    <input>
+      <speaker>SPEAKER_00</speaker>
+      <text>Thanks for tuning in, I'm Sarah and today we'll discuss inflation.</text>
+    </input>
+    <explanation>DON'T extract "Sarah" - procedural self-identification by the speaker. Only extract when the person is the subject of discussion.</explanation>
+  </bad_example>
+</people_examples>
+
+### MENTAL MODELS EXAMPLES
+
+<mental_models_examples>
+  <good_example>
+    <input>
+      <segment_id>seg_010</segment_id>
+      <speaker>SPEAKER_00</speaker>
+      <text>I use what I call the 'Circle of Competence' approach - only invest in businesses you genuinely understand. Stay within your circle, know its boundaries, and don't venture beyond it just because something looks attractive.</text>
+      <t0>11:30</t0>
+      <t1>11:42</t1>
+    </input>
+    <extraction>
+{
+  "name": "Circle of Competence",
+  "definition": "Investment framework where one only invests in businesses within their area of genuine understanding, staying within known boundaries rather than venturing into unfamiliar territory",
+  "aliases": [],
+  "advocated_by": "SPEAKER_00",
+  "evidence_spans": [
+    {
+      "segment_id": "seg_010",
+      "speaker": "SPEAKER_00",
+      "quote": "I use what I call the 'Circle of Competence' approach - only invest in businesses you genuinely understand. Stay within your circle, know its boundaries",
+      "t0": "11:30",
+      "t1": "11:38",
+      "context_text": "I use what I call the 'Circle of Competence' approach - only invest in businesses you genuinely understand. Stay within your circle, know its boundaries, and don't venture beyond it just because something looks attractive."
+    }
+  ]
+}
+    </extraction>
+    <explanation>Clear decision-making framework with systematic approach to problem (investment selection). Speaker attribution shows who advocates for it.</explanation>
+  </good_example>
+
+  <good_example>
+    <input>
+      <segment_id>seg_011</segment_id>
+      <speaker>SPEAKER_01</speaker>
+      <text>The scientific method is really about falsification, not confirmation. You don't try to prove your theory right - you try to prove it wrong. If it survives repeated attempts at falsification, then you can have confidence in it.</text>
+      <t0>14:45</t0>
+      <t1>14:58</t1>
+    </input>
+    <extraction>
+{
+  "name": "Falsificationism / Popperian method",
+  "definition": "Scientific framework where theories are tested by attempting to disprove them rather than confirm them, gaining confidence through surviving falsification attempts",
+  "aliases": ["Popperian method"],
+  "advocated_by": "SPEAKER_01",
+  "evidence_spans": [
+    {
+      "segment_id": "seg_011",
+      "speaker": "SPEAKER_01",
+      "quote": "The scientific method is really about falsification, not confirmation. You don't try to prove your theory right - you try to prove it wrong",
+      "t0": "14:45",
+      "t1": "14:52",
+      "context_text": "The scientific method is really about falsification, not confirmation. You don't try to prove your theory right - you try to prove it wrong. If it survives repeated attempts at falsification, then you can have confidence in it."
+    }
+  ]
+}
+    </extraction>
+    <explanation>Philosophical framework that describes a systematic approach to knowledge validation. Speaker attribution shows who explained it.</explanation>
+  </good_example>
+
+  <good_example>
+    <input>
+      <segment_id>seg_012</segment_id>
+      <speaker>SPEAKER_00</speaker>
+      <text>Porter's Five Forces helps you analyze industry competition by looking at five factors: threat of new entrants, bargaining power of suppliers, bargaining power of buyers, threat of substitutes, and rivalry among existing competitors.</text>
+      <t0>18:20</t0>
+      <t1>18:35</t1>
+    </input>
+    <extraction>
+{
+  "name": "Porter's Five Forces",
+  "definition": "Strategic framework for analyzing industry competition through five factors: threat of new entrants, supplier power, buyer power, threat of substitutes, and competitive rivalry",
+  "aliases": [],
+  "advocated_by": "SPEAKER_00",
+  "evidence_spans": [
+    {
+      "segment_id": "seg_012",
+      "speaker": "SPEAKER_00",
+      "quote": "Porter's Five Forces helps you analyze industry competition by looking at five factors: threat of new entrants, bargaining power of suppliers, bargaining power of buyers, threat of substitutes, and rivalry among existing competitors",
+      "t0": "18:20",
+      "t1": "18:35",
+      "context_text": "Porter's Five Forces helps you analyze industry competition by looking at five factors: threat of new entrants, bargaining power of suppliers, bargaining power of buyers, threat of substitutes, and rivalry among existing competitors."
+    }
+  ]
+}
+    </extraction>
+    <explanation>Named analytical framework with structured methodology. Speaker attribution shows who explained it.</explanation>
+  </good_example>
+
+  <bad_example>
+    <input>
+      <speaker>SPEAKER_01</speaker>
+      <text>Higher prices reduce demand - that's just basic supply and demand.</text>
+    </input>
+    <explanation>DON'T extract "supply and demand" here - it's referenced too casually. Mental models should be frameworks being explained or applied meaningfully, not just mentioned in passing.</explanation>
+  </bad_example>
+
+  <bad_example>
+    <input>
+      <speaker>SPEAKER_00</speaker>
+      <text>You need to think about the opportunity cost of your time.</text>
+    </input>
+    <explanation>DON'T extract "opportunity cost" - this is a simple concept mention, not a framework being explained. Only extract when a structured approach or methodology is being described.</explanation>
+  </bad_example>
+</mental_models_examples>
+
+## COMPREHENSIVE EXAMPLES
+
+<comprehensive_examples>
+  <example>
+    <input>
+      <segment_id>seg_013</segment_id>
+      <speaker>SPEAKER_00</speaker>
+      <text>The Federal Reserve's quantitative easing program has fundamentally altered the relationship between monetary policy and asset prices. Jerome Powell mentioned that this creates what economists call a 'wealth effect' where rising asset prices boost consumer spending. However, some critics argue this approach primarily benefits wealthy asset holders.</text>
+      <t0>00:15</t0>
+      <t1>00:40</t1>
+    </input>
+    <good_response>
+{
+  "claims": [
+    {
+      "claim_text": "The Federal Reserve's quantitative easing program has fundamentally altered the relationship between monetary policy and asset prices",
+      "claim_type": "causal",
+      "domain": "economics",
+      "stance": "asserts",
+      "speaker": "SPEAKER_00",
+      "evidence_spans": [
+        {
+          "segment_id": "seg_013",
+          "speaker": "SPEAKER_00",
+          "quote": "The Federal Reserve's quantitative easing program has fundamentally altered the relationship between monetary policy and asset prices",
+          "t0": "00:15",
+          "t1": "00:23",
+          "context_text": "Let me explain the impact. The Federal Reserve's quantitative easing program has fundamentally altered the relationship between monetary policy and asset prices. This is a major shift from traditional approaches.",
+          "context_type": "extended"
+        }
+      ]
+    },
+    {
+      "claim_text": "Quantitative easing creates a wealth effect where rising asset prices boost consumer spending",
+      "claim_type": "causal",
+      "domain": "economics",
+      "stance": "asserts",
+      "speaker": "SPEAKER_00",
+      "evidence_spans": [
+        {
+          "segment_id": "seg_013",
+          "speaker": "SPEAKER_00",
+          "quote": "this creates what economists call a 'wealth effect' where rising asset prices boost consumer spending",
+          "t0": "00:25",
+          "t1": "00:32",
+          "context_text": "Jerome Powell mentioned that this creates what economists call a 'wealth effect' where rising asset prices boost consumer spending. The mechanism is well documented.",
+          "context_type": "extended"
+        }
+      ]
+    },
+    {
+      "claim_text": "Quantitative easing primarily benefits wealthy asset holders",
+      "claim_type": "normative",
+      "domain": "economics",
+      "stance": "questions",
+      "speaker": "SPEAKER_00",
+      "evidence_spans": [
+        {
+          "segment_id": "seg_013",
+          "speaker": "SPEAKER_00",
+          "quote": "some critics argue this approach primarily benefits wealthy asset holders",
+          "t0": "00:35",
+          "t1": "00:40",
+          "context_text": "However, some critics argue this approach primarily benefits wealthy asset holders. This remains a point of debate.",
+          "context_type": "extended"
+        }
+      ]
+    }
+  ],
+  "jargon": [
+    {
+      "term": "quantitative easing",
+      "definition": "Federal Reserve program involving large-scale asset purchases to stimulate the economy",
+      "domain": "economics",
+      "introduced_by": "SPEAKER_00",
+      "evidence_spans": [
+        {
+          "segment_id": "seg_013",
+          "speaker": "SPEAKER_00",
+          "quote": "The Federal Reserve's quantitative easing program",
+          "t0": "00:15",
+          "t1": "00:18",
+          "context_text": "The Federal Reserve's quantitative easing program has fundamentally altered the relationship between monetary policy and asset prices."
+        }
+      ]
+    },
+    {
+      "term": "wealth effect",
+      "definition": "Economic phenomenon where rising asset prices boost consumer spending",
+      "domain": "economics",
+      "introduced_by": "SPEAKER_00",
+      "evidence_spans": [
+        {
+          "segment_id": "seg_013",
+          "speaker": "SPEAKER_00",
+          "quote": "what economists call a 'wealth effect' where rising asset prices boost consumer spending",
+          "t0": "00:28",
+          "t1": "00:32",
+          "context_text": "Jerome Powell mentioned that this creates what economists call a 'wealth effect' where rising asset prices boost consumer spending."
+        }
+      ]
+    }
+  ],
+  "people": [
+    {
+      "name": "Jerome Powell",
+      "normalized_name": "Jerome Powell",
+      "entity_type": "person",
+      "role_or_description": "Federal Reserve Chairman discussing monetary policy effects",
+      "confidence": 0.95,
+      "external_ids": {},
+      "mentioned_by": "SPEAKER_00",
+      "is_speaker": false,
+      "mentions": [
+        {
+          "segment_id": "seg_013",
+          "surface_form": "Jerome Powell",
+          "speaker": "SPEAKER_00",
+          "quote": "Jerome Powell mentioned that this creates",
+          "t0": "00:25",
+          "t1": "00:27"
+        }
+      ]
+    }
+  ],
+  "mental_models": []
+}
+    </good_response>
+    <explanation>Note: Removed "wealth effect mechanism" from mental models - it's more of a concept/phenomenon than a framework. Mental models should be structured approaches or methodologies, not just economic concepts. All items include proper speaker attribution showing who made claims, introduced jargon, or mentioned people.</explanation>
+  </example>
+
+  <example>
+    <input>
+      <segment_id>seg_014</segment_id>
+      <speaker>SPEAKER_00</speaker>
+      <text>Today I want to talk about investing. Let me start by explaining what a stock is. A stock represents ownership in a company. This is basic stuff that everyone should know.</text>
+      <t0>01:00</t0>
+      <t1>01:15</t1>
+    </input>
+    <good_response>
+{
+  "claims": [],
+  "jargon": [],
+  "people": [],
+  "mental_models": []
+}
+    </good_response>
+    <explanation>This content contains only basic definitions and procedural statements. "A stock represents ownership in a company" is a trivial definition that doesn't meet our criteria for extraction. No novel insights, jargon, people, or mental models are present.</explanation>
+  </example>
+</comprehensive_examples>
+
+## ANTI-EXAMPLES
+
+<anti_examples>
+  <bad_claims>
+    <example>
+      <input>
+        <speaker>SPEAKER_00</speaker>
+        <text>Today I want to talk about investing.</text>
+      </input>
+      <bad_extraction>{"claim_text": "Today I want to talk about investing", "claim_type": "factual", "stance": "asserts", "speaker": "SPEAKER_00"}</bad_extraction>
+      <explanation>DON'T extract procedural statements about what the speaker will discuss.</explanation>
+    </example>
+
+    <example>
+      <input>
+        <speaker>SPEAKER_01</speaker>
+        <text>This is interesting.</text>
+      </input>
+      <bad_extraction>{"claim_text": "This is interesting", "claim_type": "normative", "stance": "asserts", "speaker": "SPEAKER_01"}</bad_extraction>
+      <explanation>DON'T extract vague value statements without specific content.</explanation>
+    </example>
+
+    <example>
+      <input>
+        <speaker>SPEAKER_00</speaker>
+        <text>As I mentioned earlier...</text>
+      </input>
+      <bad_extraction>{"claim_text": "As I mentioned earlier", "claim_type": "factual", "stance": "asserts", "speaker": "SPEAKER_00"}</bad_extraction>
+      <explanation>DON'T extract meta-commentary about the discussion itself.</explanation>
+    </example>
+
+    <example>
+      <input>
+        <speaker>SPEAKER_01</speaker>
+        <text>The stock market exists.</text>
+      </input>
+      <bad_extraction>{"claim_text": "The stock market exists", "claim_type": "factual", "stance": "asserts", "speaker": "SPEAKER_01"}</bad_extraction>
+      <explanation>DON'T extract trivially obvious facts that contain no insight.</explanation>
+    </example>
+  </bad_claims>
+
+  <bad_jargon>
+    <example>
+      <input>
+        <speaker>SPEAKER_00</speaker>
+        <text>The company, investors, and the stock market all play important roles.</text>
+      </input>
+      <bad_extraction>Extract "company", "investors", "stock market" as jargon</bad_extraction>
+      <explanation>DON'T extract common business terms that general audiences understand.</explanation>
+    </example>
+
+    <example>
+      <input>
+        <speaker>SPEAKER_01</speaker>
+        <text>We need to think about this carefully and make a good decision.</text>
+      </input>
+      <bad_extraction>Extract "think", "decision" as jargon</bad_extraction>
+      <explanation>DON'T extract everyday vocabulary just because it appears in a technical discussion.</explanation>
+    </example>
+  </bad_jargon>
+
+  <bad_people>
+    <example>
+      <input>
+        <speaker>SPEAKER_00</speaker>
+        <text>My colleague mentioned this to me yesterday.</text>
+      </input>
+      <bad_extraction>{"name": "colleague", "role_or_description": "person who mentioned something", "mentioned_by": "SPEAKER_00"}</bad_extraction>
+      <explanation>DON'T extract unnamed people or casual mentions.</explanation>
+    </example>
+
+    <example>
+      <input>
+        <speaker>SPEAKER_00</speaker>
+        <text>I'm Dr. Smith and today I'll be discussing economics.</text>
+      </input>
+      <bad_extraction>{"name": "Dr. Smith", "role_or_description": "economics presenter", "mentioned_by": "SPEAKER_00", "is_speaker": true}</bad_extraction>
+      <explanation>DON'T extract the speaker introducing themselves.</explanation>
+    </example>
+  </bad_people>
+
+  <bad_mental_models>
+    <example>
+      <input>
+        <speaker>SPEAKER_01</speaker>
+        <text>We should use common sense here.</text>
+      </input>
+      <bad_extraction>{"name": "common sense", "definition": "using common sense", "advocated_by": "SPEAKER_01"}</bad_extraction>
+      <explanation>DON'T extract vague appeals to general reasoning.</explanation>
+    </example>
+
+    <example>
+      <input>
+        <speaker>SPEAKER_00</speaker>
+        <text>Think about supply and demand.</text>
+      </input>
+      <bad_extraction>{"name": "supply and demand", "definition": "economic concept", "advocated_by": "SPEAKER_00"}</bad_extraction>
+      <explanation>DON'T extract casual mentions. Only extract when a framework is actually being explained or meaningfully applied.</explanation>
+    </example>
+  </bad_mental_models>
+</anti_examples>
 
 ## SEGMENT INPUT
 
@@ -146,3 +879,5 @@ The input will contain:
 3. Note conversational dynamics (agreements, disagreements, questions)
 4. Use precise timestamps provided in our high-quality transcripts
 5. Return ONLY valid, parseable JSON with no additional text
+6. Include speaker attribution for all claims, jargon, people, and mental models
+7. Extract ALL evidence spans showing where each item appears in the transcript

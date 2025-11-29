@@ -322,6 +322,15 @@ class EnhancedSummarizationWorker(QThread):
                                 "total_claims": result["result"].get(
                                     "claims_extracted", 0
                                 ),
+                                "tier_a_count": result["result"].get(
+                                    "claims_tier_a", 0
+                                ),
+                                "tier_b_count": result["result"].get(
+                                    "claims_tier_b", 0
+                                ),
+                                "tier_c_count": result["result"].get(
+                                    "claims_tier_c", 0
+                                ),
                                 "people_count": result["result"].get(
                                     "people_extracted", 0
                                 ),
@@ -2785,6 +2794,10 @@ class SummarizationTab(BaseTab):
         if hasattr(self, "progress_display"):
             self.progress_display.finish(completed=success_count, failed=failure_count)
 
+        # Auto-upload to GetReceipts if enabled and processing succeeded
+        if success_count > 0:
+            self._maybe_auto_upload()
+
         # Log final HCE statistics to console
         if hasattr(self, "_final_hce_stats") and self._final_hce_stats:
             self.append_log("\n📊 CLAIM EXTRACTION STATISTICS:")
@@ -2831,7 +2844,9 @@ class SummarizationTab(BaseTab):
             self.append_log(
                 f"   • Database: knowledge_system.db (claims, people, concepts)"
             )
-            self.append_log(f"   • Summary files: {output_dir}")
+            # Summary files are saved in the summaries subdirectory
+            summaries_path = Path(output_dir) / "summaries"
+            self.append_log(f"   • Summary files: {summaries_path}")
         else:
             self.append_log(f"\n💾 Data saved to:")
             self.append_log(
@@ -3865,3 +3880,145 @@ class SummarizationTab(BaseTab):
         """Handle status updates from the processor log integrator."""
         # Add rich processor status to our regular log output
         self.append_log(f"🔍 {status}")
+
+    def _maybe_auto_upload(self) -> None:
+        """Auto-upload claims to GetReceipts if enabled."""
+        try:
+            # Import device auth
+            from ...services.device_auth import get_device_auth
+
+            device_auth = get_device_auth()
+
+            # Check if auto-upload is enabled
+            if not device_auth.is_enabled():
+                logger.info("Auto-upload disabled - skipping upload")
+                return
+
+            self.append_log("\n📤 AUTO-UPLOAD: Enabled - uploading claims to GetReceipts.org...")
+
+            # Import upload dependencies
+            import sys
+            from pathlib import Path
+
+            # Add project root to path to enable package imports
+            project_root = Path(__file__).parent.parent.parent.parent
+            if str(project_root) not in sys.path:
+                sys.path.insert(0, str(project_root))
+
+            from knowledge_chipper_oauth.getreceipts_uploader import GetReceiptsUploader
+            from knowledge_chipper_oauth.getreceipts_config import get_config, set_production, validate_config
+
+            # Configure for production
+            set_production()
+            config = get_config()
+
+            if not validate_config(config):
+                self.append_log("⚠️ GetReceipts configuration incomplete - skipping auto-upload")
+                logger.warning("GetReceipts configuration incomplete")
+                return
+
+            # Initialize uploader with API base URL (uses device authentication automatically)
+            api_base_url = f"{config['base_url']}/api/knowledge-chipper"
+            uploader = GetReceiptsUploader(api_base_url=api_base_url)
+
+            # Get unuploaded claims
+            from ...services.claims_upload_service import ClaimsUploadService
+
+            claims_service = ClaimsUploadService()
+            unuploaded_claims = claims_service.get_unuploaded_claims()
+
+            if not unuploaded_claims:
+                self.append_log("📤 AUTO-UPLOAD: No new claims to upload")
+                return
+
+            self.append_log(f"📤 AUTO-UPLOAD: Found {len(unuploaded_claims)} claims to upload...")
+
+            # Convert claims to GetReceipts format
+            session_data = {
+                "episodes": [],
+                "claims": [],
+                "evidence_spans": [],
+                "people": [],
+                "jargon": [],
+                "concepts": [],
+                "relations": [],
+            }
+
+            seen_episodes = set()
+            for claim in unuploaded_claims:
+                source_id = claim.source_id
+                
+                # Add episode data (if not already added)
+                if claim.episode_data and source_id not in seen_episodes:
+                    episode_data = dict(claim.episode_data)
+                    episode_data['source_id'] = source_id
+                    session_data["episodes"].append(episode_data)
+                    seen_episodes.add(source_id)
+
+                # Add claim data
+                claim_dict = {
+                    "claim_id": claim.claim_id,
+                    "canonical": claim.canonical,
+                    "source_id": source_id,
+                    "claim_type": claim.claim_type,
+                    "tier": claim.tier,
+                    "scores_json": claim.scores_json,
+                    "first_mention_ts": claim.first_mention_ts,
+                    "inserted_at": claim.inserted_at,
+                }
+                session_data["claims"].append(claim_dict)
+
+                # Add associated data
+                session_data["evidence_spans"].extend(claim.evidence_spans)
+                session_data["people"].extend(claim.people)
+                session_data["jargon"].extend(claim.jargon)
+                session_data["concepts"].extend(claim.concepts)
+                session_data["relations"].extend(claim.relations)
+
+            # Log what we're uploading
+            episode_count = len(session_data["episodes"])
+            claim_count = len(session_data["claims"])
+            self.append_log(f"📤 AUTO-UPLOAD: Preparing {episode_count} episodes, {claim_count} claims, "
+                          f"{len(session_data['people'])} people, {len(session_data['jargon'])} jargon, "
+                          f"{len(session_data['concepts'])} concepts for upload...")
+
+            # Upload data
+            upload_results = uploader.upload_session_data(session_data)
+
+            # Parse upload results
+            if upload_results:
+                uploaded = upload_results.get("uploaded", {})
+                total_new = upload_results.get("total_new", 0)
+                total_merged = upload_results.get("total_merged", 0)
+                errors = upload_results.get("errors", [])
+                
+                if errors:
+                    self.append_log(f"⚠️ AUTO-UPLOAD: {len(errors)} errors occurred:")
+                    for error in errors[:5]:  # Show first 5 errors
+                        self.append_log(f"   • {error}")
+                
+                if total_new > 0 or total_merged > 0:
+                    self.append_log(f"✅ AUTO-UPLOAD: Successfully uploaded {total_new} new and {total_merged} merged records to GetReceipts.org")
+                    
+                    # Mark claims as uploaded and hide them
+                    successful_claim_ids = [
+                        (claim.source_id, claim.claim_id)
+                        for claim in unuploaded_claims
+                    ]
+                    claims_service.mark_claims_uploaded(successful_claim_ids)
+                    claims_service.hide_uploaded_claims(successful_claim_ids)
+
+                    self.append_log("📤 AUTO-UPLOAD: Claims synced to web (hidden from local view)")
+                else:
+                    self.append_log("⚠️ AUTO-UPLOAD: Upload completed but no records were synced")
+                    if not errors:
+                        self.append_log("   (Check GetReceipts configuration and device authentication)")
+            else:
+                self.append_log("⚠️ AUTO-UPLOAD: Upload returned no results (check logs for details)")
+
+        except ImportError as e:
+            logger.warning(f"Auto-upload dependencies not available: {e}")
+            self.append_log(f"⚠️ AUTO-UPLOAD: Could not load upload module - {str(e)}")
+        except Exception as e:
+            logger.error(f"Auto-upload failed: {e}")
+            self.append_log(f"❌ AUTO-UPLOAD: Failed - {str(e)}")

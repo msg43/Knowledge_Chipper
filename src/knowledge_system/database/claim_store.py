@@ -243,6 +243,15 @@ class ClaimStore:
 
             # 4. Store claims (claims are the fundamental unit)
             # Note: FTS indexing moved to after session.commit() to avoid database locks
+            
+            # CRITICAL: Delete existing claims for this source to avoid count mismatches
+            # This prevents verification failures when re-running summarization
+            old_claim_count = session.query(Claim).filter_by(source_id=source_id).count()
+            if old_claim_count > 0:
+                logger.info(f"Deleting {old_claim_count} existing claims for source {source_id}")
+                session.query(Claim).filter_by(source_id=source_id).delete()
+                session.flush()
+            
             for claim_data in outputs.claims:
                 # Generate global claim ID
                 global_claim_id = f"{source_id}_{claim_data.claim_id}"
@@ -264,11 +273,12 @@ class ClaimStore:
                 claim.domain = getattr(claim_data, "domain", None)
                 claim.tier = claim_data.tier
 
-                # Scores (normalized - no JSON)
+                # Scores: Store as JSON (canonical format matching HCE schema and GetReceipts API)
                 if hasattr(claim_data, "scores") and claim_data.scores:
-                    claim.importance_score = claim_data.scores.get("importance")
-                    claim.specificity_score = claim_data.scores.get("specificity")
-                    claim.verifiability_score = claim_data.scores.get("verifiability")
+                    claim.scores_json = claim_data.scores
+                else:
+                    # Default empty scores if not provided
+                    claim.scores_json = {}
 
                 # Temporality
                 claim.temporality_score = getattr(claim_data, "temporality_score", 3)
@@ -300,12 +310,12 @@ class ClaimStore:
                     evidence_span = EvidenceSpan(
                         claim_id=global_claim_id,
                         segment_id=fully_qualified_segment_id,
-                        sequence=seq,
-                        start_time=evidence.t0,
-                        end_time=evidence.t1,
+                        seq=seq,  # Canonical field name matching GetReceipts API
+                        t0=evidence.t0,  # Canonical field name
+                        t1=evidence.t1,  # Canonical field name
                         quote=evidence.quote,
-                        context_start_time=evidence.context_t0,
-                        context_end_time=evidence.context_t1,
+                        context_t0=evidence.context_t0,  # Canonical field name
+                        context_t1=evidence.context_t1,  # Canonical field name
                         context_text=evidence.context_text,
                         context_type=evidence.context_type,
                     )

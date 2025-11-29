@@ -181,31 +181,77 @@ class SpeakerProcessor(BaseProcessor):
                 speaker_data.segment_count += 1
 
             # 🚨 NEW: Use voice fingerprinting to merge similar speakers before text assignment
+            # 🔒 PRESERVATION: Track all speakers before merging to ensure none are lost
+            speakers_before_voice = set(speaker_map.keys())
             speaker_count_before_voice = len(speaker_map)
+            
             self._voice_fingerprint_merge_speakers(speaker_map, audio_path)
+            
             speaker_count_after_voice = len(speaker_map)
-
+            speakers_after_voice = set(speaker_map.keys())
+            
+            # 🔒 PRESERVATION: Verify no speakers were unexpectedly lost
+            lost_speakers = speakers_before_voice - speakers_after_voice
+            if lost_speakers and len(lost_speakers) != (speaker_count_before_voice - speaker_count_after_voice):
+                logger.error(
+                    f"🚨 CRITICAL: Unexpected speaker loss detected! Lost: {lost_speakers}, "
+                    f"Expected loss: {speaker_count_before_voice - speaker_count_after_voice}"
+                )
+            
             if speaker_count_after_voice < speaker_count_before_voice:
+                merged_count = speaker_count_before_voice - speaker_count_after_voice
                 logger.info(
-                    f"✅ Voice fingerprinting merged speakers: {speaker_count_before_voice} → {speaker_count_after_voice}"
+                    f"✅ Voice fingerprinting merged {merged_count} speaker(s): "
+                    f"{speaker_count_before_voice} → {speaker_count_after_voice}"
+                )
+                logger.info(
+                    f"🔒 PRESERVATION: Preserved {speaker_count_after_voice} speaker(s) "
+                    f"(merged {merged_count}, lost 0)"
                 )
             elif speaker_count_before_voice > 1:
                 logger.warning(
                     f"⚠️ Voice fingerprinting did NOT merge speakers (still have {speaker_count_before_voice} speakers)"
                 )
+                logger.info(
+                    f"🔒 PRESERVATION: All {speaker_count_before_voice} speaker(s) preserved "
+                    f"(conservative merging - no matches above threshold)"
+                )
 
             # 🚨 NEW: Check for potential over-segmentation and merge similar speakers
+            # 🔒 PRESERVATION: Track speakers before heuristic merging
+            speakers_before_heuristic = set(speaker_map.keys())
             speaker_count_before_heuristic = len(speaker_map)
+            
             self._detect_and_merge_oversegmented_speakers(speaker_map)
+            
             speaker_count_after_heuristic = len(speaker_map)
+            speakers_after_heuristic = set(speaker_map.keys())
+            
+            # 🔒 PRESERVATION: Verify no speakers were unexpectedly lost
+            lost_speakers = speakers_before_heuristic - speakers_after_heuristic
+            if lost_speakers and len(lost_speakers) != (speaker_count_before_heuristic - speaker_count_after_heuristic):
+                logger.error(
+                    f"🚨 CRITICAL: Unexpected speaker loss in heuristic merging! Lost: {lost_speakers}, "
+                    f"Expected loss: {speaker_count_before_heuristic - speaker_count_after_heuristic}"
+                )
 
             if speaker_count_after_heuristic < speaker_count_before_heuristic:
+                merged_count = speaker_count_before_heuristic - speaker_count_after_heuristic
                 logger.info(
-                    f"✅ Heuristic merging merged speakers: {speaker_count_before_heuristic} → {speaker_count_after_heuristic}"
+                    f"✅ Heuristic merging merged {merged_count} speaker(s): "
+                    f"{speaker_count_before_heuristic} → {speaker_count_after_heuristic}"
+                )
+                logger.info(
+                    f"🔒 PRESERVATION: Preserved {speaker_count_after_heuristic} speaker(s) "
+                    f"(merged {merged_count}, lost 0)"
                 )
             elif speaker_count_before_heuristic > 1:
                 logger.warning(
                     f"⚠️ Heuristic merging did NOT merge speakers (still have {speaker_count_before_heuristic} speakers)"
+                )
+                logger.info(
+                    f"🔒 PRESERVATION: All {speaker_count_before_heuristic} speaker(s) preserved "
+                    f"(conservative merging - no matches above threshold)"
                 )
 
             # 🚨 CRITICAL FIX: Clean up data FIRST before LLM analysis
@@ -231,11 +277,41 @@ class SpeakerProcessor(BaseProcessor):
                 speaker_map.values(), key=lambda x: x.total_duration, reverse=True
             )
 
-            logger.info(f"Prepared data for {len(sorted_speakers)} speakers")
+            # 🔒 PRESERVATION: Final verification - ensure all speakers are returned
+            if len(sorted_speakers) != len(speaker_map):
+                logger.error(
+                    f"🚨 CRITICAL: Speaker count mismatch! "
+                    f"speaker_map has {len(speaker_map)} speakers, "
+                    f"but sorted_speakers has {len(sorted_speakers)}"
+                )
+                # Recover by using all speakers from map
+                sorted_speakers = list(speaker_map.values())
+            
+            # 🔒 PRESERVATION: Log final speaker preservation status
+            total_segments = sum(len(sp.segments) for sp in sorted_speakers)
+            total_duration = sum(sp.total_duration for sp in sorted_speakers)
+            logger.info(
+                f"✅ Prepared data for {len(sorted_speakers)} speaker(s) "
+                f"({total_segments} segments, {total_duration:.1f}s total duration)"
+            )
+            logger.info(
+                f"🔒 PRESERVATION: All {len(sorted_speakers)} speaker(s) preserved and returned"
+            )
+            
             return sorted_speakers
 
         except Exception as e:
             logger.error(f"Error preparing speaker data: {e}")
+            # 🔒 PRESERVATION: On error, try to return any speakers we have
+            try:
+                if 'speaker_map' in locals() and speaker_map:
+                    logger.warning(
+                        f"🔒 PRESERVATION: Error occurred, but returning {len(speaker_map)} "
+                        f"speaker(s) that were successfully processed"
+                    )
+                    return list(speaker_map.values())
+            except Exception:
+                pass
             return []
 
     def _find_overlapping_text(
@@ -576,7 +652,10 @@ class SpeakerProcessor(BaseProcessor):
 
                 voice_processor = VoiceFingerprintProcessor()
                 logger.info(
-                    "🎯 Voice fingerprinting available - analyzing speaker segments"
+                    "🔍 DIAGNOSTIC: Voice fingerprinting available - analyzing speaker segments"
+                )
+                logger.info(
+                    f"🔍 DIAGNOSTIC: Will compare {len(speaker_map)} speakers for potential merging"
                 )
             except ImportError as e:
                 logger.debug(f"Voice fingerprinting not available: {e}")
@@ -587,9 +666,10 @@ class SpeakerProcessor(BaseProcessor):
 
             # If no audio path provided, fall back to text-based heuristics
             if not audio_path:
-                logger.debug(
-                    "No audio path provided - using text-based similarity fallback"
+                logger.warning(
+                    "🔍 DIAGNOSTIC: No audio path provided - using text-based similarity fallback"
                 )
+                logger.warning("   → Voice fingerprinting will use heuristics instead of audio analysis")
                 self._voice_fingerprint_merge_speakers_fallback(speaker_map)
                 return
 
@@ -598,8 +678,9 @@ class SpeakerProcessor(BaseProcessor):
                 audio_file = Path(audio_path)
                 if not audio_file.exists():
                     logger.warning(
-                        f"Audio file not found: {audio_path} - using fallback"
+                        f"🔍 DIAGNOSTIC: Audio file not found: {audio_path} - using fallback"
                     )
+                    logger.warning("   → Voice fingerprinting will use heuristics instead of audio analysis")
                     self._voice_fingerprint_merge_speakers_fallback(speaker_map)
                     return
 
@@ -625,29 +706,75 @@ class SpeakerProcessor(BaseProcessor):
                     audio_segments = []
                     total_duration = 0.0
                     max_duration = 30.0  # Use up to 30 seconds for fingerprinting
+                    
+                    # 🔍 DIAGNOSTIC: Track why segments are rejected
+                    rejected_segments = {
+                        "out_of_bounds": 0,
+                        "too_short": 0,
+                        "total_checked": 0
+                    }
+                    
+                    # For speakers with very few segments, use a lower minimum length threshold
+                    # This helps with edge cases where diarization creates short segments
+                    min_segment_length = 0.5  # Default: 0.5 seconds
+                    if len(speaker_data.segments) <= 2:
+                        min_segment_length = 0.2  # Lower threshold for speakers with 1-2 segments
+                        logger.info(
+                            f"🔍 DIAGNOSTIC: {speaker_id} has only {len(speaker_data.segments)} segment(s), "
+                            f"using lower minimum length threshold: {min_segment_length}s"
+                        )
 
                     for segment in speaker_data.segments:
                         if total_duration >= max_duration:
                             break
 
+                        rejected_segments["total_checked"] += 1
                         start_sample = int(segment.start * sample_rate)
                         end_sample = int(segment.end * sample_rate)
+                        segment_duration = (end_sample - start_sample) / sample_rate
 
                         # Validate segment bounds
                         if start_sample >= len(full_audio) or end_sample > len(
                             full_audio
                         ):
+                            rejected_segments["out_of_bounds"] += 1
+                            logger.debug(
+                                f"🔍 DIAGNOSTIC: {speaker_id} segment {rejected_segments['total_checked']} "
+                                f"rejected - out of bounds (start: {start_sample}, end: {end_sample}, "
+                                f"audio_length: {len(full_audio)}, duration: {segment_duration:.2f}s)"
+                            )
                             continue
 
                         segment_audio = full_audio[start_sample:end_sample]
 
-                        # Only use segments longer than 0.5 seconds
-                        if len(segment_audio) > sample_rate * 0.5:
+                        # Use adaptive minimum segment length based on speaker segment count
+                        if len(segment_audio) > sample_rate * min_segment_length:
                             audio_segments.append(segment_audio)
-                            total_duration += (end_sample - start_sample) / sample_rate
+                            total_duration += segment_duration
+                        else:
+                            rejected_segments["too_short"] += 1
+                            logger.debug(
+                                f"🔍 DIAGNOSTIC: {speaker_id} segment {rejected_segments['total_checked']} "
+                                f"rejected - too short (duration: {segment_duration:.2f}s, "
+                                f"minimum: {min_segment_length}s)"
+                            )
 
                     if not audio_segments:
-                        logger.debug(f"No valid audio segments for {speaker_id}")
+                        logger.warning(
+                            f"🔍 DIAGNOSTIC: No valid audio segments for {speaker_id}"
+                        )
+                        logger.warning(
+                            f"   → Checked {rejected_segments['total_checked']} segments: "
+                            f"{rejected_segments['out_of_bounds']} out of bounds, "
+                            f"{rejected_segments['too_short']} too short"
+                        )
+                        logger.warning(
+                            f"   → Speaker has {len(speaker_data.segments)} total segments, "
+                            f"total duration: {speaker_data.total_duration:.2f}s"
+                        )
+                        logger.warning(
+                            f"   → This speaker will be skipped in voice fingerprinting"
+                        )
                         continue
 
                     # Concatenate segments for this speaker
@@ -659,13 +786,65 @@ class SpeakerProcessor(BaseProcessor):
                     )
                     speaker_fingerprints[speaker_id] = fingerprint
 
-                    logger.debug(
-                        f"Extracted fingerprint for {speaker_id} from {len(audio_segments)} segments ({total_duration:.1f}s)"
+                    logger.info(
+                        f"✅ Extracted fingerprint for {speaker_id} from {len(audio_segments)} segments ({total_duration:.1f}s)"
                     )
 
+                # 🔍 DIAGNOSTIC: Check if we have fingerprints for all speakers
+                skipped_speakers = set(speaker_map.keys()) - set(speaker_fingerprints.keys())
+                if skipped_speakers and len(speaker_map) >= 2:
+                    logger.warning(
+                        f"🔍 DIAGNOSTIC: Skipped {len(skipped_speakers)} speaker(s) due to no valid segments: {skipped_speakers}"
+                    )
+                    logger.warning(
+                        f"   → Only {len(speaker_fingerprints)} speaker(s) have valid fingerprints out of {len(speaker_map)} total"
+                    )
+                    
+                    # If we have fewer than 2 fingerprints, we can't compare, so fall back to text-based merging
+                    if len(speaker_fingerprints) < 2:
+                        logger.warning(
+                            f"🔍 DIAGNOSTIC: Cannot compare voices (need 2+ fingerprints, have {len(speaker_fingerprints)})"
+                        )
+                        logger.warning(
+                            f"   → Falling back to text-based heuristic merging"
+                        )
+                        self._voice_fingerprint_merge_speakers_fallback(speaker_map)
+                        return
+
                 # Compare speakers pairwise using voice fingerprints
+                # 🔒 PRESERVATION: Adaptive threshold based on available features
+                # Check which features are available to determine appropriate threshold
+                sample_fingerprint = next(iter(speaker_fingerprints.values()))
+                has_deep_learning = (
+                    sample_fingerprint.get("wav2vec2")
+                    and len(sample_fingerprint.get("wav2vec2", [])) > 0
+                    and sample_fingerprint.get("ecapa")
+                    and len(sample_fingerprint.get("ecapa", [])) > 0
+                )
+                
+                # Adaptive threshold: Lower when deep learning models aren't available
+                # - With full features (wav2vec2 + ECAPA): 0.8 threshold (high confidence)
+                # - Without deep learning models: 0.65 threshold (basic features only, lower confidence)
+                if has_deep_learning:
+                    MERGE_THRESHOLD = 0.8
+                    logger.info(
+                        "🔍 DIAGNOSTIC: Using high-confidence threshold (0.8) - deep learning models available"
+                    )
+                else:
+                    MERGE_THRESHOLD = 0.65
+                    logger.warning(
+                        "⚠️ DIAGNOSTIC: Using adaptive threshold (0.65) - deep learning models NOT available"
+                    )
+                    logger.warning(
+                        "   → Only basic features (MFCC, spectral, prosodic) available - similarity scores will be lower"
+                    )
+                    logger.warning(
+                        "   → Lower threshold helps catch over-segmentation in single-speaker monologues"
+                    )
+                
                 speakers_to_merge = []
                 main_speakers = list(speaker_fingerprints.keys())
+                similarity_scores = []  # Track all scores for diagnostics
 
                 for i, speaker1_id in enumerate(main_speakers):
                     for speaker2_id in main_speakers[i + 1 :]:
@@ -676,30 +855,74 @@ class SpeakerProcessor(BaseProcessor):
                         similarity_score = voice_processor.calculate_voice_similarity(
                             fingerprint1, fingerprint2
                         )
-
+                        similarity_scores.append(similarity_score)
+                        
                         # 🔍 ALWAYS log similarity scores for debugging
                         logger.info(
                             f"🔍 Voice similarity: {speaker1_id} vs {speaker2_id} = {similarity_score:.3f} "
-                            f"(threshold: 0.7, will_merge: {similarity_score > 0.7})"
+                            f"(threshold: {MERGE_THRESHOLD}, will_merge: {similarity_score > MERGE_THRESHOLD})"
                         )
 
-                        # Use 0.7 threshold for merging (70% similar = same person)
-                        if similarity_score > 0.7:
+                        if similarity_score > MERGE_THRESHOLD:
                             logger.info(
                                 f"🔗 Voice fingerprinting: {speaker1_id} and {speaker2_id} "
-                                f"are likely the same speaker (similarity: {similarity_score:.3f})"
+                                f"are likely the same speaker (similarity: {similarity_score:.3f} > {MERGE_THRESHOLD})"
                             )
                             speakers_to_merge.append(
                                 (speaker1_id, speaker2_id, similarity_score)
                             )
+                        else:
+                            logger.debug(
+                                f"🔒 PRESERVATION: Not merging {speaker1_id} and {speaker2_id} "
+                                f"(similarity: {similarity_score:.3f} <= {MERGE_THRESHOLD} - preserving both)"
+                            )
 
                 # Perform merges for highly similar speakers
+                merge_count = 0
                 for speaker1_id, speaker2_id, score in speakers_to_merge:
                     if speaker2_id in speaker_map:  # Check if still exists
                         self._merge_speakers(speaker_map, speaker1_id, speaker2_id)
                         logger.info(
                             f"🎯 Merged {speaker2_id} into {speaker1_id} (voice similarity: {score:.3f})"
                         )
+                        merge_count += 1
+                
+                # 🔍 DIAGNOSTIC: Summary of voice fingerprinting results
+                if merge_count > 0:
+                    logger.info(
+                        f"✅ Voice fingerprinting merged {merge_count} speaker pair(s) "
+                        f"({len(speaker_map)} speakers remaining)"
+                    )
+                elif len(main_speakers) >= 2:
+                    # Show actual similarity scores in the warning
+                    max_similarity = max(similarity_scores) if similarity_scores else 0.0
+                    avg_similarity = sum(similarity_scores) / len(similarity_scores) if similarity_scores else 0.0
+                    
+                    logger.warning(
+                        f"⚠️ Voice fingerprinting compared {len(main_speakers)} speakers but found no matches above {MERGE_THRESHOLD} threshold"
+                    )
+                    logger.warning(
+                        f"   → Highest similarity: {max_similarity:.3f}, Average: {avg_similarity:.3f}"
+                    )
+                    if max_similarity > 0.5 and max_similarity < MERGE_THRESHOLD:
+                        logger.warning(
+                            f"   → Similarity ({max_similarity:.3f}) is close to threshold ({MERGE_THRESHOLD}) - likely over-segmentation"
+                        )
+                        if not has_deep_learning:
+                            logger.warning(
+                                f"   → Consider installing transformers and speechbrain for better accuracy"
+                            )
+                    logger.warning(
+                        f"   → This may indicate genuine multiple speakers or over-segmentation with low similarity"
+                    )
+                    logger.info(
+                        f"🔒 PRESERVATION: All {len(main_speakers)} speaker(s) preserved "
+                        f"(threshold: {MERGE_THRESHOLD}, deep_learning_available: {has_deep_learning})"
+                    )
+                else:
+                    logger.info(
+                        f"ℹ️ Voice fingerprinting: Only {len(main_speakers)} speaker(s) with valid fingerprints, nothing to compare"
+                    )
 
             except Exception as e:
                 logger.warning(f"Error extracting audio segments: {e} - using fallback")
@@ -713,9 +936,27 @@ class SpeakerProcessor(BaseProcessor):
     ) -> None:
         """
         Fallback method using text-based heuristics when audio is not available.
+        🔒 PRESERVATION: Uses conservative threshold (0.85) to avoid losing speaker content.
         """
+        if len(speaker_map) < 2:
+            logger.info("🔒 PRESERVATION: Only 1 speaker, nothing to merge")
+            return
+        
+        # 🔒 PRESERVATION: Track speakers before merging
+        speakers_before = set(speaker_map.keys())
+        speaker_count_before = len(speaker_map)
+        
         speakers_to_merge = []
         main_speakers = list(speaker_map.keys())
+
+        # 🔒 PRESERVATION: Conservative threshold - only merge if very confident (85% similarity)
+        # This errs on the side of preserving speakers rather than losing content
+        MERGE_THRESHOLD = 0.85  # Raised from 0.7 to be more conservative
+        
+        logger.info(
+            f"🔒 PRESERVATION: Text-based merging using conservative threshold: {MERGE_THRESHOLD} "
+            f"(will preserve speakers unless similarity > {MERGE_THRESHOLD})"
+        )
 
         # Compare speakers pairwise for potential merging
         for i, speaker1_id in enumerate(main_speakers):
@@ -729,22 +970,61 @@ class SpeakerProcessor(BaseProcessor):
                     speaker1_data, speaker2_data
                 )
 
-                if similarity_score > 0.7:
+                logger.debug(
+                    f"🔍 Text-based similarity: {speaker1_id} vs {speaker2_id} = {similarity_score:.3f} "
+                    f"(threshold: {MERGE_THRESHOLD}, will_merge: {similarity_score > MERGE_THRESHOLD})"
+                )
+
+                if similarity_score > MERGE_THRESHOLD:
                     logger.info(
                         f"🔗 Text-based analysis suggests {speaker1_id} and {speaker2_id} "
-                        f"are likely the same speaker (similarity: {similarity_score:.3f})"
+                        f"are likely the same speaker (similarity: {similarity_score:.3f} > {MERGE_THRESHOLD})"
                     )
                     speakers_to_merge.append(
                         (speaker1_id, speaker2_id, similarity_score)
                     )
+                else:
+                    logger.debug(
+                        f"🔒 PRESERVATION: Not merging {speaker1_id} and {speaker2_id} "
+                        f"(similarity: {similarity_score:.3f} <= {MERGE_THRESHOLD} - preserving both)"
+                    )
 
         # Perform merges for highly similar speakers
+        merge_count = 0
         for speaker1_id, speaker2_id, score in speakers_to_merge:
             if speaker2_id in speaker_map:
                 self._merge_speakers(speaker_map, speaker1_id, speaker2_id)
                 logger.info(
-                    f"🎯 Merged {speaker2_id} into {speaker1_id} based on text analysis"
+                    f"🎯 Merged {speaker2_id} into {speaker1_id} based on text analysis "
+                    f"(similarity: {score:.3f})"
                 )
+                merge_count += 1
+        
+        speaker_count_after = len(speaker_map)
+        speakers_after = set(speaker_map.keys())
+        
+        # 🔒 PRESERVATION: Verify no unexpected speaker loss
+        lost_speakers = speakers_before - speakers_after
+        if lost_speakers and len(lost_speakers) != merge_count:
+            logger.error(
+                f"🚨 CRITICAL: Unexpected speaker loss in text-based merging! "
+                f"Lost: {lost_speakers}, Expected: {merge_count} merged"
+            )
+        
+        if merge_count > 0:
+            logger.info(
+                f"✅ Text-based merging merged {merge_count} speaker pair(s): "
+                f"{speaker_count_before} → {speaker_count_after}"
+            )
+            logger.info(
+                f"🔒 PRESERVATION: Preserved {speaker_count_after} speaker(s) "
+                f"(merged {merge_count}, lost 0)"
+            )
+        else:
+            logger.info(
+                f"🔒 PRESERVATION: No speakers merged - all {speaker_count_before} speaker(s) preserved "
+                f"(conservative threshold: {MERGE_THRESHOLD})"
+            )
 
     def _calculate_speaker_similarity(
         self, speaker1: SpeakerData, speaker2: SpeakerData
@@ -801,19 +1081,47 @@ class SpeakerProcessor(BaseProcessor):
     def _merge_speakers(
         self, speaker_map: dict[str, SpeakerData], target_id: str, source_id: str
     ) -> None:
-        """Merge source speaker into target speaker."""
+        """
+        Merge source speaker into target speaker.
+        🔒 PRESERVATION: Safely merges segments and preserves all content.
+        """
         if source_id not in speaker_map or target_id not in speaker_map:
+            logger.warning(
+                f"🔒 PRESERVATION: Cannot merge - speaker(s) not found: "
+                f"target={target_id} ({target_id in speaker_map}), "
+                f"source={source_id} ({source_id in speaker_map})"
+            )
             return
 
         target_data = speaker_map[target_id]
         source_data = speaker_map[source_id]
+
+        # 🔒 PRESERVATION: Track content before merge
+        target_segments_before = len(target_data.segments)
+        source_segments_count = len(source_data.segments)
+        source_duration = source_data.total_duration
 
         # Merge segments
         target_data.segments.extend(source_data.segments)
         target_data.total_duration += source_data.total_duration
         target_data.segment_count += source_data.segment_count
 
-        # Remove the merged speaker
+        # 🔒 PRESERVATION: Verify merge succeeded
+        target_segments_after = len(target_data.segments)
+        expected_segments = target_segments_before + source_segments_count
+        
+        if target_segments_after != expected_segments:
+            logger.error(
+                f"🚨 CRITICAL: Segment count mismatch after merge! "
+                f"Expected {expected_segments} segments, got {target_segments_after}"
+            )
+        else:
+            logger.debug(
+                f"🔒 PRESERVATION: Successfully merged {source_segments_count} segments "
+                f"({source_duration:.1f}s) from {source_id} into {target_id}"
+            )
+
+        # Remove the merged speaker (content is now in target)
         del speaker_map[source_id]
 
     def _validate_and_fix_speaker_segments(

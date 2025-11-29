@@ -15,12 +15,10 @@ import sys
 from pathlib import Path
 from typing import Any
 
-# Add the OAuth package to the path
-oauth_package_path = (
-    Path(__file__).parent.parent.parent.parent / "knowledge_chipper_oauth"
-)
-if str(oauth_package_path) not in sys.path:
-    sys.path.append(str(oauth_package_path))
+# Add project root to path to enable package imports
+project_root = Path(__file__).parent.parent.parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
 
 from ..logger import get_logger  # noqa: E402
 
@@ -28,30 +26,29 @@ logger = get_logger(__name__)
 
 
 def upload_to_getreceipts(
-    session_data: dict[str, Any], use_production: bool = True, authenticate: bool = True
+    session_data: dict[str, Any], use_production: bool = True
 ) -> dict[str, Any]:
     """
     Upload Knowledge_Chipper session data to GetReceipts.org
 
-    This function handles the complete OAuth authentication and data upload flow
+    This function handles data upload flow using automatic device authentication
     for sharing processed claims with the GetReceipts.org community.
 
     Args:
         session_data: Dictionary containing HCE processing results
         use_production: Whether to use production GetReceipts.org (default: True)
-        authenticate: Whether to perform OAuth authentication (default: True)
 
     Returns:
         Dictionary with upload results for each data type
 
     Raises:
-        Exception: If configuration is incomplete, authentication fails, or upload fails
+        Exception: If configuration is incomplete or upload fails
     """
 
     try:
         # Import OAuth package modules
-        from getreceipts_config import get_config, set_production, validate_config
-        from getreceipts_uploader import GetReceiptsUploader
+        from knowledge_chipper_oauth.getreceipts_config import get_config, set_production, validate_config
+        from knowledge_chipper_oauth.getreceipts_uploader import GetReceiptsUploader
 
         logger.info("🚀 Starting GetReceipts.org upload process...")
 
@@ -69,20 +66,11 @@ def upload_to_getreceipts(
 
         logger.info(f"📋 Configuration valid - connecting to {config['base_url']}")
 
-        # Initialize uploader
-        uploader = GetReceiptsUploader(
-            supabase_url=config["supabase_url"],
-            supabase_anon_key=config["supabase_anon_key"],
-            base_url=config["base_url"],
-        )
-
-        # Authenticate if required
-        if authenticate:
-            logger.info("🔐 Starting OAuth authentication...")
-            auth_result = uploader.authenticate()
-            logger.info(
-                f"✅ Authenticated as: {auth_result['user_info']['name']} ({auth_result['user_info']['email']})"
-            )
+        # Initialize uploader with API base URL (uses device authentication automatically)
+        api_base_url = f"{config['base_url']}/api/knowledge-chipper"
+        uploader = GetReceiptsUploader(api_base_url=api_base_url)
+        
+        logger.info("🔐 Using device authentication (automatic)")
 
         # Log data summary
         data_summary = {}
@@ -119,7 +107,7 @@ def check_getreceipts_availability() -> bool:
 
     try:
         import requests
-        from getreceipts_config import get_config, set_production
+        from knowledge_chipper_oauth.getreceipts_config import get_config, set_production
 
         set_production()
         config = get_config()
@@ -182,7 +170,7 @@ def get_upload_summary(session_data: dict[str, Any]) -> str:
 def _check_oauth_package():
     """Check if OAuth package is properly configured"""
     try:
-        from getreceipts_config import get_config, validate_config
+        from knowledge_chipper_oauth.getreceipts_config import get_config, validate_config
 
         config = get_config()
         if not validate_config(config):

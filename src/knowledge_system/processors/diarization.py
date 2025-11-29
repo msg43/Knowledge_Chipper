@@ -884,6 +884,48 @@ class SpeakerDiarizationProcessor(BaseProcessor):
                     if self._pipeline is None:
                         raise RuntimeError("Pipeline not loaded - cannot process audio")
 
+                    # 🔧 FIX: Adjust clustering parameters based on audio duration
+                    # For short videos (< 5 minutes), use lower min_cluster_size to prevent over-segmentation
+                    if audio_duration and hasattr(self._pipeline, "clustering"):
+                        duration_minutes = audio_duration / 60.0
+                        
+                        # Adaptive min_cluster_size based on video length
+                        # Short videos (< 5 min) need much lower cluster size to avoid false splits
+                        if duration_minutes < 5:
+                            # Very short videos: use minimal cluster size
+                            adaptive_min_cluster_size = max(3, int(duration_minutes * 2))
+                            logger.info(
+                                f"🔧 Short video detected ({duration_minutes:.1f} min): "
+                                f"Using adaptive min_cluster_size={adaptive_min_cluster_size} "
+                                f"(was {getattr(self._pipeline.clustering, 'min_cluster_size', 'default')})"
+                            )
+                        elif duration_minutes < 10:
+                            # Short videos: reduce cluster size proportionally
+                            adaptive_min_cluster_size = max(5, int(duration_minutes * 2.5))
+                            logger.info(
+                                f"🔧 Short video detected ({duration_minutes:.1f} min): "
+                                f"Using adaptive min_cluster_size={adaptive_min_cluster_size} "
+                                f"(was {getattr(self._pipeline.clustering, 'min_cluster_size', 'default')})"
+                            )
+                        else:
+                            # Normal/long videos: use default settings
+                            adaptive_min_cluster_size = getattr(
+                                self._pipeline.clustering, 'min_cluster_size', 20
+                            )
+                            logger.debug(
+                                f"Using default min_cluster_size={adaptive_min_cluster_size} "
+                                f"for {duration_minutes:.1f} min video"
+                            )
+                        
+                        # Apply adaptive cluster size
+                        if hasattr(self._pipeline.clustering, 'min_cluster_size'):
+                            original_size = self._pipeline.clustering.min_cluster_size
+                            self._pipeline.clustering.min_cluster_size = adaptive_min_cluster_size
+                            logger.info(
+                                f"✅ Adjusted clustering: min_cluster_size {original_size} → {adaptive_min_cluster_size} "
+                                f"(duration: {duration_minutes:.1f} min)"
+                            )
+
                     try:
                         # Preload audio using torchaudio to avoid torchcodec FFmpeg issues
                         # See: https://github.com/pyannote/pyannote-audio/issues/1707

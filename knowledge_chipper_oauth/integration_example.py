@@ -270,7 +270,8 @@ def upload_to_getreceipts(
     Main integration function for Knowledge_Chipper
 
     Add this function to your Knowledge_Chipper codebase and call it
-    after processing a session to upload data to GetReceipts.org
+    after processing a session to upload data to GetReceipts.org.
+    Uses automatic device authentication (no manual OAuth required).
 
     Args:
         session_data: Dictionary containing HCE results
@@ -280,7 +281,7 @@ def upload_to_getreceipts(
         Upload results dictionary
 
     Raises:
-        Exception: If authentication or upload fails
+        Exception: If configuration is incomplete or upload fails
     """
 
     # Switch to production if requested
@@ -294,16 +295,11 @@ def upload_to_getreceipts(
             "GetReceipts configuration incomplete - check getreceipts_config.py"
         )
 
-    # Initialize uploader
-    uploader = GetReceiptsUploader(
-        supabase_url=config["supabase_url"],
-        supabase_anon_key=config["supabase_anon_key"],
-        base_url=config["base_url"],
-    )
-
-    # Authenticate user
-    auth_result = uploader.authenticate()
-    print(f"🔐 Authenticated as: {auth_result['user_info']['name']}")
+    # Initialize uploader with API base URL (uses device authentication automatically)
+    api_base_url = f"{config['base_url']}/api/knowledge-chipper"
+    uploader = GetReceiptsUploader(api_base_url=api_base_url)
+    
+    print("🔐 Using device authentication (automatic)")
 
     # Upload data
     upload_results = uploader.upload_session_data(session_data)

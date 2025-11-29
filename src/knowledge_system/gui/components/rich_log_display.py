@@ -57,6 +57,9 @@ class LogCapture(QObject):
             "summarizer",
             "audio_processor",
             "transcribe",
+            "hce",  # Hybrid Claim Extraction logs
+            "miner",  # Mining operation logs
+            "unified_miner",  # Unified miner specific logs
         ]
 
         return any(mod in module_name.lower() for mod in interesting_modules)

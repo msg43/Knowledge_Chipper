@@ -5,7 +5,7 @@ This module handles uploading Knowledge_Chipper HCE data to GetReceipts.org
 via HTTP API with automatic device authentication (Happy-style).
 
 Usage:
-    from getreceipts_uploader import GetReceiptsUploader
+    from knowledge_chipper_oauth.getreceipts_uploader import GetReceiptsUploader
 
     uploader = GetReceiptsUploader()  # Auto-authenticates with device credentials
     results = uploader.upload_session_data(session_data)

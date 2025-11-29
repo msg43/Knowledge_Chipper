@@ -37,7 +37,7 @@ logger = get_logger(__name__)
 PIPELINE_STAGES = {
     "unified_miner": {
         "name": "Unified Miner ⭐ ACTIVE",
-        "description": "Extracts ALL entities in one pass: claims, jargon, people, and mental models from content segments (v2 schema with full evidence structure)",
+        "description": "Extracts ALL entities in one pass: claims, jargon, people, and mental models from content segments (v2 schema with full evidence structure). NOTE: Content-type-specific prompts (transcript_own, transcript_third_party, document) are selected automatically based on Content Type in Summarize tab.",
         "prompt_path": "src/knowledge_system/processors/hce/prompts/unified_miner.txt",
         "default_prompt": "unified_miner.txt",
         "status": "active",
@@ -184,26 +184,30 @@ class PromptsTab(BaseTab):
             desc_label.setStyleSheet("color: #555; font-size: 9pt;")
             group_layout.addWidget(desc_label)
 
-            # Combo box for prompt selection
-            combo_layout = QHBoxLayout()
-            combo_label = QLabel("Prompt:")
-            combo = QComboBox()
-            combo.setMinimumWidth(200)
-            combo.currentTextChanged.connect(
-                lambda text, sid=stage_id: self._on_stage_assignment_changed(sid, text)
-            )
-            self.stage_prompt_combos[stage_id] = combo
+            # Special handling for Unified Miner - show prompt selection hierarchy
+            if stage_id == "unified_miner":
+                group_layout.addWidget(self._create_unified_miner_prompt_display())
+            else:
+                # Standard combo box for other stages (Flagship Evaluator, Skimmer)
+                combo_layout = QHBoxLayout()
+                combo_label = QLabel("Prompt:")
+                combo = QComboBox()
+                combo.setMinimumWidth(200)
+                combo.currentTextChanged.connect(
+                    lambda text, sid=stage_id: self._on_stage_assignment_changed(sid, text)
+                )
+                self.stage_prompt_combos[stage_id] = combo
 
-            combo_layout.addWidget(combo_label)
-            combo_layout.addWidget(combo, stretch=1)
-            group_layout.addLayout(combo_layout)
+                combo_layout.addWidget(combo_label)
+                combo_layout.addWidget(combo, stretch=1)
+                group_layout.addLayout(combo_layout)
 
-            # View/Edit button
-            view_btn = QPushButton("View Assigned Prompt")
-            view_btn.clicked.connect(
-                lambda checked, sid=stage_id: self._view_stage_prompt(sid)
-            )
-            group_layout.addWidget(view_btn)
+                # View/Edit button
+                view_btn = QPushButton("View Assigned Prompt")
+                view_btn.clicked.connect(
+                    lambda checked, sid=stage_id: self._view_stage_prompt(sid)
+                )
+                group_layout.addWidget(view_btn)
 
             group.setLayout(group_layout)
             scroll_layout.addWidget(group)
@@ -221,6 +225,140 @@ class PromptsTab(BaseTab):
         self._refresh_pipeline_assignments()
 
         return widget
+
+    def _create_unified_miner_prompt_display(self) -> QWidget:
+        """Create an informational display for Unified Miner showing all prompt variants."""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setContentsMargins(5, 5, 5, 5)
+
+        # Selection logic explanation
+        explanation = QLabel(
+            "📋 Prompt Selection Logic:\n"
+            "The Unified Miner selects prompts automatically based on:\n"
+            "1. Content Type (if specified) → Content-specific prompts\n"
+            "2. Selectivity setting → Selectivity-based prompts\n"
+            "3. Fallback → unified_miner.txt"
+        )
+        explanation.setWordWrap(True)
+        explanation.setStyleSheet(
+            "color: #2563EB; font-size: 9pt; padding: 8px; "
+            "background-color: #EFF6FF; border-radius: 4px; border: 1px solid #93C5FD;"
+        )
+        layout.addWidget(explanation)
+
+        # Content-Type-Specific Prompts Section
+        content_type_header = QLabel("🎯 Content-Type-Specific Prompts")
+        content_type_header.setStyleSheet("font-weight: bold; color: #059669; margin-top: 10px;")
+        layout.addWidget(content_type_header)
+
+        content_type_prompts = [
+            ("Transcript (Own)", "unified_miner_transcript_own.txt"),
+            ("Transcript (Third-party)", "unified_miner_transcript_third_party.txt"),
+            ("Document (PDF/eBook)", "unified_miner_document.txt"),
+        ]
+
+        for display_name, filename in content_type_prompts:
+            prompt_row = QHBoxLayout()
+            prompt_label = QLabel(f"  • {display_name}: {filename}")
+            prompt_label.setStyleSheet("color: #555; font-size: 9pt;")
+            prompt_row.addWidget(prompt_label, stretch=1)
+
+            edit_btn = QPushButton("Edit")
+            edit_btn.setMaximumWidth(60)
+            edit_btn.clicked.connect(
+                lambda checked, f=filename: self._edit_prompt_by_filename(f)
+            )
+            prompt_row.addWidget(edit_btn)
+            layout.addLayout(prompt_row)
+
+        # Selectivity-Based Prompts Section
+        selectivity_header = QLabel("⚙️ Selectivity-Based Prompts")
+        selectivity_header.setStyleSheet("font-weight: bold; color: #7C3AED; margin-top: 10px;")
+        layout.addWidget(selectivity_header)
+
+        selectivity_prompts = [
+            ("Liberal", "unified_miner_liberal.txt"),
+            ("Moderate", "unified_miner_moderate.txt"),
+            ("Conservative", "unified_miner_conservative.txt"),
+        ]
+
+        for display_name, filename in selectivity_prompts:
+            prompt_row = QHBoxLayout()
+            prompt_label = QLabel(f"  • {display_name}: {filename}")
+            prompt_label.setStyleSheet("color: #555; font-size: 9pt;")
+            prompt_row.addWidget(prompt_label, stretch=1)
+
+            edit_btn = QPushButton("Edit")
+            edit_btn.setMaximumWidth(60)
+            edit_btn.clicked.connect(
+                lambda checked, f=filename: self._edit_prompt_by_filename(f)
+            )
+            prompt_row.addWidget(edit_btn)
+            layout.addLayout(prompt_row)
+
+        # Fallback Prompt Section
+        fallback_header = QLabel("🔄 Fallback Prompt")
+        fallback_header.setStyleSheet("font-weight: bold; color: #DC2626; margin-top: 10px;")
+        layout.addWidget(fallback_header)
+
+        fallback_row = QHBoxLayout()
+        fallback_label = QLabel("  • Used when content-type/selectivity prompts don't exist: unified_miner.txt")
+        fallback_label.setWordWrap(True)
+        fallback_label.setStyleSheet("color: #555; font-size: 9pt;")
+        fallback_row.addWidget(fallback_label, stretch=1)
+
+        edit_fallback_btn = QPushButton("Edit")
+        edit_fallback_btn.setMaximumWidth(60)
+        edit_fallback_btn.clicked.connect(
+            lambda checked: self._edit_prompt_by_filename("unified_miner.txt")
+        )
+        fallback_row.addWidget(edit_fallback_btn)
+        layout.addLayout(fallback_row)
+
+        return widget
+
+    def _edit_prompt_by_filename(self, filename: str) -> None:
+        """Open a prompt file for editing by filename."""
+        prompt_path = Path("src/knowledge_system/processors/hce/prompts") / filename
+        if not prompt_path.exists():
+            QMessageBox.warning(
+                self,
+                "Prompt Not Found",
+                f"The prompt file '{filename}' was not found at:\n{prompt_path}"
+            )
+            return
+
+        # Find and select this prompt in the list
+        prompt_files = self._get_all_prompt_files()
+        for pf in prompt_files:
+            if pf.name == filename:
+                # Select this prompt in the list
+                for i in range(self.prompt_list.count()):
+                    item = self.prompt_list.item(i)
+                    if item is not None and item.data(Qt.ItemDataRole.UserRole) == pf:
+                        self.prompt_list.setCurrentItem(item)
+                        self._on_prompt_selected(item)
+                        # Scroll to make it visible
+                        self.prompt_list.scrollToItem(item)
+                        return
+
+        # If not found in list, load it directly
+        try:
+            content = prompt_path.read_text(encoding="utf-8")
+            self.prompt_editor.blockSignals(True)
+            self.prompt_editor.setPlainText(content)
+            self.prompt_editor.blockSignals(False)
+            self.current_prompt_file = prompt_path
+            self.prompt_modified = False
+            self.save_prompt_btn.setEnabled(False)
+            self.revert_btn.setEnabled(False)
+            self.delete_btn.setEnabled(True)
+            self.prompt_info_label.setText(f"📝 {filename} | Editing directly")
+            logger.info(f"Opened prompt for editing: {filename}")
+        except Exception as e:
+            logger.error(f"Failed to load prompt {filename}: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to load prompt: {e}")
 
     def _create_prompt_editor_widget(self) -> QWidget:
         """Create the right side prompt management and editor widget."""
@@ -351,8 +489,11 @@ class PromptsTab(BaseTab):
         prompt_files = self._get_all_prompt_files()
         prompt_names = [p.stem for p in prompt_files]
 
-        # Update each combo box
+        # Update each combo box (skip unified_miner as it uses special display)
         for stage_id, combo in self.stage_prompt_combos.items():
+            if stage_id == "unified_miner":
+                continue  # Unified Miner uses special display, not dropdown
+
             # Block signals while updating
             combo.blockSignals(True)
             combo.clear()
@@ -454,6 +595,10 @@ class PromptsTab(BaseTab):
     def _on_stage_assignment_changed(self, stage_id: str, prompt_name: str) -> None:
         """Handle pipeline stage prompt assignment change."""
         if not prompt_name:
+            return
+
+        # Unified Miner doesn't use dropdown assignment
+        if stage_id == "unified_miner":
             return
 
         try:

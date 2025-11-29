@@ -20,18 +20,28 @@ Shows all processing stages in the HCE pipeline with their current prompt assign
 
 #### Pipeline Stages:
 
-1. **Unified Miner** - Extracts claims, jargon, people, and mental models from content segments
-2. **Flagship Evaluator** - Reviews and ranks extracted claims by importance and quality
-3. **Skimmer** - Performs high-level overview to identify key milestones
-4. **Concept Extractor** - Detects mental models and conceptual frameworks
-5. **Glossary Builder** - Creates definitions for jargon and technical terms
-6. **People Detector** - Identifies people mentioned in content
-7. **People Disambiguator** - Resolves ambiguous person references
+1. **Unified Miner ⭐ ACTIVE** - Extracts ALL entities in one pass: claims, jargon, people, and mental models from content segments (v2 schema with full evidence structure)
+   - Uses dynamic prompt selection based on Content Type and Selectivity settings
+   - Content-Type-Specific Prompts:
+     - `unified_miner_transcript_own.txt` for Transcript (Own)
+     - `unified_miner_transcript_third_party.txt` for Transcript (Third-party)
+     - `unified_miner_document.txt` for Document (PDF/eBook)
+   - Selectivity-Based Prompts:
+     - `unified_miner_liberal.txt` for liberal extraction
+     - `unified_miner_moderate.txt` for moderate extraction
+     - `unified_miner_conservative.txt` for conservative extraction
+   - Fallback: `unified_miner.txt` (used when content-type/selectivity prompts don't exist)
+   - All prompt variants are shown with "Edit" buttons for direct access
 
-Each stage shows:
-- Stage name and description
-- Dropdown menu to select assigned prompt
-- "View Assigned Prompt" button to load and inspect the prompt
+2. **Flagship Evaluator ⭐ ACTIVE** - Reviews and ranks ALL extracted entities (claims, jargon, people, concepts) by importance and quality in parallel
+   - Uses a single prompt: `flagship_evaluator.txt`
+   - Dropdown menu to select assigned prompt
+   - "View Assigned Prompt" button to load and inspect the prompt
+
+3. **Skimmer (Optional)** - Performs high-level overview to identify key milestones
+   - NOT used in main pipeline but available for custom workflows
+   - Dropdown menu to select assigned prompt
+   - "View Assigned Prompt" button to load and inspect the prompt
 
 ### Right Panel: Prompt Library & Editor
 
@@ -88,12 +98,21 @@ Manages the complete collection of available prompts:
 
 ### Assigning Prompts to Pipeline Stages
 
+**For Flagship Evaluator and Skimmer:**
 1. In the left panel, find the pipeline stage you want to configure
 2. Click the dropdown menu under that stage
 3. Select a prompt from the list
 4. A confirmation dialog shows the assignment was successful
 5. The change takes effect immediately for future processing runs
 6. The prompt file is copied to the stage's expected location
+
+**For Unified Miner:**
+- Unified Miner uses automatic prompt selection based on Content Type and Selectivity settings
+- To edit prompts, use the "Edit" buttons next to each prompt variant in the Unified Miner section
+- The system automatically selects the appropriate prompt during processing:
+  1. First checks for content-type-specific prompt (if Content Type is set)
+  2. Then checks for selectivity-based prompt (if Selectivity is set)
+  3. Falls back to `unified_miner.txt` if neither exists
 
 ### Viewing Stage Assignments
 

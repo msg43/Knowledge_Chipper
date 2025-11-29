@@ -166,6 +166,9 @@ class DatabaseService:
         # Ensure unified HCE schema (tables, indexes, FTS) exists in main DB
         self._ensure_unified_hce_schema()
 
+        # Apply incremental schema migrations
+        self._apply_incremental_migrations()
+
         logger.info(f"Database service initialized with {self.database_url}")
 
     def get_session(self) -> Session:
@@ -235,6 +238,50 @@ class DatabaseService:
             logger.info("Unified HCE schema ensured in main database")
         except Exception as e:
             logger.error(f"Failed to ensure unified HCE schema: {e}")
+
+    def _apply_incremental_migrations(self) -> None:
+        """Apply incremental schema migrations that aren't part of unified_schema.sql.
+        
+        This applies migrations for schema changes like adding new columns to existing
+        tables. Each migration is idempotent and can be safely re-run.
+        """
+        try:
+            # Only applicable for SQLite
+            if not (
+                self.database_url.startswith("sqlite:///")
+                or self.database_url.startswith("sqlite://")
+            ):
+                return
+
+            migrations_dir = Path(__file__).parent / "migrations"
+            
+            # List of incremental migrations to apply (in order)
+            # These are migrations that add columns or indexes to existing tables
+            incremental_migrations = [
+                "2025_11_16_add_user_notes_to_claims.sql",
+                # Note: verification_status fix requires table rebuild, apply manually if needed
+                # Add new migrations here as needed
+            ]
+            
+            for migration_file in incremental_migrations:
+                migration_path = migrations_dir / migration_file
+                if not migration_path.exists():
+                    logger.warning(f"Migration file not found: {migration_path}")
+                    continue
+                
+                try:
+                    sql_text = migration_path.read_text()
+                    with self.engine.connect() as conn:
+                        # Execute the migration (should be idempotent with IF NOT EXISTS, etc.)
+                        conn.connection.executescript(sql_text)
+                        conn.commit()
+                    logger.debug(f"Applied migration: {migration_file}")
+                except Exception as e:
+                    # Log but don't fail - migration might already be applied
+                    logger.debug(f"Migration {migration_file} skipped or already applied: {e}")
+                    
+        except Exception as e:
+            logger.error(f"Failed to apply incremental migrations: {e}")
 
     # =============================================================================
     # SOURCE OPERATIONS (MediaSource table)

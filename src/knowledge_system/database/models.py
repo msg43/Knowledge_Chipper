@@ -361,7 +361,7 @@ class Summary(Base):
     processing_time_seconds = Column(Float)
 
     # Processing metadata
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
     template_used = Column(String(100))
 
     # Relationships
@@ -714,9 +714,8 @@ class Claim(Base):
 
     # System evaluation (from HCE)
     tier = Column(String)
-    importance_score = Column(Float)
-    specificity_score = Column(Float)
-    verifiability_score = Column(Float)
+    # Canonical format: scores_json (matches HCE schema and GetReceipts API)
+    scores_json = Column(JSONEncodedType, nullable=False)  # JSON: {"importance":0.8, "novelty":0.7, "confidence":0.9, "controversy":0.2, "fragility":0.1}
 
     # User curation
     user_tier_override = Column(String)
@@ -796,9 +795,6 @@ class Claim(Base):
         ),
         CheckConstraint("tier IN ('A', 'B', 'C')", name="ck_tier"),
         CheckConstraint("user_tier_override IN ('A', 'B', 'C')", name="ck_user_tier"),
-        CheckConstraint("importance_score BETWEEN 0 AND 1", name="ck_importance"),
-        CheckConstraint("specificity_score BETWEEN 0 AND 1", name="ck_specificity"),
-        CheckConstraint("verifiability_score BETWEEN 0 AND 1", name="ck_verifiability"),
         CheckConstraint(
             "user_confidence_override BETWEEN 0 AND 1", name="ck_user_confidence"
         ),
@@ -821,7 +817,10 @@ class Claim(Base):
 
 
 class EvidenceSpan(Base):
-    """Evidence spans: Supporting quotes for claims."""
+    """Evidence spans: Supporting quotes for claims.
+    
+    Uses canonical field names matching HCE schema and GetReceipts API.
+    """
 
     __tablename__ = "evidence_spans"
 
@@ -831,16 +830,16 @@ class EvidenceSpan(Base):
         String, ForeignKey("claims.claim_id", ondelete="CASCADE"), nullable=False
     )
     segment_id = Column(String, ForeignKey("segments.segment_id", ondelete="SET NULL"))
-    sequence = Column(Integer, nullable=False)
+    seq = Column(Integer, nullable=False)
 
     # Precise quote
-    start_time = Column(String)
-    end_time = Column(String)
+    t0 = Column(String)
+    t1 = Column(String)
     quote = Column(Text)
 
     # Extended context
-    context_start_time = Column(String)
-    context_end_time = Column(String)
+    context_t0 = Column(String)
+    context_t1 = Column(String)
     context_text = Column(Text)
     context_type = Column(String, default="exact")
 

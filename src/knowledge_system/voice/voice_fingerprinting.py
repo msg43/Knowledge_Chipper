@@ -217,11 +217,13 @@ class AdvancedVoiceEncoder:
     def _load_wav2vec2(self):
         """Lazy load wav2vec2 model for voice embeddings."""
         if not HAS_TRANSFORMERS:
-            logger.warning("Transformers not available, skipping wav2vec2")
+            logger.warning("🔍 DIAGNOSTIC: Transformers package not installed (HAS_TRANSFORMERS=False)")
+            logger.warning("   → wav2vec2 embeddings will NOT be available")
+            logger.warning("   → Install with: pip install transformers")
             return False
 
         try:
-            logger.info("Loading wav2vec2 model for voice embeddings...")
+            logger.info("🔍 DIAGNOSTIC: Loading wav2vec2 model for voice embeddings...")
 
             # Use bundled model if available, otherwise download
             model_name = "facebook/wav2vec2-base-960h"
@@ -247,21 +249,24 @@ class AdvancedVoiceEncoder:
             )
             self.wav2vec2_model.eval()
 
-            logger.info(f"Wav2vec2 model loaded on {self.device}")
+            logger.info(f"✅ DIAGNOSTIC: Wav2vec2 model loaded successfully on {self.device}")
             return True
 
         except Exception as e:
-            logger.error(f"Failed to load wav2vec2 model: {e}")
+            logger.error(f"❌ DIAGNOSTIC: Failed to load wav2vec2 model: {e}")
+            logger.error("   → wav2vec2 embeddings will NOT be available")
             return False
 
     def _load_ecapa_tdnn(self):
         """Lazy load ECAPA-TDNN model for speaker verification."""
         if not HAS_SPEECHBRAIN:
-            logger.warning("SpeechBrain not available, skipping ECAPA-TDNN")
+            logger.warning("🔍 DIAGNOSTIC: SpeechBrain package not installed (HAS_SPEECHBRAIN=False)")
+            logger.warning("   → ECAPA-TDNN embeddings will NOT be available")
+            logger.warning("   → Install with: pip install speechbrain")
             return False
 
         try:
-            logger.info("Loading ECAPA-TDNN model for speaker verification...")
+            logger.info("🔍 DIAGNOSTIC: Loading ECAPA-TDNN model for speaker verification...")
 
             # Use bundled model if available
             if self._bundled_models_path:
@@ -297,11 +302,12 @@ class AdvancedVoiceEncoder:
                     run_opts={"device": self.device},
                 )
 
-            logger.info(f"ECAPA-TDNN model loaded on {self.device}")
+            logger.info(f"✅ DIAGNOSTIC: ECAPA-TDNN model loaded successfully on {self.device}")
             return True
 
         except Exception as e:
-            logger.error(f"Failed to load ECAPA-TDNN model: {e}")
+            logger.error(f"❌ DIAGNOSTIC: Failed to load ECAPA-TDNN model: {e}")
+            logger.error("   → ECAPA-TDNN embeddings will NOT be available")
             return False
 
     def extract_wav2vec2_embeddings(
@@ -434,8 +440,16 @@ class VoiceFingerprintProcessor:
                     features_empty.append(key)
 
         logger.info(
-            f"Voice fingerprint extracted - Success: [{', '.join(features_extracted)}], Empty: [{', '.join(features_empty)}]"
+            f"🔍 DIAGNOSTIC: Voice fingerprint extracted - Success: [{', '.join(features_extracted)}], Empty: [{', '.join(features_empty)}]"
         )
+
+        # Additional detail for debugging
+        if features_empty:
+            logger.warning(f"⚠️ DIAGNOSTIC: Missing features will reduce similarity accuracy")
+            logger.warning(f"   → Missing: {features_empty}")
+            if "wav2vec2" in features_empty or "ecapa" in features_empty:
+                logger.warning(f"   → Deep learning models (60% weight) are missing!")
+                logger.warning(f"   → Expected similarity scores will be MUCH LOWER (0.4-0.6 instead of 0.8-0.9)")
         return fingerprint
 
     def calculate_voice_similarity(
@@ -484,12 +498,13 @@ class VoiceFingerprintProcessor:
                 features_missing.append(f"{feature_type}(missing)")
 
         # 🔍 Debug: Log feature analysis
-        logger.debug(
-            f"Voice similarity features - Available: [{', '.join(features_available)}], Missing: [{', '.join(features_missing)}]"
+        logger.info(
+            f"🔍 DIAGNOSTIC: Voice similarity features - Available: [{', '.join(features_available)}], Missing: [{', '.join(features_missing)}]"
         )
 
         if not similarities:
-            logger.warning("⚠️ No valid features for voice similarity calculation!")
+            logger.warning("⚠️ DIAGNOSTIC: No valid features for voice similarity calculation!")
+            logger.warning("   → This means fingerprints have no overlapping features")
             return 0.0
 
         # Weighted average similarity
@@ -502,9 +517,15 @@ class VoiceFingerprintProcessor:
         )
 
         final_score = max(0.0, min(1.0, weighted_similarity))  # Clamp to [0, 1]
-        logger.debug(
-            f"Voice similarity calculated: {final_score:.3f} from {len(similarities)} features (total weight: {total_weight:.2f})"
+        logger.info(
+            f"🔍 DIAGNOSTIC: Voice similarity calculated: {final_score:.3f} from {len(similarities)} features (total weight: {total_weight:.2f})"
         )
+
+        # Diagnostic: Explain if score seems low
+        if final_score < 0.7 and len(similarities) < 5:
+            logger.warning(f"⚠️ DIAGNOSTIC: Low similarity score ({final_score:.3f}) with incomplete features")
+            logger.warning(f"   → Only {len(similarities)}/5 features available (weight: {total_weight:.2f}/1.00)")
+            logger.warning(f"   → This may cause false negatives (same speaker not merged)")
 
         return final_score
 
