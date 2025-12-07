@@ -134,7 +134,7 @@ class UnifiedMiner:
             # If content_type is specified, use content-specific prompt
             if content_type:
                 content_type_files = {
-                    "transcript_own": "unified_miner_transcript_own.txt",
+                    "transcript_own": "unified_miner_transcript_own_V3.txt",
                     "transcript_third_party": "unified_miner_transcript_third_party.txt",
                     "document_pdf": "unified_miner_document.txt",
                     "document_whitepaper": "unified_miner_document.txt",  # Uses same as document_pdf

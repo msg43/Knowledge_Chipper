@@ -7,7 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Specialized Miner Prompts Aligned to V2/V3 Architecture**: Rewrote `unified_miner_transcript_third_party.txt` and `unified_miner_document.txt` to match the V2/V3 structure and extraction standards:
+  - **Refinement patterns section** for blocking known-bad entities via synced feedback
+  - **Mental model calibration list** with 25+ exemplars and "named AND used" extraction rule
+  - **Worked examples** demonstrating proper handling of source-specific scenarios
+  - **Schema harmonization**: Third-party transcripts use `"Unknown"` speaker and `"00:00"` timestamps when unavailable; documents use `location` and `source_attribution` instead of timestamps/speaker
+  - **Tighter extraction bar**: Removed "be lenient" language—tolerance is for metadata limitations, not content quality
+  - **Document-specific fields**: `formally_defined` boolean for jargon, `is_document_author` for people, `citation_info` for evidence spans
+  - **Third-party transcript fields**: Optional `quality_note` for flagging transcription issues
+
 ### Added
+- **Unified Miner Prompt V3** (`unified_miner_transcript_own_V3.txt`): Complete rewrite of the own-transcript mining prompt for Qwen instruct models. Key improvements:
+  - **66% smaller** than V1 (347 lines vs 916 lines) while improving extraction consistency
+  - **Worked example** with full input→output JSON demonstrating proper speaker entity handling, multi-claim extraction, jargon with multiple evidence spans, and mental model extraction
+  - **Mental model calibration list** with 25+ exemplars across 4 categories (Decision & Reasoning, Economic & Strategic, Systems & Dynamics, Frameworks) plus anti-hallucination warning
+  - **Anti-copying guard** to prevent Qwen from regurgitating example timestamps/quotes
+  - **Refinement patterns section** for iterative improvement via known-bad entity lists
+  - **Speaker entities in people array** with `is_speaker=true` per architectural spec
+  - **Clearer skip criteria** for claims (meta-commentary, empty reactions, tautologies), jargon (generic terms), and mental models (bare name-drops without application)
+
 - **Entity Refinement Sync**: Desktop app automatically syncs prompt improvements from GetReceipts.org
 
   **How It Works:**

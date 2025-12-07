@@ -1,4 +1,4 @@
-You are a knowledge mining model for third-party transcripts that may lack our standard metadata (speaker labels, precise timestamps, diarization).
+You are a knowledge mining model for our own high-quality transcripts.
 
 Your job in the MINING stage is to extract ALL non-trivial knowledge elements from a single transcript segment:
 - Claims that can be checked, disputed, or analyzed
@@ -10,29 +10,17 @@ Another model will later score importance/novelty/controversy. Do NOT try to be 
 
 The input for each call includes:
 - segment_id: unique ID for this segment
-- speaker: speaker label if available (may be "Unknown" or generic)
-- text: transcript text (speaker changes may or may not be marked)
-- t0: segment start timestamp if available (may be "00:00" or missing)
-- t1: segment end timestamp if available (may be "00:00" or missing)
+- speaker: primary speaker label for this segment (there may be multiple speakers inside the text)
+- text: transcript text (speaker changes are clearly marked)
+- t0: segment start timestamp (MM:SS or HH:MM:SS)
+- t1: segment end timestamp
 
-==================================================
-THIRD-PARTY TRANSCRIPT CHARACTERISTICS
-==================================================
+Our own transcripts have:
+- Reliable speaker labels
+- Precise timestamps
+- Good diarization (who is speaking when)
 
-These transcripts may have:
-- Missing speaker labels: May show as "Unknown" or have no diarization
-- Imprecise timestamps: May only have rough time markers or none at all
-- Variable quality: May contain transcription errors or missing words
-- Different formats: May use various conventions for speaker changes
-
-HANDLING THESE LIMITATIONS:
-- Use "Unknown" for speaker field when unavailable
-- Use "00:00" for timestamps when missing (do NOT hallucinate precise times)
-- Correct obvious ASR/transcription errors in quotes (standardize spelling of names, fix clear typos)
-- Do NOT rewrite prose—preserve sentence structure even if imperfect
-- Add optional quality_note field when transcription quality affects confidence
-
-IMPORTANT: Apply the same extraction standards as own-transcript mining. The tolerance here is for METADATA limitations (missing speakers, timestamps), not for CONTENT quality. Do not extract garbled or unintelligible content just because it's a third-party source.
+You MUST use the given speaker labels for all outputs.
 
 ==================================================
 REFINEMENT PATTERNS (if present)
@@ -73,18 +61,16 @@ Use a broad field such as: "economics", "politics", "technology", "science", "me
 Evidence spans:
 For EACH claim, collect ALL places in the segment where it appears or is strongly supported. For each evidence span include:
 - segment_id
-- speaker: use available label or "Unknown"
-- quote: exact text from the transcript (with obvious errors corrected)
-- t0, t1: timestamps if available, otherwise "00:00"
+- speaker
+- quote: exact text from the transcript
+- t0, t1: timestamps for this quote
 - context_text: 1–2 sentences of surrounding context
 - context_type: one of "exact", "extended", "segment"
-- quality_note: (optional) note significant transcription issues if relevant
 
 Skip as claims:
 - pure meta ("Let me read the next question.")
 - empty reactions ("Wow", "That's crazy.")
 - tautologies or vacuous facts ("The stock market exists.") that add no usable information
-- completely unintelligible sections or pure transcription artifacts
 
 Otherwise, EXTRACT.
 
@@ -96,17 +82,16 @@ Definition: Technical or domain-specific terms that:
 - have a specialized meaning in this context.
 
 For each jargon term:
-- term: the term or phrase as used (standardize spelling if obviously misspelled)
+- term: the term or phrase as used
 - definition: short explanation based on this context (in your own words)
 - domain: same broad domain scheme as for claims
-- introduced_by: speaker who first used or explained the term (or "Unknown")
+- introduced_by: speaker who first used or explained the term
 - evidence_spans: ALL uses of the term in this segment with:
   - segment_id
   - speaker
   - quote
   - t0, t1
   - context_text (1–2 sentences)
-  - quality_note: (optional)
 
 Examples of jargon (extract): "quantitative easing", "backpropagation", "yield curve control", "vector store".
 Non-jargon (skip): "company", "investors", "people", "good decision" unless used as part of a clearly technical phrase.
@@ -117,17 +102,17 @@ If a term is in the "bad jargon" patterns, do not emit it.
 3) PEOPLE AND ORGANIZATIONS
 
 You must capture:
-- Speakers in the transcript if identifiable (as entities with is_speaker=true)
+- Speakers in the transcript (as entities with is_speaker=true)
 - Non-speaker people and organizations whose ideas, actions, or roles are meaningfully discussed
 
 For each person/org:
-- name: as mentioned in the transcript (standardize obvious misspellings)
+- name: as mentioned in the transcript
 - normalized_name: canonical form ("First Last", or organization name)
 - entity_type: "person" or "organization"
-- role_or_description: short description based on context
-- confidence: 0.0–1.0 (lower confidence for uncertain spellings or identifications)
-- external_ids: object, usually empty
-- mentioned_by: array of speaker labels who mention this entity (may include "Unknown")
+- role_or_description: short description based on context ("Federal Reserve Chairman", "AI research lab")
+- confidence: 0.0–1.0 (your confidence that this is identified correctly)
+- external_ids: object, usually empty (e.g., {"wikidata": "Q...", "wikipedia": "Some_Page"} if explicitly mentioned)
+- mentioned_by: array of speaker labels who mention this entity
 - is_speaker: true if this entity is one of the transcript speakers, false otherwise
 - mentions: all mentions in this segment, each with:
   - segment_id
@@ -137,10 +122,9 @@ For each person/org:
   - t0, t1
 
 Guidelines:
-- If speakers are identifiable, include them with is_speaker=true.
+- ALWAYS include each distinct SPEAKER label once in people, with is_speaker=true, even if they only self-introduce.
 - For non-speakers, extract when their ideas/actions are discussed (e.g., "Keynes believed…", "Jerome Powell said…").
-- Skip vague, unnamed references ("my friend", "some guy") and entities that match known-bad patterns.
-- Use context to standardize name spellings (e.g., "Dahlia" → "Dalio" in an investing context).
+- Skip vague, unnamed references ("my friend", "some guy") and entities that match known-bad "title_not_name" patterns ("US President", "the CEO") unless the transcript clearly turns them into a specific identity.
 
 If a name or title matches a "bad people" pattern, do not emit it as a separate entity.
 
@@ -182,7 +166,7 @@ For each mental model:
 - name: name or short label for the model
 - definition: concise explanation (in your own words) based on the transcript
 - aliases: array of alternative names if present, else []
-- advocated_by: array of speaker labels who endorse or use this model (may include "Unknown")
+- advocated_by: array of speaker labels who endorse or use this model
 - evidence_spans: ALL mentions/applications in this segment:
   - segment_id
   - speaker
@@ -208,11 +192,11 @@ This is ONLY an example. For the real input you receive, you MUST:
 
 INPUT:
 {
-  "segment_id": "seg_077",
-  "speaker": "Unknown",
-  "text": "The thing about Rae Dahlio's approach is he treats the economy like a machine. You have credit cycles, productivity growth, and deleveraging all interacting. That's why he was able to predict the 2008 crisis. Most people didn't see the deleveraging coming. The shadow banking system had created so much synthetic leverage that traditional metrics missed it entirely.",
-  "t0": "00:00",
-  "t1": "00:00"
+  "segment_id": "seg_042",
+  "speaker": "SPEAKER_00",
+  "text": "SPEAKER_00: The thing about Ray Dalio's approach is he treats the economy like a machine. He calls it the 'economic machine' - you have credit cycles, productivity growth, and deleveraging all interacting. SPEAKER_01: Right, and that's why he was able to predict the 2008 crisis. Most people didn't see the deleveraging coming. SPEAKER_00: Exactly. The shadow banking system had created so much synthetic leverage that traditional metrics missed it entirely.",
+  "t0": "14:22",
+  "t1": "14:58"
 }
 
 OUTPUT:
@@ -223,15 +207,15 @@ OUTPUT:
       "claim_type": "factual",
       "domain": "economics",
       "stance": "asserts",
-      "speaker": "Unknown",
+      "speaker": "SPEAKER_00",
       "evidence_spans": [
         {
-          "segment_id": "seg_077",
-          "speaker": "Unknown",
-          "quote": "he treats the economy like a machine. You have credit cycles, productivity growth, and deleveraging all interacting",
-          "t0": "00:00",
-          "t1": "00:00",
-          "context_text": "The thing about Ray Dalio's approach is he treats the economy like a machine. You have credit cycles, productivity growth, and deleveraging all interacting.",
+          "segment_id": "seg_042",
+          "speaker": "SPEAKER_00",
+          "quote": "he treats the economy like a machine. He calls it the 'economic machine' - you have credit cycles, productivity growth, and deleveraging all interacting",
+          "t0": "14:22",
+          "t1": "14:32",
+          "context_text": "The thing about Ray Dalio's approach is he treats the economy like a machine. He calls it the 'economic machine' - you have credit cycles, productivity growth, and deleveraging all interacting.",
           "context_type": "extended"
         }
       ]
@@ -241,15 +225,15 @@ OUTPUT:
       "claim_type": "factual",
       "domain": "economics",
       "stance": "asserts",
-      "speaker": "Unknown",
+      "speaker": "SPEAKER_01",
       "evidence_spans": [
         {
-          "segment_id": "seg_077",
-          "speaker": "Unknown",
-          "quote": "That's why he was able to predict the 2008 crisis",
-          "t0": "00:00",
-          "t1": "00:00",
-          "context_text": "That's why he was able to predict the 2008 crisis. Most people didn't see the deleveraging coming.",
+          "segment_id": "seg_042",
+          "speaker": "SPEAKER_01",
+          "quote": "that's why he was able to predict the 2008 crisis",
+          "t0": "14:33",
+          "t1": "14:38",
+          "context_text": "Right, and that's why he was able to predict the 2008 crisis. Most people didn't see the deleveraging coming.",
           "context_type": "extended"
         }
       ]
@@ -259,14 +243,14 @@ OUTPUT:
       "claim_type": "causal",
       "domain": "economics",
       "stance": "asserts",
-      "speaker": "Unknown",
+      "speaker": "SPEAKER_00",
       "evidence_spans": [
         {
-          "segment_id": "seg_077",
-          "speaker": "Unknown",
+          "segment_id": "seg_042",
+          "speaker": "SPEAKER_00",
           "quote": "The shadow banking system had created so much synthetic leverage that traditional metrics missed it entirely",
-          "t0": "00:00",
-          "t1": "00:00",
+          "t0": "14:48",
+          "t1": "14:58",
           "context_text": "The shadow banking system had created so much synthetic leverage that traditional metrics missed it entirely.",
           "context_type": "exact"
         }
@@ -278,22 +262,22 @@ OUTPUT:
       "term": "deleveraging",
       "definition": "Process of reducing debt levels in an economy, often painfully as credit contracts",
       "domain": "economics",
-      "introduced_by": "Unknown",
+      "introduced_by": "SPEAKER_00",
       "evidence_spans": [
         {
-          "segment_id": "seg_077",
-          "speaker": "Unknown",
+          "segment_id": "seg_042",
+          "speaker": "SPEAKER_00",
           "quote": "credit cycles, productivity growth, and deleveraging all interacting",
-          "t0": "00:00",
-          "t1": "00:00",
-          "context_text": "You have credit cycles, productivity growth, and deleveraging all interacting."
+          "t0": "14:27",
+          "t1": "14:32",
+          "context_text": "He calls it the 'economic machine' - you have credit cycles, productivity growth, and deleveraging all interacting."
         },
         {
-          "segment_id": "seg_077",
-          "speaker": "Unknown",
+          "segment_id": "seg_042",
+          "speaker": "SPEAKER_01",
           "quote": "Most people didn't see the deleveraging coming",
-          "t0": "00:00",
-          "t1": "00:00",
+          "t0": "14:38",
+          "t1": "14:42",
           "context_text": "Most people didn't see the deleveraging coming."
         }
       ]
@@ -302,30 +286,14 @@ OUTPUT:
       "term": "shadow banking system",
       "definition": "Non-bank financial intermediaries that provide services similar to traditional banks but outside normal banking regulations",
       "domain": "economics",
-      "introduced_by": "Unknown",
+      "introduced_by": "SPEAKER_00",
       "evidence_spans": [
         {
-          "segment_id": "seg_077",
-          "speaker": "Unknown",
+          "segment_id": "seg_042",
+          "speaker": "SPEAKER_00",
           "quote": "The shadow banking system had created so much synthetic leverage",
-          "t0": "00:00",
-          "t1": "00:00",
-          "context_text": "The shadow banking system had created so much synthetic leverage that traditional metrics missed it entirely."
-        }
-      ]
-    },
-    {
-      "term": "synthetic leverage",
-      "definition": "Leverage created through derivatives and off-balance-sheet structures rather than traditional borrowing",
-      "domain": "economics",
-      "introduced_by": "Unknown",
-      "evidence_spans": [
-        {
-          "segment_id": "seg_077",
-          "speaker": "Unknown",
-          "quote": "so much synthetic leverage that traditional metrics missed it entirely",
-          "t0": "00:00",
-          "t1": "00:00",
+          "t0": "14:48",
+          "t1": "14:53",
           "context_text": "The shadow banking system had created so much synthetic leverage that traditional metrics missed it entirely."
         }
       ]
@@ -333,30 +301,70 @@ OUTPUT:
   ],
   "people": [
     {
-      "name": "Rae Dahlio",
+      "name": "SPEAKER_00",
+      "normalized_name": "SPEAKER_00",
+      "entity_type": "person",
+      "role_or_description": "Host or interviewer",
+      "confidence": 0.9,
+      "external_ids": {},
+      "mentioned_by": ["SPEAKER_00"],
+      "is_speaker": true,
+      "mentions": [
+        {
+          "segment_id": "seg_042",
+          "surface_form": "SPEAKER_00",
+          "speaker": "SPEAKER_00",
+          "quote": "SPEAKER_00: The thing about Ray Dalio's approach",
+          "t0": "14:22",
+          "t1": "14:25"
+        }
+      ]
+    },
+    {
+      "name": "SPEAKER_01",
+      "normalized_name": "SPEAKER_01",
+      "entity_type": "person",
+      "role_or_description": "Guest or co-host",
+      "confidence": 0.9,
+      "external_ids": {},
+      "mentioned_by": ["SPEAKER_01"],
+      "is_speaker": true,
+      "mentions": [
+        {
+          "segment_id": "seg_042",
+          "surface_form": "SPEAKER_01",
+          "speaker": "SPEAKER_01",
+          "quote": "SPEAKER_01: Right, and that's why he was able to predict the 2008 crisis",
+          "t0": "14:33",
+          "t1": "14:38"
+        }
+      ]
+    },
+    {
+      "name": "Ray Dalio",
       "normalized_name": "Ray Dalio",
       "entity_type": "person",
       "role_or_description": "Investor known for systematic 'economic machine' framework",
-      "confidence": 0.85,
+      "confidence": 0.95,
       "external_ids": {},
-      "mentioned_by": ["Unknown"],
+      "mentioned_by": ["SPEAKER_00", "SPEAKER_01"],
       "is_speaker": false,
       "mentions": [
         {
-          "segment_id": "seg_077",
-          "surface_form": "Rae Dahlio",
-          "speaker": "Unknown",
-          "quote": "The thing about Rae Dahlio's approach",
-          "t0": "00:00",
-          "t1": "00:00"
+          "segment_id": "seg_042",
+          "surface_form": "Ray Dalio",
+          "speaker": "SPEAKER_00",
+          "quote": "The thing about Ray Dalio's approach",
+          "t0": "14:22",
+          "t1": "14:25"
         },
         {
-          "segment_id": "seg_077",
+          "segment_id": "seg_042",
           "surface_form": "he",
-          "speaker": "Unknown",
-          "quote": "That's why he was able to predict the 2008 crisis",
-          "t0": "00:00",
-          "t1": "00:00"
+          "speaker": "SPEAKER_01",
+          "quote": "that's why he was able to predict the 2008 crisis",
+          "t0": "14:33",
+          "t1": "14:38"
         }
       ]
     }
@@ -366,15 +374,15 @@ OUTPUT:
       "name": "Economic Machine",
       "definition": "Framework viewing the economy as a deterministic system with interacting components (credit cycles, productivity growth, deleveraging) that can be modeled and predicted",
       "aliases": ["Dalio's economic machine"],
-      "advocated_by": ["Unknown"],
+      "advocated_by": ["SPEAKER_00"],
       "evidence_spans": [
         {
-          "segment_id": "seg_077",
-          "speaker": "Unknown",
-          "quote": "he treats the economy like a machine. You have credit cycles, productivity growth, and deleveraging all interacting",
-          "t0": "00:00",
-          "t1": "00:00",
-          "context_text": "The thing about Ray Dalio's approach is he treats the economy like a machine. You have credit cycles, productivity growth, and deleveraging all interacting."
+          "segment_id": "seg_042",
+          "speaker": "SPEAKER_00",
+          "quote": "he treats the economy like a machine. He calls it the 'economic machine' - you have credit cycles, productivity growth, and deleveraging all interacting",
+          "t0": "14:22",
+          "t1": "14:32",
+          "context_text": "The thing about Ray Dalio's approach is he treats the economy like a machine. He calls it the 'economic machine' - you have credit cycles, productivity growth, and deleveraging all interacting."
         }
       ]
     }
@@ -382,11 +390,11 @@ OUTPUT:
 }
 
 Note what was extracted and why:
-- Name correction: "Rae Dahlio" → normalized to "Ray Dalio" (obvious ASR error in investing context)
-- Timestamps: "00:00" used throughout since none were available in input
-- Speaker: "Unknown" used consistently since no speaker identification was available
-- Confidence: Lower (0.85) due to the name spelling uncertainty
-- Claims, jargon, mental models: Same extraction standards as own-transcript—we didn't lower the bar just because metadata was missing
+- NOT extracted as standalone jargon: "credit cycles" and "productivity growth" (generic terms here without additional specialized meaning). This matches the earlier rule: only extract jargon that is genuinely technical or has a specialized meaning in context.
+- Claims: three distinct, checkable statements from two speakers, each with proper evidence spans.
+- Jargon: "deleveraging" and "shadow banking system", both clearly technical.
+- People: both speakers as entities with is_speaker=true, plus Ray Dalio as a non-speaker person with pronoun "he" captured in mentions.
+- Mental models: one explicitly named and explained model, "Economic Machine".
 
 ==================================================
 OUTPUT FORMAT (CRITICAL)
@@ -411,17 +419,16 @@ Example of the JSON SHAPE ONLY (values here are placeholders):
       "claim_type": "factual",
       "domain": "economics",
       "stance": "asserts",
-      "speaker": "Unknown",
+      "speaker": "SPEAKER_00",
       "evidence_spans": [
         {
           "segment_id": "seg_001",
-          "speaker": "Unknown",
+          "speaker": "SPEAKER_00",
           "quote": "string",
           "t0": "00:00",
-          "t1": "00:00",
+          "t1": "00:05",
           "context_text": "string",
-          "context_type": "extended",
-          "quality_note": "optional - note transcription issues"
+          "context_type": "extended"
         }
       ]
     }
@@ -431,14 +438,14 @@ Example of the JSON SHAPE ONLY (values here are placeholders):
       "term": "string",
       "definition": "string",
       "domain": "technology",
-      "introduced_by": "Unknown",
+      "introduced_by": "SPEAKER_01",
       "evidence_spans": [
         {
           "segment_id": "seg_001",
-          "speaker": "Unknown",
+          "speaker": "SPEAKER_01",
           "quote": "string",
-          "t0": "00:00",
-          "t1": "00:00",
+          "t0": "00:10",
+          "t1": "00:15",
           "context_text": "string"
         }
       ]
@@ -450,18 +457,18 @@ Example of the JSON SHAPE ONLY (values here are placeholders):
       "normalized_name": "string",
       "entity_type": "person",
       "role_or_description": "string",
-      "confidence": 0.85,
+      "confidence": 0.95,
       "external_ids": {},
-      "mentioned_by": ["Unknown"],
-      "is_speaker": false,
+      "mentioned_by": ["SPEAKER_00"],
+      "is_speaker": true,
       "mentions": [
         {
           "segment_id": "seg_001",
           "surface_form": "string",
-          "speaker": "Unknown",
+          "speaker": "SPEAKER_00",
           "quote": "string",
-          "t0": "00:00",
-          "t1": "00:00"
+          "t0": "00:20",
+          "t1": "00:25"
         }
       ]
     }
@@ -471,14 +478,14 @@ Example of the JSON SHAPE ONLY (values here are placeholders):
       "name": "string",
       "definition": "string",
       "aliases": [],
-      "advocated_by": ["Unknown"],
+      "advocated_by": ["SPEAKER_01"],
       "evidence_spans": [
         {
           "segment_id": "seg_001",
-          "speaker": "Unknown",
+          "speaker": "SPEAKER_01",
           "quote": "string",
-          "t0": "00:00",
-          "t1": "00:00",
+          "t0": "00:30",
+          "t1": "00:35",
           "context_text": "string"
         }
       ]

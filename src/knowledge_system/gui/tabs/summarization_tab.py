@@ -915,7 +915,7 @@ class SummarizationTab(BaseTab):
 
         # Prompt file section REMOVED - prompts are now automatically selected based on Content Type
         # The system uses:
-        #   - unified_miner_transcript_own.txt for "Transcript (Own)"
+        #   - unified_miner_transcript_own_V3.txt for "Transcript (Own)"
         #   - unified_miner_transcript_third_party.txt for "Transcript (Third-party)"
         #   - unified_miner_document.txt for "Document (PDF/eBook)" and "Document (White Paper)"
         # These are hardcoded in the HCE pipeline and cannot be overridden via GUI

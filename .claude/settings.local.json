@@ -1,0 +1,36 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3:*)",
+      "Bash(cloc:*)",
+      "Bash(git push:*)",
+      "Bash(make test-quick:*)",
+      "Bash(tee:*)",
+      "Bash(KNOWLEDGE_CHIPPER_TESTING_MODE=1 python3 -m pytest:*)",
+      "Bash(jobs:*)",
+      "Bash(xargs:*)",
+      "Bash(echo:*)",
+      "Bash(source .venv/bin/activate)",
+      "Bash(export PATH=\"/opt/homebrew/bin:$PATH\")",
+      "Bash(PATH=\"/opt/homebrew/bin:$PATH\" KNOWLEDGE_CHIPPER_TESTING_MODE=1 .venv/bin/python:*)",
+      "Bash(PATH=\"/opt/homebrew/bin:$PATH\" KNOWLEDGE_CHIPPER_TESTING_MODE=1 .venv/bin/python -m pytest:*)",
+      "Bash(cat:*)",
+      "Bash(python -m pytest:*)",
+      "Bash(KNOWLEDGE_CHIPPER_TESTING_MODE=1 .venv/bin/python -m pytest:*)",
+      "Bash(git restore:*)",
+      "Bash(.venv/bin/python:*)",
+      "Bash(system_profiler:*)",
+      "WebFetch(domain:huggingface.co)",
+      "Bash(tests/integration/test_schema_validation.py::TestMinerValidation::test_validate_miner_output_valid )",
+      "WebFetch(domain:eu-central-1-1.aws.cloud2.influxdata.com)",
+      "Bash(pytest:*)",
+      "Bash(find:*)"
+    ],
+    "deny": [],
+    "ask": []
+  },
+  "sandbox": {
+    "autoAllowBashIfSandboxed": true,
+    "enabled": true
+  }
+}

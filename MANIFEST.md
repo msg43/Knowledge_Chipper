@@ -763,7 +763,9 @@ Prompt templates for HCE (13 prompt files).
 - `unified_miner_document.txt` - Document-specific mining prompt
 - `unified_miner_liberal.txt` - Liberal mining prompt
 - `unified_miner_moderate.txt` - Moderate mining prompt (default)
-- `unified_miner_transcript_own.txt` - Own-transcript mining prompt
+- `unified_miner_transcript_own.txt` - Own-transcript mining prompt (V1, verbose with extensive examples)
+- `unified_miner_transcript_own_V2.txt` - Own-transcript mining prompt V2 (concise, ~258 lines)
+- `unified_miner_transcript_own_V3.txt` - Own-transcript mining prompt V3 (recommended): concise structure with worked example, mental model calibration list, anti-hallucination safeguards, and speaker entity handling
 - `unified_miner_transcript_third_party.txt` - Third-party transcript mining prompt
 - `unified_miner.txt` - Base unified mining prompt
 

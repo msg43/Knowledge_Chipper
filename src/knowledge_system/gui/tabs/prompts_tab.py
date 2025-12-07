@@ -253,7 +253,7 @@ class PromptsTab(BaseTab):
         layout.addWidget(content_type_header)
 
         content_type_prompts = [
-            ("Transcript (Own)", "unified_miner_transcript_own.txt"),
+            ("Transcript (Own)", "unified_miner_transcript_own_V3.txt"),
             ("Transcript (Third-party)", "unified_miner_transcript_third_party.txt"),
             ("Document (PDF/eBook)", "unified_miner_document.txt"),
         ]

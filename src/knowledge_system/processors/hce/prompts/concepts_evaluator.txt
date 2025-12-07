@@ -21,19 +21,20 @@ Identify different descriptions of the same conceptual approach:
 
 **Output:** Canonical name + description synthesizing the variants
 
-### Task 2: Filter Vague Appeals
-Reject frameworks that are:
-✗ Vague appeals to general reasoning ("common sense", "logic", "thinking critically")
-✗ Casual mentions without explanation or application
-✗ Basic principles stated without analytical depth
-✗ Generic heuristics everyone knows
+### Task 2: Filter Only Truly Empty Mentions
+Be INCLUSIVE. Only reject concepts that are:
+✗ Completely vague with no identifiable concept ("think about it", "use logic")
+✗ Pure filler words with no conceptual content
 
-Accept frameworks that are:
-✓ Specific analytical methodologies
-✓ Systematic approaches to problems
-✓ Theoretical perspectives actively employed
-✓ Decision-making frameworks explained or demonstrated
-✓ Sophisticated conceptual models
+Accept concepts that are:
+✓ Named theories, models, or frameworks (even if briefly mentioned)
+✓ Economic, political, scientific, or social concepts
+✓ Any abstraction that helps explain or predict something
+✓ Heuristics or rules of thumb (even common ones like "supply and demand")
+✓ Ways of thinking that have recognizable names
+
+Mental models help people navigate the world - even "basic" ones like supply/demand 
+or opportunity cost are valid extractions. Be generous in accepting.
 
 ### Task 3: Rank by Analytical Value
 Score 0-10 based on:
@@ -106,13 +107,13 @@ Return valid JSON only (no additional text):
 }
 ```
 
-### Example 2: Filter Vague Appeals
+### Example 2: Accept Common Concepts
 
 **Input:**
 ```json
 [
-  {"name": "common sense", "description": "Using common sense approach", "timestamp": "05:15"},
-  {"name": "critical thinking", "description": "Think critically about this", "timestamp": "08:30"}
+  {"name": "supply and demand", "description": "Basic market forces", "timestamp": "05:15"},
+  {"name": "opportunity cost", "description": "Trade-off thinking", "timestamp": "08:30"}
 ]
 ```
 
@@ -120,16 +121,43 @@ Return valid JSON only (no additional text):
 ```json
 [
   {
-    "canonical_name": "common sense",
-    "decision": "reject",
-    "reason": "Vague appeal to general reasoning, not a specific framework",
-    "importance": 1
+    "canonical_name": "Supply and Demand",
+    "description": "Economic model explaining how prices are determined by the relationship between availability and desire for goods",
+    "decision": "accept",
+    "importance": 5,
+    "analytical_depth": "low",
+    "usage_count": 1,
+    "reasoning": "Common but valid mental model for understanding markets"
   },
   {
-    "canonical_name": "critical thinking",
+    "canonical_name": "Opportunity Cost",
+    "description": "The value of the next best alternative foregone when making a choice",
+    "decision": "accept",
+    "importance": 5,
+    "analytical_depth": "low",
+    "usage_count": 1,
+    "reasoning": "Fundamental decision-making concept"
+  }
+]
+```
+
+### Example 2b: Reject Only Truly Empty Mentions
+
+**Input:**
+```json
+[
+  {"name": "think about it", "description": "Generic thinking", "timestamp": "05:15"}
+]
+```
+
+**Output:**
+```json
+[
+  {
+    "canonical_name": "think about it",
     "decision": "reject",
-    "reason": "Generic skill, not an analytical framework or methodology",
-    "importance": 1
+    "reason": "No identifiable concept or framework - just a generic phrase",
+    "importance": 0
   }
 ]
 ```

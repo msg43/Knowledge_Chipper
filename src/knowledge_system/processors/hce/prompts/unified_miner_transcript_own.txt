@@ -68,13 +68,19 @@ Identify any people mentioned, including:
 - **Track both speakers in the transcript AND people they mention**
 
 ## MENTAL MODELS EXTRACTION
-Identify conceptual frameworks, ways of thinking, or models including:
-- Analytical frameworks or methodologies
-- Conceptual models for understanding phenomena
-- Systematic approaches to problems
-- Philosophical or theoretical perspectives
-- Decision-making frameworks
+Mental models are ways of understanding how the world works. Extract any concept, 
+framework, or way of thinking that helps explain, predict, or navigate reality:
+
+- Named theories or frameworks (even if just mentioned)
+- Economic, political, or social concepts being applied
+- Ways of categorizing or understanding phenomena
+- Heuristics, rules of thumb, or mental shortcuts
+- Cause-and-effect patterns being described
+- Any abstraction used to make sense of complexity
 - **Note which speaker advocates for each model**
+
+Be INCLUSIVE - extract concepts even when casually mentioned. The evaluator will 
+filter for quality later. When in doubt, extract it.
 
 ## OUTPUT FORMAT
 **IMPORTANT: Return ONLY valid JSON. Your response must be parseable JSON with no additional text.**
@@ -594,20 +600,46 @@ Extract ALL mentions/applications of the model across the segment. For each evid
     <explanation>Named analytical framework with structured methodology. Speaker attribution shows who explained it.</explanation>
   </good_example>
 
-  <bad_example>
+  <good_example>
     <input>
       <speaker>SPEAKER_01</speaker>
       <text>Higher prices reduce demand - that's just basic supply and demand.</text>
     </input>
-    <explanation>DON'T extract "supply and demand" here - it's referenced too casually. Mental models should be frameworks being explained or applied meaningfully, not just mentioned in passing.</explanation>
-  </bad_example>
+    <extraction>
+{
+  "name": "Supply and Demand",
+  "definition": "Economic model where prices are determined by the relationship between availability (supply) and desire for goods (demand)",
+  "aliases": ["market forces"],
+  "advocated_by": "SPEAKER_01",
+  "evidence_spans": [...]
+}
+    </extraction>
+    <explanation>EXTRACT even casual mentions - "supply and demand" is a mental model being applied to explain price behavior. The evaluator will determine quality.</explanation>
+  </good_example>
 
-  <bad_example>
+  <good_example>
     <input>
       <speaker>SPEAKER_00</speaker>
       <text>You need to think about the opportunity cost of your time.</text>
     </input>
-    <explanation>DON'T extract "opportunity cost" - this is a simple concept mention, not a framework being explained. Only extract when a structured approach or methodology is being described.</explanation>
+    <extraction>
+{
+  "name": "Opportunity Cost",
+  "definition": "The value of the next best alternative foregone when making a choice",
+  "aliases": ["trade-offs"],
+  "advocated_by": "SPEAKER_00",
+  "evidence_spans": [...]
+}
+    </extraction>
+    <explanation>EXTRACT - "opportunity cost" is a mental model for decision-making, even in brief mentions.</explanation>
+  </good_example>
+
+  <bad_example>
+    <input>
+      <speaker>SPEAKER_00</speaker>
+      <text>That's a good idea.</text>
+    </input>
+    <explanation>DON'T extract - no mental model or concept is being referenced here, just a generic opinion.</explanation>
   </bad_example>
 </mental_models_examples>
 

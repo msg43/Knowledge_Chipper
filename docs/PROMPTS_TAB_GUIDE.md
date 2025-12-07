@@ -23,7 +23,7 @@ Shows all processing stages in the HCE pipeline with their current prompt assign
 1. **Unified Miner ⭐ ACTIVE** - Extracts ALL entities in one pass: claims, jargon, people, and mental models from content segments (v2 schema with full evidence structure)
    - Uses dynamic prompt selection based on Content Type and Selectivity settings
    - Content-Type-Specific Prompts:
-     - `unified_miner_transcript_own.txt` for Transcript (Own)
+     - `unified_miner_transcript_own_V3.txt` for Transcript (Own)
      - `unified_miner_transcript_third_party.txt` for Transcript (Third-party)
      - `unified_miner_document.txt` for Document (PDF/eBook)
    - Selectivity-Based Prompts:
