@@ -1059,8 +1059,132 @@ class SummarizationTab(BaseTab):
         # Claims Analysis section removed per user request
         # layout.addWidget(hce_group)
 
+        # =================================================================
+        # Processing Mode Section
+        # =================================================================
+        from PyQt6.QtWidgets import QButtonGroup, QFrame
+        
+        processing_mode_group = QGroupBox("⚡ Processing Mode")
+        processing_mode_layout = QVBoxLayout()
+        processing_mode_layout.setSpacing(10)
+        
+        # Mode selector row
+        mode_row = QHBoxLayout()
+        mode_row.setSpacing(15)
+        
+        mode_label = QLabel("Mode:")
+        mode_label.setMinimumWidth(50)
+        mode_row.addWidget(mode_label)
+        
+        # Radio buttons for mode selection
+        self.mode_button_group = QButtonGroup(self)
+        
+        self.realtime_radio = QRadioButton("Real-time")
+        self.realtime_radio.setToolTip(
+            "Process immediately using local or cloud LLM.\n"
+            "Best for single episodes or quick testing."
+        )
+        self.batch_radio = QRadioButton("Batch")
+        self.batch_radio.setToolTip(
+            "50% cost savings, 24-48 hour processing.\n"
+            "Best for bulk jobs (100+ episodes)."
+        )
+        self.auto_radio = QRadioButton("Auto")
+        self.auto_radio.setToolTip(
+            "Automatically selects mode based on volume:\n"
+            "• <100 segments → Real-time\n"
+            "• ≥100 segments → Batch"
+        )
+        self.auto_radio.setChecked(True)  # Default to auto
+        
+        self.mode_button_group.addButton(self.realtime_radio, 0)
+        self.mode_button_group.addButton(self.batch_radio, 1)
+        self.mode_button_group.addButton(self.auto_radio, 2)
+        
+        mode_row.addWidget(self.realtime_radio)
+        mode_row.addWidget(self.batch_radio)
+        mode_row.addWidget(self.auto_radio)
+        mode_row.addStretch()
+        
+        # Connect mode changes to update UI and save settings
+        self.mode_button_group.buttonClicked.connect(self._on_processing_mode_changed)
+        
+        processing_mode_layout.addLayout(mode_row)
+        
+        # Mode description label
+        self.mode_description_label = QLabel(
+            "Auto: Uses real-time for small jobs, batch for bulk processing."
+        )
+        self.mode_description_label.setStyleSheet(
+            "color: #666; font-style: italic; font-size: 11px; margin-left: 55px;"
+        )
+        processing_mode_layout.addWidget(self.mode_description_label)
+        
+        # Cost estimate label (updated dynamically)
+        self.cost_estimate_label = QLabel("")
+        self.cost_estimate_label.setStyleSheet(
+            "color: #28a745; font-weight: bold; font-size: 11px; margin-left: 55px;"
+        )
+        processing_mode_layout.addWidget(self.cost_estimate_label)
+        
+        # Batch settings (shown only in batch mode)
+        self.batch_settings_frame = QFrame()
+        self.batch_settings_frame.setStyleSheet(
+            "QFrame { border: 1px solid #ddd; border-radius: 5px; padding: 10px; }"
+        )
+        batch_settings_layout = QGridLayout()
+        batch_settings_layout.setSpacing(8)
+        
+        # Batch provider selection
+        batch_provider_label = QLabel("Batch Provider:")
+        self.batch_provider_combo = QComboBox()
+        self.batch_provider_combo.addItems(["openai", "anthropic"])
+        self.batch_provider_combo.setCurrentText("openai")
+        self.batch_provider_combo.currentTextChanged.connect(self._on_setting_changed)
+        batch_settings_layout.addWidget(batch_provider_label, 0, 0)
+        batch_settings_layout.addWidget(self.batch_provider_combo, 0, 1)
+        
+        # Batch model selection
+        batch_model_label = QLabel("Mining Model:")
+        self.batch_mining_model_edit = QLineEdit("gpt-5-mini")
+        self.batch_mining_model_edit.setToolTip(
+            "Model for batch claim extraction.\n"
+            "OpenAI: gpt-5-mini, gpt-4o-mini\n"
+            "Anthropic: claude-3.5-haiku, claude-3.7-sonnet"
+        )
+        self.batch_mining_model_edit.textChanged.connect(self._on_setting_changed)
+        batch_settings_layout.addWidget(batch_model_label, 0, 2)
+        batch_settings_layout.addWidget(self.batch_mining_model_edit, 0, 3)
+        
+        # Re-mining settings
+        self.remine_checkbox = QCheckBox("Enable Re-mining")
+        self.remine_checkbox.setChecked(True)
+        self.remine_checkbox.setToolTip(
+            "Re-mine low-confidence and empty segments with a stronger model."
+        )
+        self.remine_checkbox.stateChanged.connect(self._on_setting_changed)
+        batch_settings_layout.addWidget(self.remine_checkbox, 1, 0)
+        
+        remine_model_label = QLabel("Re-mine Model:")
+        self.batch_remine_model_edit = QLineEdit("claude-3.7-sonnet")
+        self.batch_remine_model_edit.setToolTip(
+            "Stronger model for re-mining flagged segments."
+        )
+        self.batch_remine_model_edit.textChanged.connect(self._on_setting_changed)
+        batch_settings_layout.addWidget(remine_model_label, 1, 2)
+        batch_settings_layout.addWidget(self.batch_remine_model_edit, 1, 3)
+        
+        self.batch_settings_frame.setLayout(batch_settings_layout)
+        self.batch_settings_frame.setVisible(False)  # Hidden by default
+        processing_mode_layout.addWidget(self.batch_settings_frame)
+        
+        processing_mode_group.setLayout(processing_mode_layout)
+        processing_mode_group.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+        )
+        layout.addWidget(processing_mode_group)
+
         # Advanced: Per-stage Models (collapsible)
-        from PyQt6.QtWidgets import QFrame
 
         self.advanced_models_group = QGroupBox(
             "🔧 Per-stage Model Configuration (Required)"
@@ -2962,6 +3086,23 @@ class SummarizationTab(BaseTab):
                         self.append_log(
                             f"      📋 Primary routing reason: {routing_reason}"
                         )
+            
+            # Show batch processing cache metrics (if available)
+            cache_stats = analytics.get("cache_stats", {})
+            if cache_stats:
+                cache_hit_rate = cache_stats.get("cache_hit_rate", 0)
+                total_input_tokens = cache_stats.get("total_input_tokens", 0)
+                cached_tokens = cache_stats.get("cached_tokens", 0)
+                cost_savings = cache_stats.get("cost_savings", 0)
+                
+                if total_input_tokens > 0:
+                    self.append_log("   💾 Batch Processing Cache Metrics:")
+                    self.append_log(f"      📊 Cache Hit Rate: {cache_hit_rate:.1%}")
+                    self.append_log(
+                        f"      🔢 Cached Tokens: {cached_tokens:,} / {total_input_tokens:,}"
+                    )
+                    if cost_savings > 0:
+                        self.append_log(f"      💰 Estimated Savings: ${cost_savings:.3f}")
 
             # Show top claims
             top_claims = analytics.get("top_claims", [])
@@ -3264,6 +3405,43 @@ class SummarizationTab(BaseTab):
                         logger.debug(f"Widget access error for {stage_name}: {e}")
                         continue
 
+                # Load processing mode settings
+                saved_processing_mode = self.gui_settings.get_combo_selection(
+                    self.tab_name, "processing_mode", "auto"
+                )
+                if is_widget_valid(self.realtime_radio):
+                    self._set_processing_mode(saved_processing_mode)
+                
+                # Load batch processing settings
+                saved_batch_provider = self.gui_settings.get_combo_selection(
+                    self.tab_name, "batch_provider", "openai"
+                )
+                if is_widget_valid(self.batch_provider_combo):
+                    index = self.batch_provider_combo.findText(saved_batch_provider)
+                    if index >= 0:
+                        self.batch_provider_combo.setCurrentIndex(index)
+                
+                saved_batch_mining_model = self.gui_settings.get_combo_selection(
+                    self.tab_name, "batch_mining_model", "gpt-5-mini"
+                )
+                if is_widget_valid(self.batch_mining_model_edit):
+                    self.batch_mining_model_edit.setText(saved_batch_mining_model)
+                
+                saved_batch_remine_model = self.gui_settings.get_combo_selection(
+                    self.tab_name, "batch_remine_model", "claude-3.7-sonnet"
+                )
+                if is_widget_valid(self.batch_remine_model_edit):
+                    self.batch_remine_model_edit.setText(saved_batch_remine_model)
+                
+                saved_remine_enabled = self.gui_settings.get_checkbox_state(
+                    self.tab_name, "remine_enabled", True
+                )
+                if is_widget_valid(self.remine_checkbox):
+                    self.remine_checkbox.setChecked(saved_remine_enabled)
+                
+                # Update cost estimate after loading
+                self._update_cost_estimate()
+
             finally:
                 # Always restore signals, even if an exception occurred
                 for widget in widgets_to_block:
@@ -3421,6 +3599,43 @@ class SummarizationTab(BaseTab):
                         self.tab_name, f"{stage_name}_model", clean_model_text
                     )
 
+            # Save processing mode settings
+            processing_mode = self._get_processing_mode()
+            self.gui_settings.set_combo_selection(
+                self.tab_name, "processing_mode", processing_mode
+            )
+            
+            # Save batch processing settings
+            batch_provider_text = safe_get_text(
+                self.batch_provider_combo, "batch_provider_combo"
+            )
+            if batch_provider_text is not None:
+                self.gui_settings.set_combo_selection(
+                    self.tab_name, "batch_provider", batch_provider_text
+                )
+            
+            batch_mining_model_text = safe_get_text(
+                self.batch_mining_model_edit, "batch_mining_model_edit"
+            )
+            if batch_mining_model_text is not None:
+                self.gui_settings.set_combo_selection(
+                    self.tab_name, "batch_mining_model", batch_mining_model_text
+                )
+            
+            batch_remine_model_text = safe_get_text(
+                self.batch_remine_model_edit, "batch_remine_model_edit"
+            )
+            if batch_remine_model_text is not None:
+                self.gui_settings.set_combo_selection(
+                    self.tab_name, "batch_remine_model", batch_remine_model_text
+                )
+            
+            remine_enabled = safe_get_checked(self.remine_checkbox, "remine_checkbox")
+            if remine_enabled is not None:
+                self.gui_settings.set_checkbox_state(
+                    self.tab_name, "remine_enabled", remine_enabled
+                )
+
             logger.info(f"✅ Successfully saved settings for {self.tab_name} tab")
         except Exception as e:
             import traceback
@@ -3554,6 +3769,94 @@ class SummarizationTab(BaseTab):
         """Called when any setting changes to automatically save."""
         logger.debug(f"🔄 Setting changed in {self.tab_name} tab, triggering save...")
         self._save_settings()
+
+    def _on_processing_mode_changed(self, button):
+        """Handle processing mode change."""
+        mode_descriptions = {
+            "realtime": "Process immediately using local or cloud LLM. Best for single episodes.",
+            "batch": "50% cost savings, 24-48hr processing. Best for bulk jobs (100+ episodes).",
+            "auto": "Auto: Uses real-time for small jobs (<100 segments), batch for larger jobs."
+        }
+        
+        # Determine which mode is selected
+        if self.realtime_radio.isChecked():
+            mode = "realtime"
+        elif self.batch_radio.isChecked():
+            mode = "batch"
+        else:
+            mode = "auto"
+        
+        # Update description
+        self.mode_description_label.setText(mode_descriptions.get(mode, ""))
+        
+        # Show/hide batch settings
+        self.batch_settings_frame.setVisible(mode == "batch")
+        
+        # Update cost estimate
+        self._update_cost_estimate()
+        
+        # Save settings
+        self._on_setting_changed()
+    
+    def _update_cost_estimate(self):
+        """Update cost estimate based on selected mode and queue size."""
+        # Get number of files in the list
+        file_count = self.file_list.count()
+        
+        if file_count == 0:
+            self.cost_estimate_label.setText("")
+            return
+        
+        # Estimate segments (approximately 18 segments per episode)
+        est_segments = file_count * 18
+        
+        # Determine mode
+        if self.realtime_radio.isChecked():
+            mode = "realtime"
+        elif self.batch_radio.isChecked():
+            mode = "batch"
+        else:
+            mode = "auto"
+        
+        # Calculate cost estimate
+        if mode == "realtime":
+            # Check if using local model
+            provider = getattr(self, 'miner_provider', None)
+            if provider and provider.currentText() == "local":
+                cost_text = "Local processing (electricity only)"
+            else:
+                cost_text = f"~${est_segments * 0.005:.2f}"
+        elif mode == "batch":
+            # With caching: ~$0.002 per segment
+            cost_text = f"~${est_segments * 0.002:.2f} (50% batch + caching discount)"
+        else:  # auto
+            if est_segments < 100:
+                cost_text = "Real-time (immediate)"
+            else:
+                cost_text = f"~${est_segments * 0.002:.2f} (batch mode)"
+        
+        self.cost_estimate_label.setText(f"Estimated cost: {cost_text}")
+    
+    def _get_processing_mode(self) -> str:
+        """Get the currently selected processing mode."""
+        if self.realtime_radio.isChecked():
+            return "realtime"
+        elif self.batch_radio.isChecked():
+            return "batch"
+        else:
+            return "auto"
+    
+    def _set_processing_mode(self, mode: str):
+        """Set the processing mode radio buttons."""
+        if mode == "realtime":
+            self.realtime_radio.setChecked(True)
+        elif mode == "batch":
+            self.batch_radio.setChecked(True)
+        else:
+            self.auto_radio.setChecked(True)
+        
+        # Update UI accordingly
+        self._on_processing_mode_changed(None)
 
     def _get_model_override(
         self, provider_combo: QComboBox, model_combo: QComboBox

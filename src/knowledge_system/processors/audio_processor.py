@@ -470,9 +470,18 @@ class AudioProcessor(BaseProcessor):
                     "aliased_sources": [],
                 }
 
+            # Extract word-level timestamps if available (from whisper.cpp --output-words)
+            word_timestamps = transcript_data.get("words", [])
+            if word_timestamps:
+                logger.info(f"📝 Word timestamps available: {len(word_timestamps)} words for fine-grained attribution")
+
             # Prepare speaker data with multi-source metadata for enhanced suggestions
             speaker_data_list = speaker_processor.prepare_speaker_data(
-                diarization_segments, transcript_segments, all_metadata, recording_path
+                diarization_segments,
+                transcript_segments,
+                word_timestamps=word_timestamps,
+                metadata=all_metadata,
+                audio_path=recording_path,
             )
 
             if not speaker_data_list:
@@ -2142,12 +2151,18 @@ class AudioProcessor(BaseProcessor):
                                         "aliased_sources": [],
                                     }
 
+                                # Extract word-level timestamps if available (from whisper.cpp --output-words)
+                                word_timestamps = final_data.get("words", [])
+                                if word_timestamps:
+                                    logger.info(f"📝 Word timestamps available: {len(word_timestamps)} words")
+
                                 # Prepare speaker data with multi-source metadata for enhanced suggestions
                                 speaker_data_list = speaker_processor.prepare_speaker_data(
                                     diarization_segments,
                                     transcript_segments,
-                                    all_metadata,
-                                    str(
+                                    word_timestamps=word_timestamps,
+                                    metadata=all_metadata,
+                                    audio_path=str(
                                         output_path
                                     ),  # Pass converted WAV path for voice fingerprinting (same file used for diarization)
                                 )

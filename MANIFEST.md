@@ -551,6 +551,7 @@ SQL migration files for database schema changes.
 - `004_channel_host_mappings.py` - Channel to host mapping tables
 - `migration_004_channel_host_mappings.py` - Python migration for channel mappings
 - `system2_migration.py` - System 2 processing tables migration
+- `2025_12_07_persistent_speaker_profiles.sql` - Persistent speaker profiles for cross-episode voice recognition
 
 ### EXAMPLES/
 
@@ -699,9 +700,9 @@ Media processing and transformation.
 - `pdf.py` - PDF document processing
 - `registry.py` - Processor registry for dynamic processor selection
 - `rss_processor.py` - RSS feed processing
-- `speaker_processor.py` - Speaker attribution and identification
+- `speaker_processor.py` - Speaker attribution with word-level verification using voice fingerprinting. Supports persistent profiles for recurring hosts (97%+ accuracy for known speakers)
 - `unified_batch_processor.py` - Unified batch processor for multiple files
-- `whisper_cpp_transcribe.py` - Whisper.cpp transcription wrapper
+- `whisper_cpp_transcribe.py` - Whisper.cpp transcription wrapper with word-level timestamps for precise speaker attribution
 - `youtube_download.py` - YouTube video/audio download
 
 #### PROCESSORS/HCE/
@@ -868,7 +869,7 @@ Voice fingerprinting and speaker verification.
 - `__init__.py` - Voice module initialization
 - `accuracy_testing.py` - Accuracy testing for voice fingerprinting
 - `speaker_verification_service.py` - Speaker verification service
-- `voice_fingerprinting.py` - Voice fingerprinting using acoustic features
+- `voice_fingerprinting.py` - Voice fingerprinting using acoustic features with persistent profile accumulation for cross-episode speaker recognition
 
 ### WORKERS/
 

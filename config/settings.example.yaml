@@ -73,6 +73,35 @@ transcription:
   min_words: 50
   use_whisper_cpp: false  # Use whisper.cpp with Core ML acceleration on macOS
 
+# Speaker Identification & Attribution Settings
+# Controls how speakers are identified and attributed in transcripts
+speaker_identification:
+  # Diarization sensitivity mode
+  # Options: dialogue, aggressive, balanced, conservative
+  # - dialogue: Best for interviews, podcasts with quick exchanges (default)
+  # - aggressive: Capture more speakers, more sensitive to changes
+  # - balanced: Middle ground for general use
+  # - conservative: Fewer speakers, merge similar voices
+  diarization_sensitivity: "dialogue"
+
+  # Word-level verification (requires whisper.cpp with --output-words)
+  # When enabled, uses voice fingerprinting to verify speaker assignments per word group
+  # Achieves 4-7% DER vs 10-15% with segment-level only
+  enable_word_level_verification: true
+  word_verification_confidence_gap: 0.15  # Similarity difference required to reassign
+  word_verification_window_seconds: 0.5   # Minimum time window for voice extraction
+
+  # Persistent speaker profiles
+  # Stores voice fingerprints for recurring hosts across episodes
+  # After 3-5 episodes, achieves 97%+ accuracy for known speakers
+  enable_persistent_profiles: true
+  profile_accumulation_weight: 0.3  # Weight for new samples vs existing profile (0.0-1.0)
+  min_profile_confidence: 0.7       # Minimum confidence to use stored profile
+
+  # Performance tuning
+  max_words_to_verify: 500          # Limit verification for performance
+  skip_verification_for_long_segments: true  # Skip segments > 3s (pyannote already reliable)
+
 # LLM Settings
 llm:
   provider: "openai"  # openai, claude, local
@@ -260,6 +289,72 @@ getreceipts:
   # Auto-export settings
   auto_export_after_processing: false  # Auto-export after successful HCE processing
   export_only_on_success: true         # Only export if processing was successful
+
+# =============================================================================
+# PROCESSING MODE CONFIGURATION
+# =============================================================================
+# Control how claim extraction is processed: real-time, batch, or auto
+
+batch_processing:
+  # Mode: "realtime" | "batch" | "auto"
+  # - realtime: Process immediately using configured LLM (local or cloud)
+  # - batch: Use batch APIs (50% discount, 24-48hr processing)
+  # - auto: Automatically switch based on volume
+  mode: "auto"
+  
+  # Auto mode threshold: switch to batch when segments > this
+  auto_batch_threshold: 100
+
+  # Provider and model for batch stages
+  batch_provider: "openai"              # openai or anthropic
+  batch_mining_model: "gpt-5-mini"      # Model for claim extraction
+  batch_flagship_model: "gpt-5-mini"    # Model for claim evaluation
+  
+  # Re-mining uses stronger model (can be different provider)
+  batch_remine_provider: "anthropic"
+  batch_remine_model: "claude-3.7-sonnet"
+  
+  # Real-time model configuration (when mode is "realtime" or "auto" stays realtime)
+  realtime_mining_model: "ollama://qwen2.5:72b-instruct"
+  realtime_flagship_model: "ollama://qwen2.5:72b-instruct"
+  
+  # Re-mining triggers
+  remine_enabled: true
+  remine_confidence_threshold: 4.0      # Re-mine if avg confidence < 4
+  remine_empty_segments: true           # Re-mine segments with 0 claims
+  remine_max_percent: 15                # Cap at 15% of segments
+  
+  # Prompt caching optimization (OpenAI)
+  # Caching can provide additional 25% savings on input tokens
+  enable_cache_optimization: true
+  sequential_batch_submission: true     # Submit batches one at a time for cache warmup
+  batch_delay_seconds: 30               # Wait between batches for cache warmup
+  
+  # Polling settings
+  poll_interval_seconds: 60             # How often to check batch status
+  max_requests_per_batch: 10000         # Split larger jobs into batches
+
+# =============================================================================
+# BATCH PROCESSING COST ESTIMATES
+# =============================================================================
+# 
+# For 5,000 hours of podcast audio (~90,000 segments):
+#
+# Real-time processing (no batch):
+#   - OpenAI GPT-5 Mini: ~$438
+#   - Local Qwen 72B: ~$75 electricity, 10-35 days processing
+#
+# Batch processing (50% discount):
+#   - Mining (GPT-5 Mini): ~$104
+#   - Flagship Evaluation: ~$20
+#   - Re-mining 10% (Claude Sonnet): ~$95
+#   - TOTAL: ~$219
+#
+# Batch + Prompt Caching (additional 25% input savings):
+#   - TOTAL: ~$170-195
+#
+# Processing time: 48-72 hours for batch mode
+# =============================================================================
 
 # =============================================================================
 # PERFORMANCE PROFILES EXPLANATION

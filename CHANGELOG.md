@@ -7,7 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Word-Level Speaker Attribution**: Implemented word-level speaker verification using whisper.cpp word timestamps combined with voice fingerprinting. Achieves 4-7% Diarization Error Rate (DER) compared to 10-15% with segment-level attribution.
+  - New `--output-words` flag in whisper.cpp for word timestamps
+  - `_verify_word_level_speakers()` method verifies speaker assignments per word group
+  - `_build_speaker_profiles()` builds voice profiles from audio for comparison
+  - Strategic verification focuses on speaker transitions and short utterances
+  - Adds ~15-30 seconds processing per hour of audio on M2 Ultra
+
+- **Persistent Speaker Profiles**: Speaker voice profiles now persist across episodes for recurring hosts.
+  - New `speaker_profiles` database table stores averaged embeddings
+  - `PersistentSpeakerProfile` SQLAlchemy model with fingerprint accumulation
+  - Profiles accumulate across episodes (more data = better accuracy)
+  - Channel-aware profile lookup for instant host recognition
+  - New methods: `accumulate_speaker_profile()`, `get_or_create_channel_profile()`
+  - New migration: `database/migrations/024_persistent_speaker_profiles.sql`
+  - Confidence scoring based on sample count and feature availability
+
+- **Batch Processing Pipeline with Prompt Caching**: Complete implementation of batch API support for OpenAI and Anthropic with automatic prompt caching optimization.
+  - **50% cost savings** via batch API discounts (24-48 hour processing)
+  - **Additional 25% input savings** from OpenAI prompt caching for static prompt prefixes
+  - **3-stage pipeline**: Mining → Flagship Evaluation → Re-mining of flagged segments
+  - **Processing modes**: `realtime`, `batch`, and `auto` (switches based on segment count)
+  - **GUI integration**: Mode selector, cost estimates, and cache metrics display
+  - **Database tracking**: New tables for batch jobs and requests with cache hit metrics
+  - **Re-mining**: Low-confidence and empty segments automatically re-processed with stronger model
+  
+  **New Files:**
+  - `src/knowledge_system/core/batch_client.py` - Base class and data models
+  - `src/knowledge_system/core/batch_openai.py` - OpenAI Batch API client
+  - `src/knowledge_system/core/batch_anthropic.py` - Anthropic Batch API client
+  - `src/knowledge_system/core/batch_pipeline.py` - 3-stage pipeline orchestrator
+  - `database/migrations/023_batch_processing.sql` - Batch tracking tables
+  - `tests/test_batch_pipeline.py` - 19 unit tests for batch processing
+  
+  **Cost Estimate for 5,000 Hours:**
+  - Real-time: ~$438
+  - Batch only: ~$219
+  - Batch + caching: ~$170-195
+
 ### Changed
+- **yt-dlp upgraded to 2025.10.22**: Updated from 2025.10.14 with YouTube support fixes. **Important:** This is the last version before Deno/JavaScript runtime becomes required (2025.11.12+). pyannote.audio minimum bumped to 4.0.1 for the new community-1 speaker diarization model.
+
 - **Specialized Miner Prompts Aligned to V2/V3 Architecture**: Rewrote `unified_miner_transcript_third_party.txt` and `unified_miner_document.txt` to match the V2/V3 structure and extraction standards:
   - **Refinement patterns section** for blocking known-bad entities via synced feedback
   - **Mental model calibration list** with 25+ exemplars and "named AND used" extraction rule
@@ -55,6 +96,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Complete Documentation Suite**: Created comprehensive documentation including `ARCHITECTURE_WEB_CANONICAL.md` (complete architecture guide), `VERCEL_ENV_SETUP.md` (environment variable setup), `MIGRATION_CHECK.md` (schema diagnosis), `READY_TO_TEST.md`, `QUICK_START.md`, and `DEPLOYMENT_STATUS.md`.
 
 ### Changed
+- **Diarization Sensitivity Default**: Default changed from "conservative" to "dialogue" for better quick-exchange capture in podcasts and interviews
+- **Speaker Processor Architecture**: Refactored to use word-level verification as primary method, with segment-level as fallback when word timestamps unavailable
 - **Claims Upload Service - Ephemeral Behavior**: Modified `src/knowledge_system/services/claims_upload_service.py` to add `hidden` column support and `hide_uploaded_claims()` method. Claims marked uploaded are now hidden from local views, implementing ephemeral-local architecture.
 - **Cloud Uploads Tab - Auto-Hide After Upload**: Modified `src/knowledge_system/gui/tabs/cloud_uploads_tab.py` to automatically hide uploaded claims after successful upload, moving them to web-canonical storage.
 - **Upload Mechanism - SDK to HTTP API**: Switched from Supabase Python SDK (subject to RLS policies) to direct HTTP API requests using service role key internally. Cleaner code, better error handling, bypasses RLS.
@@ -76,6 +119,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Code Reduction**: Net -213 lines in uploader rewrite (500+ → ~200 lines)
 - **Security**: Device keys never transmitted in plain text after initial registration, bcrypt-hashed (10 rounds) on backend
 - **Database Schema**: Uses `IF NOT EXISTS` for safe re-run migrations, devices table tracks last_seen_at and optional user_id for claiming devices
+
+### Deprecated
+- **`_split_mixed_speaker_segments()`**: Replaced by word-level verification (`_verify_word_level_speakers`). Kept as fallback when word timestamps unavailable
+- **`_reassign_segments_by_voice_verification()`**: Replaced by word-level verification with better accuracy (4-7% vs 10-15% DER)
 
 ### Fixed
 - **Database Schema: Missing user_notes Column**: Fixed `sqlite3.OperationalError` where Review tab failed to load claims due to missing `user_notes` column in the claims table. Applied the `2025_11_16_add_user_notes_to_claims.sql` migration to add the column and index. Updated `DatabaseService` to automatically apply incremental migrations on startup, preventing this issue from occurring on fresh installations or after database resets.

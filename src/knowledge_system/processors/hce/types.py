@@ -160,7 +160,7 @@ class EpisodeBundle(BaseModel):
 
 class PipelineOutputs(BaseModel):
     source_id: str
-    claims: list[ScoredClaim]
+    claims: list[ScoredClaim] = []
     relations: list[Relation] = []
     milestones: list[Milestone] = []
     people: list[PersonMention] = []
@@ -168,8 +168,13 @@ class PipelineOutputs(BaseModel):
     jargon: list[JargonTerm] = []
     structured_categories: list[StructuredCategory] = []
 
-    # Summary fields (new)
+    # Summary fields
     short_summary: str | None = None  # Pre-mining overview (1-2 paragraphs)
     long_summary: str | None = (
         None  # Post-evaluation comprehensive analysis (3-5 paragraphs)
     )
+    
+    # Batch processing fields
+    batch_mode: bool = False  # True if this was/is being processed via batch API
+    batch_status: str | None = None  # "submitted", "processing", "completed", "failed"
+    batch_job_ids: list[str] = []  # IDs of batch jobs for tracking

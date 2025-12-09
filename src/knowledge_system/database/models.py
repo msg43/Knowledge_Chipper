@@ -1717,6 +1717,99 @@ class SpeakerProcessingSession(Base):
         return f"<SpeakerProcessingSession(session_id='{self.session_id}', recording_path='{self.recording_path}')>"
 
 
+class PersistentSpeakerProfile(Base):
+    """
+    Persistent speaker voice profiles for cross-episode recognition.
+    
+    Stores accumulated voice fingerprints for recurring speakers (e.g., podcast hosts)
+    to enable instant recognition across episodes. Profiles improve with more samples.
+    
+    Key features:
+    - Channel-specific profiles (same speaker may sound different on different channels)
+    - Accumulated fingerprints from multiple episodes (weighted averaging)
+    - Confidence scoring based on sample count and feature availability
+    - Support for partial feature availability (not all episodes have wav2vec2/ecapa)
+    """
+
+    __tablename__ = "speaker_profiles"
+    __table_args__ = (
+        Index('idx_speaker_profiles_channel', 'channel_id', 'name'),
+        Index('idx_speaker_profiles_name', 'name'),
+        Index('idx_speaker_profiles_confidence', 'confidence_score'),
+        {"extend_existing": True},
+    )
+
+    id = Column(Integer, primary_key=True)
+    
+    # Speaker identification
+    name = Column(String(255), nullable=False, index=True)
+    channel_id = Column(String(255), index=True)  # YouTube channel ID
+    channel_name = Column(String(500))  # Human-readable channel name
+    
+    # Voice fingerprint data (JSON blob containing averaged embeddings)
+    fingerprint_embedding = Column(Text)  # JSON: averaged voice embedding
+    
+    # Profile quality metrics
+    sample_count = Column(Integer, default=0)  # Number of episodes contributing
+    total_duration_seconds = Column(Float, default=0.0)  # Total audio duration
+    confidence_score = Column(Float, default=0.0)  # Overall reliability (0.0-1.0)
+    
+    # Feature availability tracking
+    has_wav2vec2 = Column(Boolean, default=False)  # wav2vec2 embeddings available
+    has_ecapa = Column(Boolean, default=False)  # ECAPA-TDNN embeddings available
+    
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_used_at = Column(DateTime)  # Last time profile was matched
+    
+    # Source tracking
+    source_episodes = Column(Text)  # JSON: list of source_ids that contributed
+
+    def __repr__(self):
+        return (
+            f"<PersistentSpeakerProfile(id={self.id}, name='{self.name}', "
+            f"channel_id='{self.channel_id}', sample_count={self.sample_count})>"
+        )
+
+    @property
+    def fingerprint_data(self) -> dict[str, Any]:
+        """Get voice fingerprint as dictionary."""
+        if self.fingerprint_embedding:
+            try:
+                return json.loads(self.fingerprint_embedding)
+            except json.JSONDecodeError:
+                return {}
+        return {}
+
+    @fingerprint_data.setter
+    def fingerprint_data(self, data: dict[str, Any]):
+        """Set voice fingerprint from dictionary."""
+        self.fingerprint_embedding = json.dumps(data)
+
+    @property
+    def source_episode_list(self) -> list[str]:
+        """Get list of source_ids that contributed to this profile."""
+        if self.source_episodes:
+            try:
+                return json.loads(self.source_episodes)
+            except json.JSONDecodeError:
+                return []
+        return []
+
+    @source_episode_list.setter
+    def source_episode_list(self, data: list[str]):
+        """Set source episode list."""
+        self.source_episodes = json.dumps(data)
+
+    def add_source_episode(self, source_id: str):
+        """Add a source episode to the list."""
+        episodes = self.source_episode_list
+        if source_id not in episodes:
+            episodes.append(source_id)
+            self.source_episode_list = episodes
+
+
 # ============================================================================
 # QUESTIONS: Organizing Claims by Inquiry
 # ============================================================================

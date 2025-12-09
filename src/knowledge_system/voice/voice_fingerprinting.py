@@ -644,6 +644,360 @@ class VoiceFingerprintProcessor:
             logger.error(f"Error during speaker identification: {e}")
             return None
 
+    def accumulate_speaker_profile(
+        self,
+        existing_profile: dict[str, Any] | None,
+        new_fingerprint: dict[str, Any],
+        existing_sample_count: int = 0,
+        weight: float = 1.0,
+    ) -> dict[str, Any]:
+        """
+        Combine existing profile with new fingerprint using weighted average.
+        
+        More samples = more reliable profile. Uses incremental averaging formula:
+        new_avg = (old_avg * old_count + new_value * weight) / (old_count + weight)
+        
+        Args:
+            existing_profile: Existing averaged fingerprint (None for first sample)
+            new_fingerprint: New fingerprint to incorporate
+            existing_sample_count: Number of samples in existing profile
+            weight: Weight for new fingerprint (default 1.0)
+            
+        Returns:
+            Updated averaged fingerprint
+        """
+        if not new_fingerprint:
+            return existing_profile or {}
+            
+        if not existing_profile or existing_sample_count == 0:
+            # First sample - just return the new fingerprint
+            return new_fingerprint.copy()
+        
+        accumulated = {}
+        feature_types = ["mfcc", "spectral", "prosodic", "wav2vec2", "ecapa"]
+        
+        for feature_type in feature_types:
+            existing_feat = existing_profile.get(feature_type)
+            new_feat = new_fingerprint.get(feature_type)
+            
+            if new_feat and len(new_feat) > 0:
+                new_array = np.array(new_feat)
+                
+                if existing_feat and len(existing_feat) > 0:
+                    existing_array = np.array(existing_feat)
+                    
+                    # Check shape compatibility
+                    if existing_array.shape == new_array.shape:
+                        # Incremental weighted average
+                        total_weight = existing_sample_count + weight
+                        accumulated_array = (
+                            existing_array * existing_sample_count + new_array * weight
+                        ) / total_weight
+                        accumulated[feature_type] = accumulated_array.tolist()
+                    else:
+                        # Shape mismatch - use new fingerprint for this feature
+                        logger.warning(
+                            f"Shape mismatch for {feature_type}: existing {existing_array.shape} vs new {new_array.shape}"
+                        )
+                        accumulated[feature_type] = new_feat
+                else:
+                    # No existing feature - use new one
+                    accumulated[feature_type] = new_feat
+            elif existing_feat:
+                # Keep existing feature if new one is missing
+                accumulated[feature_type] = existing_feat
+        
+        # Copy metadata
+        accumulated["sample_rate"] = new_fingerprint.get("sample_rate", 16000)
+        accumulated["feature_version"] = new_fingerprint.get("feature_version", "1.0")
+        accumulated["accumulated_samples"] = existing_sample_count + 1
+        
+        return accumulated
+
+    def get_channel_speaker_profiles(
+        self, channel_id: str
+    ) -> dict[str, dict[str, Any]]:
+        """
+        Get all speaker profiles for a channel from the database.
+        
+        Args:
+            channel_id: YouTube channel ID
+            
+        Returns:
+            Dictionary mapping speaker names to their fingerprint data
+        """
+        try:
+            from sqlalchemy import create_engine
+            from sqlalchemy.orm import sessionmaker
+            
+            from ..database.models import PersistentSpeakerProfile
+            from ..utils.macos_paths import get_application_support_dir
+            
+            # Get database path
+            db_path = get_application_support_dir() / "knowledge_system.db"
+            engine = create_engine(f"sqlite:///{db_path}")
+            Session = sessionmaker(bind=engine)
+            
+            with Session() as session:
+                profiles = (
+                    session.query(PersistentSpeakerProfile)
+                    .filter_by(channel_id=channel_id)
+                    .all()
+                )
+                
+                result = {}
+                for profile in profiles:
+                    if profile.fingerprint_data:
+                        result[profile.name] = {
+                            "fingerprint": profile.fingerprint_data,
+                            "sample_count": profile.sample_count,
+                            "confidence": profile.confidence_score,
+                            "has_wav2vec2": profile.has_wav2vec2,
+                            "has_ecapa": profile.has_ecapa,
+                        }
+                        
+                return result
+                
+        except Exception as e:
+            logger.warning(f"Error loading channel speaker profiles: {e}")
+            return {}
+
+    def save_speaker_profile(
+        self,
+        name: str,
+        fingerprint: dict[str, Any],
+        channel_id: str | None = None,
+        channel_name: str | None = None,
+        source_id: str | None = None,
+        duration_seconds: float = 0.0,
+    ) -> bool:
+        """
+        Save or update a speaker profile in the database.
+        
+        If a profile already exists for this speaker+channel, accumulates the
+        new fingerprint with the existing one using weighted averaging.
+        
+        Args:
+            name: Speaker name
+            fingerprint: Voice fingerprint dictionary
+            channel_id: YouTube channel ID (optional)
+            channel_name: Human-readable channel name (optional)
+            source_id: Source episode ID that contributed this sample
+            duration_seconds: Duration of audio used for this fingerprint
+            
+        Returns:
+            True if saved successfully
+        """
+        try:
+            from datetime import datetime
+            
+            from sqlalchemy import create_engine
+            from sqlalchemy.orm import sessionmaker
+            
+            from ..database.models import Base, PersistentSpeakerProfile
+            from ..utils.macos_paths import get_application_support_dir
+            
+            # Get database path
+            db_path = get_application_support_dir() / "knowledge_system.db"
+            engine = create_engine(f"sqlite:///{db_path}")
+            
+            # Ensure table exists
+            Base.metadata.create_all(engine, tables=[PersistentSpeakerProfile.__table__])
+            
+            Session = sessionmaker(bind=engine)
+            
+            with Session() as session:
+                # Look for existing profile
+                query = session.query(PersistentSpeakerProfile).filter_by(name=name)
+                if channel_id:
+                    query = query.filter_by(channel_id=channel_id)
+                else:
+                    query = query.filter(PersistentSpeakerProfile.channel_id.is_(None))
+                    
+                existing = query.first()
+                
+                if existing:
+                    # Accumulate with existing profile
+                    accumulated = self.accumulate_speaker_profile(
+                        existing.fingerprint_data,
+                        fingerprint,
+                        existing.sample_count,
+                    )
+                    
+                    existing.fingerprint_data = accumulated
+                    existing.sample_count += 1
+                    existing.total_duration_seconds += duration_seconds
+                    existing.updated_at = datetime.utcnow()
+                    
+                    # Update feature availability
+                    existing.has_wav2vec2 = bool(accumulated.get("wav2vec2"))
+                    existing.has_ecapa = bool(accumulated.get("ecapa"))
+                    
+                    # Update confidence based on sample count and features
+                    existing.confidence_score = self._calculate_profile_confidence(
+                        existing.sample_count,
+                        existing.has_wav2vec2,
+                        existing.has_ecapa,
+                    )
+                    
+                    # Add source episode
+                    if source_id:
+                        existing.add_source_episode(source_id)
+                    
+                    logger.info(
+                        f"Updated speaker profile '{name}' (samples: {existing.sample_count}, "
+                        f"confidence: {existing.confidence_score:.2f})"
+                    )
+                else:
+                    # Create new profile
+                    has_wav2vec2 = bool(fingerprint.get("wav2vec2"))
+                    has_ecapa = bool(fingerprint.get("ecapa"))
+                    confidence = self._calculate_profile_confidence(1, has_wav2vec2, has_ecapa)
+                    
+                    new_profile = PersistentSpeakerProfile(
+                        name=name,
+                        channel_id=channel_id,
+                        channel_name=channel_name,
+                        sample_count=1,
+                        total_duration_seconds=duration_seconds,
+                        confidence_score=confidence,
+                        has_wav2vec2=has_wav2vec2,
+                        has_ecapa=has_ecapa,
+                    )
+                    new_profile.fingerprint_data = fingerprint
+                    
+                    if source_id:
+                        new_profile.source_episode_list = [source_id]
+                    
+                    session.add(new_profile)
+                    logger.info(
+                        f"Created new speaker profile '{name}' for channel '{channel_id}'"
+                    )
+                
+                session.commit()
+                return True
+                
+        except Exception as e:
+            logger.error(f"Error saving speaker profile: {e}")
+            import traceback
+            logger.debug(traceback.format_exc())
+            return False
+
+    def _calculate_profile_confidence(
+        self,
+        sample_count: int,
+        has_wav2vec2: bool,
+        has_ecapa: bool,
+    ) -> float:
+        """
+        Calculate confidence score for a speaker profile.
+        
+        Confidence increases with:
+        - More samples (diminishing returns after 10)
+        - Availability of deep learning features (wav2vec2, ecapa)
+        
+        Returns:
+            Confidence score between 0.0 and 1.0
+        """
+        # Base confidence from sample count (0.3 to 0.7)
+        # Logarithmic scaling: 1 sample = 0.3, 10 samples = 0.7
+        sample_confidence = 0.3 + 0.4 * min(1.0, np.log10(sample_count + 1) / np.log10(11))
+        
+        # Feature bonus (up to 0.3)
+        feature_bonus = 0.0
+        if has_wav2vec2:
+            feature_bonus += 0.15
+        if has_ecapa:
+            feature_bonus += 0.15
+            
+        return min(1.0, sample_confidence + feature_bonus)
+
+    def get_or_create_channel_profile(
+        self,
+        channel_id: str,
+        speaker_name: str,
+        audio_segments: list[np.ndarray],
+        channel_name: str | None = None,
+        source_id: str | None = None,
+    ) -> dict[str, Any] | None:
+        """
+        Get existing profile for channel speaker or create from audio.
+        
+        If a profile exists with sufficient confidence, returns it directly.
+        Otherwise, extracts fingerprint from provided audio and saves/updates.
+        
+        Args:
+            channel_id: YouTube channel ID
+            speaker_name: Speaker name
+            audio_segments: List of audio arrays (16kHz mono) for fingerprinting
+            channel_name: Human-readable channel name
+            source_id: Source episode ID
+            
+        Returns:
+            Speaker fingerprint dictionary, or None if extraction failed
+        """
+        # Try to get existing profile
+        existing_profiles = self.get_channel_speaker_profiles(channel_id)
+        
+        if speaker_name in existing_profiles:
+            profile_data = existing_profiles[speaker_name]
+            
+            # If high confidence, return existing profile
+            if profile_data["confidence"] >= 0.7:
+                logger.info(
+                    f"Using existing profile for '{speaker_name}' "
+                    f"(confidence: {profile_data['confidence']:.2f}, "
+                    f"samples: {profile_data['sample_count']})"
+                )
+                return profile_data["fingerprint"]
+        
+        # Extract fingerprint from audio segments
+        if not audio_segments:
+            logger.warning(f"No audio segments provided for '{speaker_name}'")
+            return existing_profiles.get(speaker_name, {}).get("fingerprint")
+        
+        # Concatenate audio segments (up to 60 seconds for profile)
+        max_samples = 60 * self.sample_rate  # 60 seconds
+        concatenated = []
+        total_samples = 0
+        
+        for segment in audio_segments:
+            if total_samples >= max_samples:
+                break
+            remaining = max_samples - total_samples
+            concatenated.append(segment[:remaining])
+            total_samples += len(segment[:remaining])
+        
+        if not concatenated:
+            return existing_profiles.get(speaker_name, {}).get("fingerprint")
+            
+        audio = np.concatenate(concatenated)
+        duration = len(audio) / self.sample_rate
+        
+        # Extract fingerprint
+        fingerprint = self.extract_voice_fingerprint(audio)
+        
+        if not fingerprint:
+            logger.warning(f"Failed to extract fingerprint for '{speaker_name}'")
+            return existing_profiles.get(speaker_name, {}).get("fingerprint")
+        
+        # Save/update profile
+        self.save_speaker_profile(
+            name=speaker_name,
+            fingerprint=fingerprint,
+            channel_id=channel_id,
+            channel_name=channel_name,
+            source_id=source_id,
+            duration_seconds=duration,
+        )
+        
+        # Return the (possibly accumulated) profile
+        updated_profiles = self.get_channel_speaker_profiles(channel_id)
+        if speaker_name in updated_profiles:
+            return updated_profiles[speaker_name]["fingerprint"]
+            
+        return fingerprint
+
     def _average_fingerprints(
         self, fingerprints: list[dict[str, Any]]
     ) -> dict[str, Any]:

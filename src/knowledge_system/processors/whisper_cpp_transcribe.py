@@ -442,6 +442,146 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
 
         return {"is_valid": True, "issue": None}
 
+    def _extract_word_timestamps(
+        self, output_data: dict, transcription: list | None = None
+    ) -> list[dict]:
+        """
+        Extract word-level timestamps from whisper.cpp JSON output.
+        
+        whisper.cpp --output-json-full includes tokens in segments, but tokens
+        don't have individual timestamps. We estimate word positions by
+        distributing the segment duration across tokens proportionally.
+        
+        Returns:
+            List of word dictionaries with keys: word, start, end
+        """
+        words = []
+        
+        try:
+            # Check for top-level words array (if whisper version supports it)
+            if "words" in output_data and isinstance(output_data["words"], list):
+                for word_data in output_data["words"]:
+                    if isinstance(word_data, dict):
+                        word = word_data.get("word", word_data.get("text", "")).strip()
+                        if not word:
+                            continue
+                            
+                        start = word_data.get("start", word_data.get("t0", 0))
+                        end = word_data.get("end", word_data.get("t1", start))
+                        
+                        # Convert from milliseconds if needed
+                        if isinstance(start, (int, float)) and start > 1000:
+                            start = start / 1000.0
+                        if isinstance(end, (int, float)) and end > 1000:
+                            end = end / 1000.0
+                            
+                        words.append({
+                            "word": word,
+                            "start": float(start),
+                            "end": float(end),
+                        })
+                        
+                logger.debug(f"Extracted {len(words)} words from top-level 'words' array")
+                return words
+            
+            # Extract from transcription segments with tokens (--output-json-full format)
+            if transcription and isinstance(transcription, list):
+                for segment in transcription:
+                    if not isinstance(segment, dict):
+                        continue
+                    
+                    # Get segment timing (offsets are in milliseconds)
+                    offsets = segment.get("offsets", {})
+                    segment_start_ms = offsets.get("from", 0)
+                    segment_end_ms = offsets.get("to", segment_start_ms)
+                    
+                    segment_start = segment_start_ms / 1000.0
+                    segment_end = segment_end_ms / 1000.0
+                    segment_duration = segment_end - segment_start
+                    
+                    # Get tokens from this segment
+                    tokens = segment.get("tokens", [])
+                    if not tokens:
+                        continue
+                    
+                    # Filter to actual word tokens (skip special tokens like [_BEG_], timestamps)
+                    word_tokens = []
+                    for token in tokens:
+                        if isinstance(token, dict):
+                            text = token.get("text", "").strip()
+                            # Skip special tokens, timestamps, and empty tokens
+                            if text and not text.startswith("[") and not text.startswith("<"):
+                                word_tokens.append(text)
+                    
+                    if not word_tokens:
+                        continue
+                    
+                    # Estimate word timestamps by distributing segment duration
+                    # Proportionally based on character count (rough approximation)
+                    total_chars = sum(len(w) for w in word_tokens)
+                    if total_chars == 0:
+                        continue
+                    
+                    current_time = segment_start
+                    for word_text in word_tokens:
+                        # Estimate word duration based on character proportion
+                        word_proportion = len(word_text) / total_chars
+                        word_duration = segment_duration * word_proportion
+                        word_end = current_time + word_duration
+                        
+                        words.append({
+                            "word": word_text,
+                            "start": round(current_time, 3),
+                            "end": round(word_end, 3),
+                            "estimated": True,  # Flag that these are estimated, not precise
+                        })
+                        
+                        current_time = word_end
+                    
+                if words:
+                    logger.info(f"📝 Estimated {len(words)} word timestamps from token data")
+                    return words
+            
+            # Fallback: check for nested words in segments
+            if transcription and isinstance(transcription, list):
+                for segment in transcription:
+                    if not isinstance(segment, dict):
+                        continue
+                        
+                    seg_words = segment.get("words", [])
+                    if seg_words:
+                        for word_data in seg_words:
+                            if isinstance(word_data, dict):
+                                word = word_data.get("word", word_data.get("text", "")).strip()
+                                if not word:
+                                    continue
+                                    
+                                start = word_data.get("start", word_data.get("t0", 0))
+                                end = word_data.get("end", word_data.get("t1", start))
+                                
+                                if isinstance(start, (int, float)) and start > 1000:
+                                    start = start / 1000.0
+                                if isinstance(end, (int, float)) and end > 1000:
+                                    end = end / 1000.0
+                                    
+                                words.append({
+                                    "word": word,
+                                    "start": float(start),
+                                    "end": float(end),
+                                })
+                
+                if words:
+                    logger.debug(f"Extracted {len(words)} words from transcription segments")
+                    return words
+                    
+            # If no words found, log but don't fail
+            logger.debug("No word-level timestamps found in whisper.cpp output")
+            return []
+            
+        except Exception as e:
+            logger.warning(f"Error extracting word timestamps: {e}")
+            return []
+
     def _remove_sequential_repetitions(
         self, segments: list[dict], threshold: int = 3
     ) -> tuple[list[dict], dict]:
@@ -984,13 +1124,24 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
                 # Add output options
                 cmd.extend(
                     [
-                        "--output-json",
+                        "--output-json-full",  # Use -ojf for detailed JSON with token info
+                        # Note: --output-words (-owts) is for karaoke scripts, NOT JSON timestamps
                         # DO NOT use --no-timestamps - it causes hallucinations on long audio
                         "--output-file",
                         str(output_base),
                         "--print-progress",  # Enable progress output
                     ]
                 )
+                
+                # Check if word-level timestamps are requested for speaker attribution
+                # Using --max-len 1 creates word-level segments but can impact quality
+                # For speaker attribution, we use segment-level + token info from -ojf
+                enable_word_segments = kwargs.get("word_level_segments", False)
+                if enable_word_segments:
+                    cmd.extend(["--max-len", "1"])  # Word-level segments
+                    logger.info("📝 Word-level segments enabled (--max-len 1)")
+                else:
+                    logger.info("📝 Full JSON output enabled with token info for speaker attribution")
 
                 # Add language if specified (otherwise whisper will auto-detect)
                 language = kwargs.get("language")
@@ -1190,6 +1341,17 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
                         "segments": segments,
                         "language": output_data.get("language", "unknown"),
                     }
+                    
+                    # Extract word-level timestamps for speaker attribution
+                    # whisper.cpp with --output-words includes tokens with word-level timing
+                    # Pass transcription data if available (may not be defined in all code paths)
+                    transcription_for_words = (
+                        transcription if "transcription" in output_data else None
+                    )
+                    words = self._extract_word_timestamps(output_data, transcription_for_words)
+                    if words:
+                        formatted_result["words"] = words
+                        logger.info(f"📝 Extracted {len(words)} word-level timestamps for speaker attribution")
 
                     # Validate transcription for common failure patterns
                     # Get the language that was used for transcription

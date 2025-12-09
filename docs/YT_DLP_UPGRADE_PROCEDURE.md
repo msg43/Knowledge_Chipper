@@ -1,14 +1,26 @@
 # yt-dlp Upgrade Procedure
 
 ## Current Status
-- **Current Version**: 2025.9.26
-- **Target Version**: 2025.10.14
-- **Last Tested**: 2025-10-11
+- **Current Version**: 2025.10.22
+- **Last Tested**: 2025-12-09
+
+## ⚠️ Important: JavaScript Runtime Requirement
+
+**Starting with version 2025.11.12**, yt-dlp requires an external JavaScript runtime (Deno recommended) to download from YouTube. This applies to ALL YouTube downloads including audio-only.
+
+**Version 2025.10.22 is the last version that works without Deno.**
+
+If you need to upgrade beyond 2025.10.22:
+1. Install Deno: https://deno.land/
+2. Ensure Deno is in your PATH
+3. Test thoroughly before deploying
+
+See: https://github.com/yt-dlp/yt-dlp/wiki/EJS
 
 ## Pre-Upgrade Checklist
 
 ### 1. Check Changelog
-Visit: https://github.com/yt-dlp/yt-dlp/releases/tag/2025.10.14
+Visit: https://github.com/yt-dlp/yt-dlp/releases/tag/[TARGET_VERSION]
 
 Key things to look for:
 - Breaking changes in format selection
@@ -20,7 +32,7 @@ Key things to look for:
 
 ```bash
 # Create a test branch
-git checkout -b test-ytdlp-2025.10.14
+git checkout -b test-ytdlp-[TARGET_VERSION]
 
 # Backup current requirements
 cp requirements.txt requirements.txt.backup
@@ -31,21 +43,21 @@ cp pyproject.toml pyproject.toml.backup
 
 Update both files to maintain consistency (pyproject.toml is source of truth):
 
-**pyproject.toml** (line 52):
+**pyproject.toml** (line ~53):
 ```toml
-"yt-dlp==2025.10.14",  # Last tested: 2025-10-18 - See docs/YT_DLP_UPGRADE_PROCEDURE.md
+"yt-dlp==[TARGET_VERSION]",  # Last tested: [DATE] - See docs/YT_DLP_UPGRADE_PROCEDURE.md
 ```
 
-**requirements.txt** (line 29):
+**requirements.txt** (line ~31):
 ```
-yt-dlp==2025.10.14  # Last tested: 2025-10-18 - format selection and signature extraction working
+yt-dlp==[TARGET_VERSION]  # Last tested: [DATE] - format selection and signature extraction working
 ```
 
 ### 4. Install and Test
 
 ```bash
 # Install the new version
-pip install --upgrade yt-dlp==2025.10.14
+pip install --upgrade yt-dlp==[TARGET_VERSION]
 
 # Verify installation
 yt-dlp --version
@@ -156,14 +168,14 @@ cp requirements.txt.backup requirements.txt
 cp pyproject.toml.backup pyproject.toml
 
 # Reinstall old version
-pip install --force-reinstall yt-dlp==2025.9.26
+pip install --force-reinstall yt-dlp==[PREVIOUS_VERSION]
 
 # Verify rollback
 yt-dlp --version
 
 # Return to main branch
-git checkout remove-cli-add-gui-tests
-git branch -D test-ytdlp-2025.10.14
+git checkout [YOUR_MAIN_BRANCH]
+git branch -D test-ytdlp-[TARGET_VERSION]
 ```
 
 ## Known Issues to Watch For
@@ -211,9 +223,9 @@ After successful testing:
 2. **Commit Changes**
    ```bash
    git add requirements.txt pyproject.toml docs/YT_DLP_UPGRADE_PROCEDURE.md
-   git commit -m "chore: upgrade yt-dlp to 2025.10.14
+   git commit -m "chore: upgrade yt-dlp to [TARGET_VERSION]
    
-   - Updated from 2025.9.26 to 2025.10.14
+   - Updated from [PREVIOUS_VERSION] to [TARGET_VERSION]
    - Tested: single video, playlist, proxy, error handling
    - All tests passing
    - See docs/YT_DLP_UPGRADE_PROCEDURE.md for details"

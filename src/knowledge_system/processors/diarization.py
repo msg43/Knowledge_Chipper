@@ -311,7 +311,16 @@ class SpeakerDiarizationProcessor(BaseProcessor):
 
                         # Configure parameters based on sensitivity level
                         # Initialize variables that will be used across different pipeline components
-                        if self.sensitivity == "aggressive":
+                        if self.sensitivity == "dialogue":
+                            # DIALOGUE MODE: Optimized for interviews with quick back-and-forth exchanges
+                            # Captures short interjections like "uh huh", "precisely", "right"
+                            threshold = 0.50  # Lower threshold for clearer speaker separation
+                            min_duration_on = 0.15  # 150ms - captures very short utterances
+                            min_cluster_size = 6  # Smaller clusters for cleaner speaker boundaries
+                            logger.info(
+                                "🎙️ Using DIALOGUE mode: optimized for interviews with quick exchanges"
+                            )
+                        elif self.sensitivity == "aggressive":
                             threshold = 0.55  # Even lower threshold for maximum speaker detection
                             min_duration_on = 0.25
                             min_cluster_size = 8
@@ -348,7 +357,15 @@ class SpeakerDiarizationProcessor(BaseProcessor):
                             pipeline.segmentation.min_duration_on = min_duration_on
 
                             # Optimize silence detection based on sensitivity
-                            if self.sensitivity == "aggressive":
+                            if self.sensitivity == "dialogue":
+                                pipeline.segmentation.min_duration_off = (
+                                    0.15  # Very quick turn-taking detection (150ms)
+                                )
+                                logger.info(
+                                    f"🎙️ Dialogue mode: min_duration_on={min_duration_on}s, "
+                                    f"min_duration_off=0.15s (captures quick exchanges)"
+                                )
+                            elif self.sensitivity == "aggressive":
                                 pipeline.segmentation.min_duration_off = (
                                     0.2  # Very short silence detection
                                 )

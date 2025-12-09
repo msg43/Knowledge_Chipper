@@ -792,6 +792,116 @@ class HCEConfig(BaseModel):
     )
 
 
+class ProcessingMode(str):
+    """Processing mode for claim extraction."""
+    REALTIME = "realtime"
+    BATCH = "batch"
+    AUTO = "auto"
+
+
+class BatchProcessingConfig(BaseModel):
+    """Configuration for batch and real-time processing."""
+
+    # Mode selection
+    mode: str = Field(
+        default="realtime",
+        pattern="^(realtime|batch|auto)$",
+        description="Processing mode: realtime, batch, or auto",
+    )
+    auto_batch_threshold: int = Field(
+        default=100,
+        ge=10,
+        le=1000,
+        description="Segment count threshold for auto mode to switch to batch",
+    )
+
+    # Batch API settings
+    batch_provider: str = Field(
+        default="openai",
+        pattern="^(openai|anthropic)$",
+        description="Provider for batch processing",
+    )
+    batch_mining_model: str = Field(
+        default="gpt-5-mini",
+        description="Model for batch mining stage",
+    )
+    batch_flagship_model: str = Field(
+        default="gpt-5-mini",
+        description="Model for batch flagship evaluation",
+    )
+    batch_remine_model: str = Field(
+        default="claude-3.7-sonnet",
+        description="Model for re-mining flagged segments",
+    )
+    batch_remine_provider: str = Field(
+        default="anthropic",
+        pattern="^(openai|anthropic)$",
+        description="Provider for re-mining (may differ from main batch provider)",
+    )
+
+    # Real-time settings (existing models)
+    realtime_mining_model: str = Field(
+        default="ollama://qwen2.5:72b-instruct",
+        description="Model for real-time mining",
+    )
+    realtime_flagship_model: str = Field(
+        default="ollama://qwen2.5:72b-instruct",
+        description="Model for real-time flagship evaluation",
+    )
+
+    # Re-mining thresholds
+    remine_enabled: bool = Field(
+        default=True,
+        description="Enable re-mining of low-confidence segments",
+    )
+    remine_confidence_threshold: float = Field(
+        default=4.0,
+        ge=0,
+        le=10,
+        description="Re-mine segments where avg confidence is below this threshold",
+    )
+    remine_empty_segments: bool = Field(
+        default=True,
+        description="Re-mine segments that produced 0 claims",
+    )
+    remine_max_percent: float = Field(
+        default=15.0,
+        ge=0,
+        le=100,
+        description="Maximum percentage of segments to re-mine",
+    )
+
+    # Prompt caching optimization (OpenAI)
+    enable_cache_optimization: bool = Field(
+        default=True,
+        description="Order batches to maximize prompt cache hits",
+    )
+    sequential_batch_submission: bool = Field(
+        default=True,
+        description="Submit batches sequentially to warm cache",
+    )
+    batch_delay_seconds: int = Field(
+        default=30,
+        ge=0,
+        le=300,
+        description="Delay between batch submissions for cache warmup",
+    )
+
+    # Polling settings
+    poll_interval_seconds: int = Field(
+        default=60,
+        ge=10,
+        le=600,
+        description="How often to poll for batch completion",
+    )
+    max_requests_per_batch: int = Field(
+        default=10000,
+        ge=100,
+        le=50000,
+        description="Maximum requests per batch submission",
+    )
+
+
 class MonitoringConfig(BaseModel):
     """Monitoring and logging configuration."""
 
@@ -867,9 +977,9 @@ class SpeakerIdentificationConfig(BaseModel):
 
     # Advanced diarization settings
     diarization_sensitivity: str = Field(
-        default="conservative",
-        pattern="^(aggressive|balanced|conservative)$",
-        description="Speaker detection sensitivity: aggressive (more speakers), balanced (default), conservative (fewer speakers)",
+        default="dialogue",  # Changed from "conservative" for better quick-exchange capture
+        pattern="^(dialogue|aggressive|balanced|conservative)$",
+        description="Speaker detection sensitivity: dialogue (best for interviews with quick exchanges), aggressive (more speakers), balanced (default), conservative (fewer speakers)",
     )
     min_speaker_duration: float = Field(
         default=1.0,
@@ -892,6 +1002,56 @@ class SpeakerIdentificationConfig(BaseModel):
     voice_fingerprinting_enabled: bool = Field(
         default=True,  # Now enabled by default for 97% accuracy
         description="Enable advanced voice fingerprinting for 97% accurate speaker recognition",
+    )
+
+    # Word-level speaker verification settings
+    # When enabled, uses word timestamps from whisper.cpp for fine-grained attribution
+    enable_word_level_verification: bool = Field(
+        default=True,
+        description="Enable word-level speaker verification for 4-7% DER (vs 10-15% segment-level)",
+    )
+    word_verification_confidence_gap: float = Field(
+        default=0.15,
+        ge=0.05,
+        le=0.5,
+        description="Similarity difference required to reassign word to different speaker",
+    )
+    word_verification_window_seconds: float = Field(
+        default=0.5,
+        ge=0.2,
+        le=2.0,
+        description="Minimum time window for voice extraction during word verification",
+    )
+
+    # Persistent speaker profiles
+    # Stores voice fingerprints for recurring hosts across episodes
+    enable_persistent_profiles: bool = Field(
+        default=True,
+        description="Store voice fingerprints for recurring speakers across episodes",
+    )
+    profile_accumulation_weight: float = Field(
+        default=0.3,
+        ge=0.1,
+        le=1.0,
+        description="Weight for new samples when updating speaker profile (0.1-1.0)",
+    )
+    min_profile_confidence: float = Field(
+        default=0.7,
+        ge=0.3,
+        le=1.0,
+        description="Minimum confidence required to use stored speaker profile",
+    )
+
+    # Performance tuning for word-level verification
+    max_words_to_verify: int = Field(
+        default=500,
+        ge=50,
+        le=5000,
+        description="Maximum words to verify for performance (focus on transitions/short utterances)",
+    )
+    skip_verification_for_long_segments: bool = Field(
+        default=True,
+        description="Skip verification for segments > 3s where pyannote is already reliable",
     )
 
     # Learning and suggestion settings
@@ -975,6 +1135,7 @@ class Settings(BaseSettings):
     )
     moc: MOCConfig = Field(default_factory=MOCConfig)
     hce: HCEConfig = Field(default_factory=HCEConfig)
+    batch_processing: BatchProcessingConfig = Field(default_factory=BatchProcessingConfig)
     monitoring: MonitoringConfig = Field(default_factory=MonitoringConfig)
     speaker_identification: SpeakerIdentificationConfig = Field(
         default_factory=SpeakerIdentificationConfig

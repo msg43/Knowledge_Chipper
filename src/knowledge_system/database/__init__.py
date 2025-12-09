@@ -29,6 +29,7 @@ from .models import (
     Person,
     PersonEvidence,
     PersonExternalId,
+    PersistentSpeakerProfile,
     PlatformCategory,
     PlatformTag,
     ProcessingJob,
@@ -73,6 +74,8 @@ __all__ = [
     "Person",
     "Concept",
     "JargonTerm",
+    # Speaker models
+    "PersistentSpeakerProfile",
 ]
 
 # Add System 2 models to exports if available

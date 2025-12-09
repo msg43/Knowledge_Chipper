@@ -88,6 +88,104 @@ class FlagshipEvaluationOutput:
             and isinstance(self.evaluated_claims, list)
         )
 
+    def get_low_confidence_segment_ids(self, threshold: float = 4.0) -> set[str]:
+        """
+        Get segment IDs where claims have low confidence.
+        
+        Args:
+            threshold: Claims with confidence below this are considered low confidence
+            
+        Returns:
+            Set of segment IDs with low-confidence claims
+        """
+        low_conf_segments: set[str] = set()
+        
+        for claim in self.evaluated_claims:
+            if claim.confidence_final < threshold:
+                # Extract segment IDs from raw data evidence spans
+                evidence_spans = claim.raw.get("evidence_spans", [])
+                for evidence in evidence_spans:
+                    seg_id = evidence.get("segment_id")
+                    if seg_id:
+                        low_conf_segments.add(seg_id)
+        
+        return low_conf_segments
+
+    def get_segments_with_claims(self) -> set[str]:
+        """
+        Get all segment IDs that produced claims.
+        
+        Returns:
+            Set of segment IDs that have at least one claim
+        """
+        segments_with_claims: set[str] = set()
+        
+        for claim in self.evaluated_claims:
+            evidence_spans = claim.raw.get("evidence_spans", [])
+            for evidence in evidence_spans:
+                seg_id = evidence.get("segment_id")
+                if seg_id:
+                    segments_with_claims.add(seg_id)
+        
+        return segments_with_claims
+
+    def get_empty_segment_ids(self, all_segment_ids: set[str]) -> set[str]:
+        """
+        Get segment IDs that produced no claims.
+        
+        Args:
+            all_segment_ids: Set of all segment IDs in the episode
+            
+        Returns:
+            Set of segment IDs that have no claims
+        """
+        segments_with_claims = self.get_segments_with_claims()
+        return all_segment_ids - segments_with_claims
+
+    def get_segments_for_remine(
+        self,
+        all_segment_ids: set[str],
+        confidence_threshold: float = 4.0,
+        include_empty: bool = True,
+        max_percent: float = 15.0
+    ) -> set[str]:
+        """
+        Get segment IDs that should be re-mined with a stronger model.
+        
+        Args:
+            all_segment_ids: Set of all segment IDs in the episode
+            confidence_threshold: Threshold below which claims are considered low confidence
+            include_empty: Whether to include segments with no claims
+            max_percent: Maximum percentage of segments to return
+            
+        Returns:
+            Set of segment IDs to re-mine
+        """
+        flagged: set[str] = set()
+        
+        # Add low confidence segments
+        flagged.update(self.get_low_confidence_segment_ids(confidence_threshold))
+        
+        # Add empty segments if enabled
+        if include_empty:
+            flagged.update(self.get_empty_segment_ids(all_segment_ids))
+        
+        # Cap at max percent
+        max_count = int(len(all_segment_ids) * max_percent / 100)
+        if len(flagged) > max_count:
+            # Prioritize low confidence over empty
+            low_conf = self.get_low_confidence_segment_ids(confidence_threshold)
+            if len(low_conf) <= max_count:
+                # Include all low conf, fill rest with empty
+                empty_to_add = max_count - len(low_conf)
+                empty = self.get_empty_segment_ids(all_segment_ids)
+                flagged = low_conf | set(list(empty)[:empty_to_add])
+            else:
+                # Just take first max_count low conf segments
+                flagged = set(list(low_conf)[:max_count])
+        
+        return flagged
+
 
 class FlagshipEvaluator:
     """

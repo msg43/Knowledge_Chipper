@@ -1400,7 +1400,10 @@ class EnhancedTranscriptionWorker(QThread):
                         # Not fatal - continue without metadata
 
                     # Check if transcript already exists in database for this source
-                    if source_id:
+                    # BUT only skip if overwrite is NOT enabled
+                    should_overwrite = self.gui_settings.get("overwrite", False)
+                    
+                    if source_id and not should_overwrite:
                         try:
                             existing_transcripts = db_service.get_transcripts_for_video(source_id)
                             if existing_transcripts:
@@ -1457,6 +1460,14 @@ class EnhancedTranscriptionWorker(QThread):
                         except Exception as transcript_check_error:
                             logger.warning(f"Failed to check for existing transcript: {transcript_check_error}")
                             # Continue with transcription on error
+                    elif source_id and should_overwrite:
+                        # Overwrite is enabled - log this and proceed with transcription
+                        logger.info(
+                            f"🔄 Overwrite enabled - re-transcribing {file_name} (source_id: {source_id})"
+                        )
+                        self.transcription_step_updated.emit(
+                            f"🔄 Overwrite enabled - re-transcribing {file_name}...", 0
+                        )
 
                     # Enable GUI mode for speaker assignment dialog (unless in testing mode)
                     import os
@@ -3296,6 +3307,37 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         # Also print download progress to terminal/console for visibility
         if "Downloading" in step_description or "Download" in step_description:
             print(f"  {log_message}")
+
+        # Update progress bar if we have a valid progress percentage
+        # (-1 is sentinel for "progress unknown but working")
+        if progress_percent >= 0 and hasattr(self, "progress_display"):
+            # Determine phase name from the step description
+            step_lower = step_description.lower()
+            if "converting" in step_lower or "convert" in step_lower:
+                phase_name = "Converting Audio"
+            elif "transcrib" in step_lower:
+                phase_name = "Transcribing"
+            elif "download" in step_lower:
+                phase_name = "Downloading"
+            elif "diariz" in step_lower:
+                phase_name = "Diarization"
+            elif "speaker" in step_lower:
+                phase_name = "Speaker Analysis"
+            elif "model" in step_lower:
+                phase_name = "Loading Model"
+            elif "initializ" in step_lower:
+                phase_name = "Initializing"
+            elif "finaliz" in step_lower:
+                phase_name = "Finalizing"
+            else:
+                phase_name = "Processing"
+
+            # Update the phase progress bar
+            self.progress_display.update_phase_progress(phase_name, progress_percent)
+
+            # Also update overall progress bar to show progress within current file
+            # This makes the overall bar move smoothly during transcription, not just at file completion
+            self.progress_display.update_current_file_progress(progress_percent)
 
     def _on_existing_audio_decision_requested(self, payload: dict) -> None:
         """Show modal prompt asking whether to reuse existing audio or re-download."""

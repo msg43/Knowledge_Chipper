@@ -50,7 +50,8 @@ dependencies = [
 
     # YouTube and video
     # PRODUCTION PIN: Match requirements.txt for consistent builds
-    "yt-dlp==2025.10.14",  # Last tested: 2025-10-18 - See docs/YT_DLP_UPGRADE_PROCEDURE.md
+    # NOTE: 2025.10.22 is last version before Deno/JS runtime requirement (2025.11.12+)
+    "yt-dlp==2025.10.22",  # Last tested: 2025-12-09 - See docs/YT_DLP_UPGRADE_PROCEDURE.md
     "requests>=2.31.0",
 
     # ML and transcription (core) - using whisper.cpp instead of openai-whisper to save ~400MB
@@ -96,7 +97,7 @@ cuda = [
 diarization = [
     "torch>=2.1.0",
     "transformers>=4.35.0",
-    "pyannote.audio>=4.0.0",  # v4.0+ fixes Python 3.13 syntax warnings
+    "pyannote.audio>=4.0.1",  # v4.0+ fixes Python 3.13 syntax warnings, 4.0.1 adds community-1 model
     # NOTE: Do NOT install torchcodec - it segfaults with PyTorch 2.8.0
     "huggingface_hub>=0.20.0",  # Required for model downloads
     "librosa>=0.10.0",  # Required for voice fingerprinting
