@@ -330,16 +330,16 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
 
             if self.progress_callback:
                 self.progress_callback(
-                    f"🎯 Transcribing {filename} with DTW word timestamps...", 50
+                    f"🎯 Transcribing {filename} with token timestamps...", 50
                 )
 
-            # Run transcription with word timestamps
-            logger.info(f"📝 Running pywhispercpp transcription with word timestamps enabled")
+            # Run transcription with token timestamps (pywhispercpp uses 'token_timestamps', not 'word_timestamps')
+            logger.info(f"📝 Running pywhispercpp transcription with token timestamps enabled")
             
             segments = self._model.transcribe(
                 str(audio_path),
                 language=language,
-                word_timestamps=True,  # Enable DTW word-level timestamps
+                token_timestamps=True,  # Enable DTW token-level timestamps (pywhispercpp API)
                 entropy_thold=entropy_thold,
                 logprob_thold=logprob_thold,
                 temperature=temperature,
@@ -365,13 +365,31 @@ class WhisperCppTranscribeProcessor(BaseProcessor):
                 }
                 
                 # Extract word-level timestamps
+                # pywhispercpp uses 'start'/'end' in seconds (newer API) or 't0'/'t1' in centiseconds (older API)
                 segment_words = []
                 if hasattr(segment, 'words') and segment.words:
                     for word in segment.words:
+                        # Get word text
+                        word_text = word.text.strip() if hasattr(word, 'text') else str(word).strip()
+                        
+                        # Get timestamps - try both API formats
+                        if hasattr(word, 'start') and hasattr(word, 'end'):
+                            # Newer pywhispercpp API: start/end in seconds
+                            word_start = float(word.start)
+                            word_end = float(word.end)
+                        elif hasattr(word, 't0') and hasattr(word, 't1'):
+                            # Older pywhispercpp API: t0/t1 in centiseconds
+                            word_start = word.t0 / 100.0
+                            word_end = word.t1 / 100.0
+                        else:
+                            # Fallback to segment times
+                            word_start = segment_data["start"]
+                            word_end = segment_data["end"]
+                        
                         word_data = {
-                            "word": word.text.strip() if hasattr(word, 'text') else str(word),
-                            "start": word.t0 / 100.0 if hasattr(word, 't0') else segment_data["start"],
-                            "end": word.t1 / 100.0 if hasattr(word, 't1') else segment_data["end"],
+                            "word": word_text,
+                            "start": word_start,
+                            "end": word_end,
                         }
                         segment_words.append(word_data)
                         output_words.append(word_data)

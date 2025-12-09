@@ -32,17 +32,26 @@ class FFmpegRelease:
 def get_default_ffmpeg_release() -> FFmpegRelease:
     """Return an appropriate FFmpeg release for the current platform/arch."""
     system = platform.system().lower()
+    machine = platform.machine().lower()
 
     if system == "darwin":
-        # Evermeet.cx provides the latest FFmpeg release (currently 8.x)
-        # This URL automatically serves the newest version available
-        # Works for both Intel and Apple Silicon architectures
-        return FFmpegRelease(
-            url="https://evermeet.cx/ffmpeg/getrelease/ffmpeg/zip",
-            sha256="",  # Skip checksum for trusted source with dynamic versions
-            ffmpeg_name="ffmpeg",
-            ffprobe_name="ffprobe",
-        )
+        if machine == "arm64":
+            # For Apple Silicon, use osxexperts.net which provides universal binaries
+            # or fallback to copying from Homebrew
+            return FFmpegRelease(
+                url="https://www.osxexperts.net/ffmpeg7arm.zip",
+                sha256="",  # Skip checksum - version changes
+                ffmpeg_name="ffmpeg",
+                ffprobe_name="ffprobe",
+            )
+        else:
+            # For Intel Macs, use evermeet.cx (x86_64 only)
+            return FFmpegRelease(
+                url="https://evermeet.cx/ffmpeg/getrelease/ffmpeg/zip",
+                sha256="",  # Skip checksum for trusted source with dynamic versions
+                ffmpeg_name="ffmpeg",
+                ffprobe_name="ffprobe",
+            )
 
     # For non-macOS systems, would need different source
     raise NotImplementedError(f"FFmpeg installation not implemented for {system}")
@@ -120,6 +129,57 @@ class SilentFFmpegInstaller:
                 h.update(chunk)
         return h.hexdigest()
 
+    def _try_homebrew_ffmpeg(self) -> bool:
+        """Try to copy ffmpeg from Homebrew installation.
+        
+        Returns:
+            True if Homebrew ffmpeg was found and copied successfully
+        """
+        homebrew_paths = [
+            Path("/opt/homebrew/bin/ffmpeg"),  # Apple Silicon
+            Path("/usr/local/bin/ffmpeg"),      # Intel
+        ]
+        
+        for brew_ffmpeg in homebrew_paths:
+            if brew_ffmpeg.exists():
+                try:
+                    # Verify it works
+                    result = subprocess.run(
+                        [str(brew_ffmpeg), "-version"],
+                        capture_output=True,
+                        timeout=10,
+                    )
+                    if result.returncode != 0:
+                        continue
+                    
+                    self.progress_callback("📦 Found Homebrew FFmpeg, copying...", 70)
+                    
+                    # Copy ffmpeg
+                    ffmpeg_dst = self.bin_dir / "ffmpeg"
+                    shutil.copy2(brew_ffmpeg, ffmpeg_dst)
+                    ffmpeg_dst.chmod(0o755)
+                    
+                    # Copy ffprobe if available
+                    brew_ffprobe = brew_ffmpeg.parent / "ffprobe"
+                    if brew_ffprobe.exists():
+                        ffprobe_dst = self.bin_dir / "ffprobe"
+                        shutil.copy2(brew_ffprobe, ffprobe_dst)
+                        ffprobe_dst.chmod(0o755)
+                    
+                    # Verify the copy works
+                    result = subprocess.run(
+                        [str(ffmpeg_dst), "-version"],
+                        capture_output=True,
+                        timeout=10,
+                    )
+                    if result.returncode == 0:
+                        self.progress_callback("✅ FFmpeg copied from Homebrew", 100)
+                        return True
+                except Exception:
+                    continue
+        
+        return False
+
     def install(self, release: FFmpegRelease | None = None) -> bool:
         """Install FFMPEG silently.
 
@@ -150,22 +210,41 @@ class SilentFFmpegInstaller:
                 except Exception:
                     pass  # Existing installation broken, continue with fresh install
 
+            # Try Homebrew first (most reliable for arm64)
+            self.progress_callback("🔍 Checking for Homebrew FFmpeg...", 15)
+            if self._try_homebrew_ffmpeg():
+                return True
+
             # Prepare candidate releases (primary + fallback)
             primary_release = release or get_default_ffmpeg_release()
             releases: list[FFmpegRelease] = [primary_release]
 
             system = platform.system().lower()
             machine = platform.machine().lower()
-            # Only consider Evermeet for non-ARM macOS (x86_64), since it's x86_64-only
-            if system == "darwin" and machine != "arm64":
-                evermeet = FFmpegRelease(
-                    url="https://evermeet.cx/ffmpeg/getrelease/ffmpeg/zip",
-                    sha256="",
-                    ffmpeg_name="ffmpeg",
-                    ffprobe_name="ffprobe",
-                )
-                if primary_release.url != evermeet.url:
-                    releases.append(evermeet)
+            
+            # Add architecture-appropriate fallbacks
+            if system == "darwin":
+                if machine == "arm64":
+                    # For Apple Silicon, add alternative arm64 sources
+                    # Try osxexperts first (if not already primary), then Homebrew path
+                    osxexperts_arm = FFmpegRelease(
+                        url="https://www.osxexperts.net/ffmpeg7arm.zip",
+                        sha256="",
+                        ffmpeg_name="ffmpeg",
+                        ffprobe_name="ffprobe",
+                    )
+                    if primary_release.url != osxexperts_arm.url:
+                        releases.append(osxexperts_arm)
+                else:
+                    # For Intel, evermeet.cx is x86_64-only
+                    evermeet = FFmpegRelease(
+                        url="https://evermeet.cx/ffmpeg/getrelease/ffmpeg/zip",
+                        sha256="",
+                        ffmpeg_name="ffmpeg",
+                        ffprobe_name="ffprobe",
+                    )
+                    if primary_release.url != evermeet.url:
+                        releases.append(evermeet)
 
             last_error: Exception | None = None
 

@@ -129,6 +129,44 @@ class AudioProcessor(BaseProcessor):
             return path.exists() and path.suffix.lower() in self.supported_formats
         return False
 
+    def _is_already_optimal_format(self, input_path: Path) -> bool:
+        """Check if audio is already 16kHz mono WAV (optimal for whisper.cpp).
+        
+        Skipping conversion saves 30-60 seconds for already-converted files.
+        """
+        if input_path.suffix.lower() != ".wav":
+            return False
+        
+        try:
+            import subprocess
+            result = subprocess.run(
+                [
+                    "ffprobe",
+                    "-v", "error",
+                    "-select_streams", "a:0",
+                    "-show_entries", "stream=sample_rate,channels",
+                    "-of", "csv=p=0",
+                    str(input_path),
+                ],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            
+            if result.returncode == 0:
+                parts = result.stdout.strip().split(",")
+                if len(parts) >= 2:
+                    sample_rate = int(parts[0])
+                    channels = int(parts[1])
+                    is_optimal = sample_rate == 16000 and channels == 1
+                    if is_optimal:
+                        logger.info(f"✅ Audio already in optimal format (16kHz mono WAV): {input_path.name}")
+                    return is_optimal
+        except Exception as e:
+            logger.debug(f"Could not check audio format: {e}")
+        
+        return False
+
     def _convert_audio(self, input_path: Path, output_path: Path) -> bool:
         """Convert audio file to target format using FFmpeg."""
         if not FFMPEG_AVAILABLE:
@@ -137,6 +175,20 @@ class AudioProcessor(BaseProcessor):
                 "To enable audio conversion, install FFmpeg: brew install ffmpeg"
             )
             return input_path.suffix.lower() == f".{self.target_format}"
+
+        # Skip conversion if already in optimal format (saves 30-60 seconds)
+        if self._is_already_optimal_format(input_path):
+            # Copy or link the file instead of converting
+            import shutil
+            try:
+                shutil.copy2(input_path, output_path)
+                if self.progress_callback:
+                    self.progress_callback(
+                        f"✅ Using {input_path.name} directly (already 16kHz mono WAV)", 100
+                    )
+                return True
+            except Exception as e:
+                logger.warning(f"Could not copy optimal file, will convert: {e}")
 
         try:
             # Report conversion start
@@ -1844,7 +1896,33 @@ class AudioProcessor(BaseProcessor):
                 },
             )
 
+        # Convert audio ONCE before retry loop (conversion is expensive - 48-60s)
+        # This converted file will be reused across all retry attempts
+        if self.temp_dir:
+            self.temp_dir.mkdir(parents=True, exist_ok=True)
+            with tempfile.NamedTemporaryFile(
+                suffix=f".{self.target_format}", delete=False, dir=self.temp_dir
+            ) as tmp_file:
+                output_path = Path(tmp_file.name)
+        else:
+            with tempfile.NamedTemporaryFile(
+                suffix=f".{self.target_format}", delete=False
+            ) as tmp_file:
+                output_path = Path(tmp_file.name)
+
+        # Convert audio once - reused for all retry attempts
+        if not self._convert_audio(path, output_path):
+            error_msg = "Audio conversion failed"
+            self._log_transcription_failure(
+                path, error_msg, current_model, audio_duration
+            )
+            # Clean up temp file before returning
+            if output_path and output_path.exists():
+                output_path.unlink(missing_ok=True)
+            return ProcessorResult(success=False, errors=[error_msg])
+
         # Smart recovery: try current model, then one upgrade
+        # Audio is already converted above - no re-conversion needed
         max_attempts = 2
         for attempt in range(max_attempts):
             try:
@@ -1864,31 +1942,6 @@ class AudioProcessor(BaseProcessor):
                         use_coreml=True,
                         progress_callback=self.progress_callback,
                     )
-
-                # Create temporary file for processed audio
-                if self.temp_dir:
-                    self.temp_dir.mkdir(parents=True, exist_ok=True)
-                    with tempfile.NamedTemporaryFile(
-                        suffix=f".{self.target_format}", delete=False, dir=self.temp_dir
-                    ) as tmp_file:
-                        output_path = Path(tmp_file.name)
-                else:
-                    with tempfile.NamedTemporaryFile(
-                        suffix=f".{self.target_format}", delete=False
-                    ) as tmp_file:
-                        output_path = Path(tmp_file.name)
-
-                # Convert audio
-                if not self._convert_audio(path, output_path):
-                    error_msg = "Audio conversion failed"
-                    if attempt == max_attempts - 1:  # Last attempt
-                        self._log_transcription_failure(
-                            path, error_msg, current_model, audio_duration
-                        )
-                    # Clean up temp file before returning
-                    if output_path and output_path.exists():
-                        output_path.unlink(missing_ok=True)
-                    return ProcessorResult(success=False, errors=[error_msg])
 
                 # Apply Apple Silicon optimizations if available
                 audio_duration = audio_metadata.get("duration_seconds") or 3600.0

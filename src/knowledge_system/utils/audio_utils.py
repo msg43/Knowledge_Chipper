@@ -191,9 +191,13 @@ class FFmpegAudioProcessor:
                         "⚠️ Silence removal failed, continuing with original audio"
                     )
 
-            # Build FFmpeg command
+            # Build FFmpeg command with performance optimizations
             ffmpeg = self._ffmpeg_path or self._resolve_binary("ffmpeg") or "ffmpeg"
-            cmd = [ffmpeg, "-i", str(input_path)]
+            cmd = [
+                ffmpeg,
+                "-threads", "0",  # Use all available CPU cores
+                "-i", str(input_path),
+            ]
 
             # Add progress reporting for FFmpeg (use stderr with stats)
             # Note: We'll parse stderr for time= progress instead of -progress
@@ -210,6 +214,10 @@ class FFmpegAudioProcessor:
             # Add channel conversion
             if channels:
                 cmd.extend(["-ac", str(channels)])
+
+            # For WAV output, use explicit PCM codec for speed
+            if target_format.lower() == "wav":
+                cmd.extend(["-acodec", "pcm_s16le"])  # 16-bit PCM, fastest encoding
 
             # Add output format and file
             cmd.extend(["-y", str(output_path)])  # -y to overwrite
@@ -281,6 +289,7 @@ class FFmpegAudioProcessor:
 
             try:
                 # Parse FFmpeg progress output in real-time from queue
+                # Optimized: reduced polling frequency to minimize CPU overhead
                 last_progress_time = time.time()
                 last_progress_update = time.time()
                 lines_received = 0
@@ -293,9 +302,10 @@ class FFmpegAudioProcessor:
                     if poll_result is not None and reader_done:
                         break
 
-                    # Try to get progress lines from queue (non-blocking with timeout)
+                    # Try to get progress lines from queue
+                    # Use 0.5s timeout to reduce polling overhead (was 0.1s)
                     try:
-                        msg_type, msg_data = progress_queue.get(timeout=0.1)
+                        msg_type, msg_data = progress_queue.get(timeout=0.5)
 
                         if msg_type == "done":
                             reader_done = True
@@ -306,98 +316,66 @@ class FFmpegAudioProcessor:
                         elif msg_type == "line":
                             line = msg_data
 
-                            if line:
+                            if line and "time=" in line:
                                 lines_received += 1
-                                # Debug: Log what we're receiving (only first few and time-related)
-                                if lines_received <= 5 or "time=" in line.lower():
-                                    logger.debug(
-                                        f"FFmpeg line #{lines_received}: {line}"
-                                    )
+                                try:
+                                    # Extract time value (format: HH:MM:SS.MS or MM:SS.MS)
+                                    time_match = line.split("time=")[1].split()[0]
 
-                                # FFmpeg stderr progress format: "time=00:01:23.45" or "size=1234kB time=00:01:23.45 bitrate=..."
-                                if "time=" in line:
-                                    try:
-                                        # Extract time value (format: HH:MM:SS.MS or MM:SS.MS)
-                                        time_match = line.split("time=")[1].split()[0]
-
-                                        # Parse time string to seconds
-                                        time_parts = time_match.split(":")
-                                        if len(time_parts) == 3:  # HH:MM:SS.MS
-                                            hours = float(time_parts[0])
-                                            minutes = float(time_parts[1])
-                                            seconds = float(time_parts[2])
-                                            current_time = (
-                                                hours * 3600 + minutes * 60 + seconds
-                                            )
-                                        elif len(time_parts) == 2:  # MM:SS.MS
-                                            minutes = float(time_parts[0])
-                                            seconds = float(time_parts[1])
-                                            current_time = minutes * 60 + seconds
-                                        else:
-                                            continue
-
-                                        if total_duration and total_duration > 0:
-                                            percent = min(
-                                                95,
-                                                (current_time / total_duration) * 100,
-                                            )
-
-                                            # Only update every 2 seconds to avoid spam
-                                            if progress_callback and (
-                                                time.time() - last_progress_time > 2.0
-                                            ):
-                                                progress_callback(
-                                                    f"🔄 Converting audio: {percent:.0f}% ({current_time:.0f}s / {total_duration:.0f}s)",
-                                                    int(percent),
-                                                )
-                                                last_progress_time = time.time()
-                                                last_progress_update = (
-                                                    time.time()
-                                                )  # Reset fallback timer
-                                                progress_updates_sent += 1
-                                                logger.info(
-                                                    f"Audio conversion progress: {percent:.0f}%"
-                                                )
-                                    except (
-                                        ValueError,
-                                        IndexError,
-                                        AttributeError,
-                                    ) as e:
-                                        logger.debug(
-                                            f"Error parsing progress line '{line}': {e}"
+                                    # Parse time string to seconds
+                                    time_parts = time_match.split(":")
+                                    if len(time_parts) == 3:  # HH:MM:SS.MS
+                                        hours = float(time_parts[0])
+                                        minutes = float(time_parts[1])
+                                        seconds = float(time_parts[2])
+                                        current_time = (
+                                            hours * 3600 + minutes * 60 + seconds
                                         )
-                                        pass
+                                    elif len(time_parts) == 2:  # MM:SS.MS
+                                        minutes = float(time_parts[0])
+                                        seconds = float(time_parts[1])
+                                        current_time = minutes * 60 + seconds
+                                    else:
+                                        continue
+
+                                    if total_duration and total_duration > 0:
+                                        percent = min(
+                                            95,
+                                            (current_time / total_duration) * 100,
+                                        )
+
+                                        # Only update every 5 seconds to reduce overhead (was 2s)
+                                        if progress_callback and (
+                                            time.time() - last_progress_time > 5.0
+                                        ):
+                                            progress_callback(
+                                                f"🔄 Converting audio: {percent:.0f}% ({current_time:.0f}s / {total_duration:.0f}s)",
+                                                int(percent),
+                                            )
+                                            last_progress_time = time.time()
+                                            last_progress_update = time.time()
+                                            progress_updates_sent += 1
+                                except (
+                                    ValueError,
+                                    IndexError,
+                                    AttributeError,
+                                ):
+                                    pass
                     except queue.Empty:
                         # No progress data available yet
                         pass
 
-                    # Show periodic "still working" message if no progress updates (every 10s)
+                    # Show periodic "still working" message if no progress updates (every 15s)
                     if progress_callback and (
-                        time.time() - last_progress_update > 10.0
+                        time.time() - last_progress_update > 15.0
                     ):
                         elapsed = time.time() - start_time
                         if total_duration:
-                            # Adaptive estimation: start optimistic, become conservative over time
-                            # First 10s: assume 20x realtime (fast)
-                            # After 10s: use actual observed speed
-                            if elapsed < 10:
-                                estimated_speed = 20.0  # Optimistic
-                            else:
-                                # Calculate actual speed based on elapsed time
-                                # If we've taken 'elapsed' seconds, we're probably going at total_duration/elapsed speed
-                                estimated_speed = max(
-                                    2.0, min(20.0, total_duration / elapsed)
-                                )
-
-                            estimated_total_time = total_duration / estimated_speed
-                            estimated_percent = min(
-                                95, (elapsed / estimated_total_time) * 100
-                            )
-
-                            # Show ETA
-                            remaining_time = max(0, estimated_total_time - elapsed)
+                            # Estimate progress based on typical FFmpeg speed (~30x realtime)
+                            estimated_percent = min(95, (elapsed * 30 / total_duration) * 100)
+                            remaining_time = max(0, (total_duration / 30) - elapsed)
                             progress_callback(
-                                f"🔄 Converting audio... (~{estimated_percent:.0f}%, {elapsed:.0f}s elapsed, ~{remaining_time:.0f}s remaining)",
+                                f"🔄 Converting audio... (~{estimated_percent:.0f}%, {elapsed:.0f}s elapsed)",
                                 int(estimated_percent),
                             )
                         else:
@@ -409,9 +387,6 @@ class FFmpegAudioProcessor:
                     # Check timeout
                     if time.time() - start_time > timeout_seconds:
                         raise subprocess.TimeoutExpired(cmd, timeout_seconds)
-
-                    # Small sleep to avoid busy waiting
-                    time.sleep(0.1)
 
                 # Get final stderr output
                 _, stderr = process.communicate(timeout=5)

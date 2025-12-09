@@ -186,13 +186,13 @@ def create_version_info(app_bundle: Path, version_info: str, quiet: bool = False
     
     info_file = resources_dir / "deno_version_info.json"
     
-    import datetime
+    from datetime import datetime, timezone
     
     info = {
         "deno_version": DENO_VERSION,
         "deno_info": version_info,
         "architecture": get_architecture(),
-        "installed_date": datetime.datetime.utcnow().isoformat() + "Z",
+        "installed_date": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "purpose": "JavaScript runtime for yt-dlp YouTube support",
         "required_for": "yt-dlp >= 2025.11.12",
         "source": "github.com/denoland/deno"
@@ -220,17 +220,7 @@ def main():
         action="store_true",
         help="Suppress output except errors"
     )
-    parser.add_argument(
-        "--version",
-        default=DENO_VERSION,
-        help=f"Deno version to install (default: {DENO_VERSION})"
-    )
-    
     args = parser.parse_args()
-    
-    # Override version if specified
-    global DENO_VERSION
-    DENO_VERSION = args.version
     
     app_bundle = Path(args.app_bundle)
     quiet = args.quiet
