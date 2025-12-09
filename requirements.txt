@@ -22,12 +22,16 @@ pdfplumber>=0.9.0
 pydub>=0.25.1  # Audio processing and manipulation (required by pyproject.toml)
 
 # ML and transcription (core)
+pywhispercpp>=1.2.0  # Python binding for whisper.cpp with DTW word timestamps
+pyannote-whisper @ git+https://github.com/yinruiqing/pyannote-whisper.git  # Battle-tested word-driven alignment
 
 # YouTube processing
 # PRODUCTION PIN: Exact version tested and verified
 # To test updates: use requirements-dev.txt, then update this pin after testing
-# NOTE: 2025.10.22 is last version before Deno/JS runtime requirement (2025.11.12+)
-yt-dlp==2025.10.22  # Last tested: 2025-12-09 - format selection and signature extraction working
+# NOTE: yt-dlp 2025.11.12+ REQUIRES Deno runtime for YouTube downloads
+# Deno is bundled in DMG via scripts/silent_deno_installer.py
+# For local dev: brew install deno
+yt-dlp==2025.11.12  # Last tested: 2025-12-09 - Requires Deno for YouTube signature extraction
 pytube>=15.0.0
 
 # HTTP requests

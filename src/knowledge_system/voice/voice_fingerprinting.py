@@ -998,6 +998,85 @@ class VoiceFingerprintProcessor:
             
         return fingerprint
 
+    def update_profiles_from_stable_regions(
+        self,
+        audio: np.ndarray,
+        words: list[dict],
+        channel_id: str | None = None,
+        channel_name: str | None = None,
+        source_id: str | None = None,
+        min_stable_duration: float = 2.0,
+    ) -> dict[str, dict]:
+        """
+        Update persistent speaker profiles using only stable regions from DTW timestamps.
+        
+        This is the recommended method for updating profiles after word-driven alignment.
+        It ensures that fingerprints are extracted only from clean, single-speaker regions
+        where the speaker label has been stable for at least `min_stable_duration` seconds.
+        
+        This prevents profile contamination from:
+        - Transition zones between speakers
+        - Short interjections that may be misattributed
+        - Overlapping speech regions
+        
+        Args:
+            audio: Full audio waveform (16kHz mono)
+            words: List of word dictionaries with DTW timestamps and speaker labels
+                   (from pywhispercpp + pyannote-whisper alignment)
+            channel_id: YouTube channel ID for persistent storage
+            channel_name: Human-readable channel name
+            source_id: Source episode ID for tracking
+            min_stable_duration: Minimum seconds of stable speech for fingerprinting
+            
+        Returns:
+            Dictionary mapping speaker IDs to their updated fingerprints
+        """
+        # Import the stable region functions
+        # (They're in this same module, at the module level)
+        stable_regions = find_stable_regions(words, min_duration=min_stable_duration)
+        
+        if not stable_regions:
+            logger.info("No stable regions found for profile update")
+            return {}
+        
+        # Extract fingerprints from stable regions
+        speaker_fingerprints = extract_fingerprints_from_stable_regions(
+            audio=audio,
+            stable_regions=stable_regions,
+            sample_rate=self.sample_rate,
+            voice_processor=self,
+        )
+        
+        if not speaker_fingerprints:
+            logger.info("No fingerprints extracted from stable regions")
+            return {}
+        
+        # Update persistent profiles if channel_id provided
+        if channel_id:
+            for speaker_id, fingerprint in speaker_fingerprints.items():
+                # Calculate duration from stable regions for this speaker
+                speaker_duration = sum(
+                    r["duration"] for r in stable_regions 
+                    if r["speaker"] == speaker_id
+                )
+                
+                # Save/update the profile
+                self.save_speaker_profile(
+                    name=speaker_id,
+                    fingerprint=fingerprint,
+                    channel_id=channel_id,
+                    channel_name=channel_name,
+                    source_id=source_id,
+                    duration_seconds=speaker_duration,
+                )
+                
+                logger.info(
+                    f"Updated persistent profile for '{speaker_id}' from "
+                    f"{speaker_duration:.1f}s of stable regions"
+                )
+        
+        return speaker_fingerprints
+
     def _average_fingerprints(
         self, fingerprints: list[dict[str, Any]]
     ) -> dict[str, Any]:
@@ -1041,6 +1120,164 @@ def load_audio_for_voice_processing(
     except Exception as e:
         logger.error(f"Error loading audio file {file_path}: {e}")
         raise
+
+
+def find_stable_regions(words: list[dict], min_duration: float = 2.0) -> list[dict]:
+    """
+    Find regions where speaker label is stable for reliable fingerprinting.
+    
+    Only stable regions (where the same speaker talks continuously for at least
+    min_duration seconds) should be used to build/update speaker profiles.
+    This ensures fingerprints are extracted from clean, single-speaker audio
+    rather than transition zones where diarization may be uncertain.
+    
+    This function is part of the word-driven alignment approach, working with
+    DTW word-level timestamps from pywhispercpp.
+    
+    Args:
+        words: List of word dictionaries with keys:
+            - word: str - the transcribed word
+            - start: float - start time in seconds
+            - end: float - end time in seconds
+            - speaker: str - assigned speaker ID
+        min_duration: Minimum duration in seconds for a region to be considered stable
+        
+    Returns:
+        List of stable region dictionaries with keys:
+            - speaker: str - the speaker ID
+            - start: float - region start time in seconds
+            - end: float - region end time in seconds
+            - duration: float - region duration in seconds
+            - word_count: int - number of words in the region
+    """
+    stable_regions = []
+    current_speaker = None
+    region_start = None
+    region_word_count = 0
+    
+    for word in words:
+        word_speaker = word.get("speaker")
+        word_start = word.get("start", 0)
+        
+        if word_speaker != current_speaker:
+            # Speaker changed - check if previous region was stable
+            if region_start is not None and current_speaker is not None:
+                duration = word_start - region_start
+                if duration >= min_duration:
+                    stable_regions.append({
+                        "speaker": current_speaker,
+                        "start": region_start,
+                        "end": word_start,
+                        "duration": duration,
+                        "word_count": region_word_count,
+                    })
+            # Start new region
+            current_speaker = word_speaker
+            region_start = word_start
+            region_word_count = 1
+        else:
+            region_word_count += 1
+    
+    # Don't forget the last region
+    if words and region_start is not None and current_speaker is not None:
+        last_word = words[-1]
+        duration = last_word.get("end", last_word.get("start", 0)) - region_start
+        if duration >= min_duration:
+            stable_regions.append({
+                "speaker": current_speaker,
+                "start": region_start,
+                "end": last_word.get("end", last_word.get("start", 0)),
+                "duration": duration,
+                "word_count": region_word_count,
+            })
+    
+    logger.info(f"Found {len(stable_regions)} stable regions (min {min_duration}s duration)")
+    return stable_regions
+
+
+def extract_fingerprints_from_stable_regions(
+    audio: np.ndarray,
+    stable_regions: list[dict],
+    sample_rate: int = 16000,
+    voice_processor: VoiceFingerprintProcessor | None = None,
+) -> dict[str, dict]:
+    """
+    Extract voice fingerprints only from stable speaker regions.
+    
+    This function extracts fingerprints from audio segments where the speaker
+    label is known to be stable (from find_stable_regions), ensuring that
+    the fingerprints represent clean, single-speaker audio.
+    
+    Used for building and updating persistent speaker profiles with accurate
+    DTW-based word timestamps.
+    
+    Args:
+        audio: Full audio waveform as numpy array
+        stable_regions: List of stable regions from find_stable_regions()
+        sample_rate: Audio sample rate in Hz
+        voice_processor: Optional VoiceFingerprintProcessor instance
+            (created if not provided)
+            
+    Returns:
+        Dictionary mapping speaker IDs to their accumulated voice fingerprints
+    """
+    if voice_processor is None:
+        voice_processor = VoiceFingerprintProcessor(sample_rate=sample_rate)
+    
+    speaker_fingerprints: dict[str, dict] = {}
+    
+    for region in stable_regions:
+        speaker = region["speaker"]
+        if not speaker:
+            continue
+            
+        start_sample = int(region["start"] * sample_rate)
+        end_sample = int(region["end"] * sample_rate)
+        
+        # Bounds checking
+        if start_sample < 0:
+            start_sample = 0
+        if end_sample > len(audio):
+            end_sample = len(audio)
+        if start_sample >= end_sample:
+            continue
+        
+        # Extract audio segment
+        audio_segment = audio[start_sample:end_sample]
+        
+        # Skip very quiet segments
+        if np.max(np.abs(audio_segment)) < 0.01:
+            logger.debug(f"Skipping quiet region for {speaker} at {region['start']:.1f}s")
+            continue
+        
+        try:
+            # Extract fingerprint from this stable region
+            fingerprint = voice_processor.extract_voice_fingerprint(audio_segment)
+            
+            if fingerprint:
+                if speaker not in speaker_fingerprints:
+                    speaker_fingerprints[speaker] = fingerprint
+                    logger.debug(
+                        f"Created fingerprint for {speaker} from {region['duration']:.1f}s region"
+                    )
+                else:
+                    # Accumulate fingerprint (weighted average)
+                    existing = speaker_fingerprints[speaker]
+                    speaker_fingerprints[speaker] = voice_processor.accumulate_fingerprint(
+                        existing, fingerprint
+                    )
+                    logger.debug(
+                        f"Accumulated fingerprint for {speaker} from {region['duration']:.1f}s region"
+                    )
+        except Exception as e:
+            logger.warning(f"Failed to extract fingerprint for {speaker}: {e}")
+            continue
+    
+    logger.info(
+        f"Extracted fingerprints for {len(speaker_fingerprints)} speakers "
+        f"from {len(stable_regions)} stable regions"
+    )
+    return speaker_fingerprints
 
 
 # Factory function for easy integration

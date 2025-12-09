@@ -83,6 +83,50 @@ def check_yt_dlp() -> None:
         ) from exc
 
 
+def check_deno() -> None:
+    """Verify Deno is available for yt-dlp YouTube support.
+    
+    Deno is REQUIRED for yt-dlp >= 2025.11.12 to download from YouTube.
+    It handles YouTube's signature extraction JavaScript challenges.
+    """
+    deno_path = shutil.which("deno")
+    
+    # If not in PATH, check common locations
+    if not deno_path:
+        common_paths = [
+            "/opt/homebrew/bin/deno",  # Homebrew Apple Silicon
+            "/usr/local/bin/deno",      # Homebrew Intel / manual install
+            os.path.expanduser("~/.deno/bin/deno"),  # curl installer default
+        ]
+        
+        # Also check bundled Deno in app bundle
+        app_bundle_deno = os.environ.get("DENO_PATH")
+        if app_bundle_deno:
+            common_paths.insert(0, app_bundle_deno)
+        
+        for path in common_paths:
+            if os.path.exists(path):
+                deno_path = path
+                # Add to PATH for this session
+                deno_bin = os.path.dirname(path)
+                if deno_bin not in os.environ.get("PATH", ""):
+                    os.environ["PATH"] = f"{deno_bin}:{os.environ.get('PATH', '')}"
+                break
+    
+    if not deno_path:
+        raise PreflightError(
+            "Deno not found. Required for YouTube downloads.\n"
+            "Install with: brew install deno\n"
+            "Or: curl -fsSL https://deno.land/install.sh | sh"
+        )
+    
+    code, out, err = _run([deno_path, "--version"])
+    if code != 0:
+        raise PreflightError(
+            f"Deno present but not runnable: {err or 'unknown error'}"
+        )
+
+
 def quick_preflight() -> None:
     """Run minimal, fast checks. Raises PreflightError on problems."""
     # Skip preflight checks if configured
@@ -93,3 +137,4 @@ def quick_preflight() -> None:
 
     check_ffmpeg()
     check_yt_dlp()
+    check_deno()

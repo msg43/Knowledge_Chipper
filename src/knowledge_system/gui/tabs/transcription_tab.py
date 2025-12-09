@@ -246,17 +246,13 @@ class EnhancedTranscriptionWorker(QThread):
         """
         try:
             # Apply delay before download (except first in batch)
-            if not is_first and youtube_delay > 0:
-                # Get rate limiting settings from config
-                from ...config import get_settings
-
-                settings = get_settings()
-                yt_config = settings.youtube_processing
-
-                # Use new rate limiting settings if available
-                min_delay = yt_config.sequential_download_delay_min
-                max_delay = yt_config.sequential_download_delay_max
-                randomization = yt_config.delay_randomization_percent / 100.0
+            # Only apply rate limiting if enabled via GUI checkbox
+            rate_limit_enabled = self.gui_settings.get("rate_limit_enabled", True)
+            if not is_first and rate_limit_enabled:
+                # Get rate limiting settings from GUI spinboxes (passed via gui_settings)
+                min_delay = self.gui_settings.get("rate_limit_min_delay", 180)
+                max_delay = self.gui_settings.get("rate_limit_max_delay", 300)
+                randomization = self.gui_settings.get("rate_limit_randomization", 0.25)
 
                 # Calculate base delay and apply randomization
                 base_delay = random.uniform(min_delay, max_delay)
@@ -2521,10 +2517,12 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         layout.addWidget(cookie_group, 3, 0, 1, 7)
 
         # Rate Limiting Section - collapsible
-        rate_limit_group = QGroupBox("Rate Limiting (Per-Account Anti-Bot Protection)")
-        rate_limit_group.setCheckable(True)
-        rate_limit_group.setChecked(False)  # Start collapsed
-        rate_limit_group.setFlat(True)  # Make it more compact
+        # When checked: rate limiting is enabled with configurable delays
+        # When unchecked: rate limiting is disabled (no delays between downloads)
+        self.rate_limit_group = QGroupBox("Rate Limiting (Per-Account Anti-Bot Protection)")
+        self.rate_limit_group.setCheckable(True)
+        self.rate_limit_group.setChecked(True)  # Start enabled by default for safety
+        self.rate_limit_group.setFlat(True)  # Make it more compact
         rate_limit_layout = QVBoxLayout()
 
         # Explanation text
@@ -2599,8 +2597,8 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         delay_row.addStretch()  # Push to left
         rate_limit_layout.addLayout(delay_row)
 
-        rate_limit_group.setLayout(rate_limit_layout)
-        layout.addWidget(rate_limit_group, 4, 0, 1, 7)
+        self.rate_limit_group.setLayout(rate_limit_layout)
+        layout.addWidget(self.rate_limit_group, 4, 0, 1, 7)
 
         group.setLayout(layout)
         return group
@@ -3164,6 +3162,13 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         gui_settings[
             "youtube_delay"
         ] = 5  # Default delay (legacy setting, rate limiting now handled by min/max delay spinboxes)
+
+        # Pass rate limiting settings from GUI spinboxes
+        # rate_limit_enabled: True if the Rate Limiting checkbox is checked
+        gui_settings["rate_limit_enabled"] = self.rate_limit_group.isChecked()
+        gui_settings["rate_limit_min_delay"] = self.min_delay_spinbox.value()
+        gui_settings["rate_limit_max_delay"] = self.max_delay_spinbox.value()
+        gui_settings["rate_limit_randomization"] = self.randomization_spinbox.value() / 100.0
 
         # Pass cookie settings to worker (automatically enabled when cookie files are present)
         gui_settings["cookie_files"] = self.cookie_manager.get_all_cookie_files()

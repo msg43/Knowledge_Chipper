@@ -1,19 +1,31 @@
 # yt-dlp Upgrade Procedure
 
 ## Current Status
-- **Current Version**: 2025.10.22
+- **Current Version**: 2025.11.12 (with Deno)
+- **Deno Version**: 2.5.6
 - **Last Tested**: 2025-12-09
 
-## ⚠️ Important: JavaScript Runtime Requirement
+## ✅ Deno Integration Complete
 
-**Starting with version 2025.11.12**, yt-dlp requires an external JavaScript runtime (Deno recommended) to download from YouTube. This applies to ALL YouTube downloads including audio-only.
+**As of 2025-12-09, this project requires and bundles Deno for YouTube downloads.**
 
-**Version 2025.10.22 is the last version that works without Deno.**
+- **DMG builds** automatically bundle Deno via `scripts/silent_deno_installer.py`
+- **Local development** requires Deno installed: `brew install deno`
+- **Preflight checks** verify Deno availability at startup (`check_deno()` in preflight.py)
+- **GitHub Action** monitors for Deno updates: `.github/workflows/watch-deno-releases.yml`
 
-If you need to upgrade beyond 2025.10.22:
-1. Install Deno: https://deno.land/
-2. Ensure Deno is in your PATH
-3. Test thoroughly before deploying
+### Why Deno?
+Starting with yt-dlp 2025.11.12, YouTube's signature extraction requires a JavaScript runtime.
+Deno is recommended by yt-dlp for security (sandboxed execution) and ease of use.
+
+### Deno Installation (Local Development)
+```bash
+# macOS with Homebrew
+brew install deno
+
+# Or curl installer
+curl -fsSL https://deno.land/install.sh | sh
+```
 
 See: https://github.com/yt-dlp/yt-dlp/wiki/EJS
 

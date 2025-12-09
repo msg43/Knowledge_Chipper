@@ -7,13 +7,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed (Major Refactor: Word-Driven Speaker Alignment)
+- **Transcription Backend**: Replaced whisper.cpp subprocess calls with `pywhispercpp` Python binding
+  - Uses DTW (Dynamic Time Warping) for accurate word-level timestamps
+  - Cleaner Python integration with same performance as subprocess
+  - Removed all subprocess command building and `_run_whisper_with_progress()` code
+
+- **Speaker Alignment**: Now using pyannote-whisper's battle-tested word-driven alignment pattern
+  - Assigns speaker labels at word midpoints (not segment boundaries)
+  - Median filter smoothing eliminates single-word speaker flips
+  - Words merged into segments by consecutive speaker labels
+  - Reference: https://github.com/yinruiqing/pyannote-whisper
+
+- **Diarization Tuning**: Applied Hervé Bredin's optimized hyperparameters for podcast content
+  - New "bredin" sensitivity mode with challenge-winning configuration
+  - `num_speakers` oracle mode for known 2-speaker podcasts
+  - Tunable parameters: `clustering_threshold`, `min_cluster_size`, `min_duration_off`
+  - Reference: https://herve.niderb.fr/posts/2022-12-02-how-I-won-2022-diarization-challenges.html
+
+- **Persistent Profiles**: Fixed to use DTW timestamps + stable regions only
+  - Fingerprints extracted only from stable speaker regions (2+ seconds continuous)
+  - Prevents profile pollution from transition zones
+  - New functions: `find_stable_regions()`, `extract_fingerprints_from_stable_regions()`
+
 ### Added
-- **Word-Level Speaker Attribution**: Implemented word-level speaker verification using whisper.cpp word timestamps combined with voice fingerprinting. Achieves 4-7% Diarization Error Rate (DER) compared to 10-15% with segment-level attribution.
-  - New `--output-words` flag in whisper.cpp for word timestamps
-  - `_verify_word_level_speakers()` method verifies speaker assignments per word group
-  - `_build_speaker_profiles()` builds voice profiles from audio for comparison
-  - Strategic verification focuses on speaker transitions and short utterances
-  - Adds ~15-30 seconds processing per hour of audio on M2 Ultra
+- `pywhispercpp>=1.2.0` and `pyannote-whisper` as dependencies
+- `scripts/tune_diarization.py` - Grid search hyperparameter tuning based on Bredin's recipe
+- Median filter smoothing for speaker label stability
+- New settings: `num_speakers`, `clustering_threshold`, `min_cluster_size`, `median_filter_window`
+- Stable region extraction functions in `voice_fingerprinting.py`
+
+- **Deno Runtime Integration for YouTube Downloads**: yt-dlp 2025.11.12+ requires Deno JavaScript runtime
+  - **DMG Bundling**: Deno is now bundled in DMG builds for offline YouTube downloads
+  - **New Scripts**:
+    - `scripts/bundle_deno.sh` - Creates Deno package for DMG installer
+    - `scripts/silent_deno_installer.py` - Installs Deno into app bundle
+  - **Preflight Check**: `check_deno()` added to verify Deno availability at startup
+  - **GitHub Action**: `.github/workflows/watch-deno-releases.yml` monitors for Deno updates
+  - **Why Deno?**: YouTube now uses complex JavaScript challenges that require a full JS runtime for signature extraction. Deno is recommended by yt-dlp for security and ease of use.
+  - **For Local Dev**: Install with `brew install deno` or `curl -fsSL https://deno.land/install.sh | sh`
+
+### Changed
+- **yt-dlp upgraded to 2025.11.12**: First version requiring Deno runtime for YouTube downloads. Deno is bundled in DMG and checked at startup via preflight.
+
+### Removed
+- `_split_mixed_speaker_segments()` - replaced by word-driven alignment
+- `_reassign_segments_by_voice_verification()` - replaced by word-driven alignment  
+- `_verify_word_level_speakers()` - replaced by pyannote-whisper pattern
+- Subprocess-based whisper.cpp calls - replaced by pywhispercpp
+- Old word verification config settings (replaced by median filter + stable regions)
+
+---
+
+## Previous Changelog Entries
+
+### Added (Legacy - Before Word-Driven Refactor)
+- **Word-Level Speaker Attribution** (SUPERSEDED): Previous implementation used whisper.cpp `--output-words` flag with custom verification. Now replaced by pywhispercpp + pyannote-whisper pattern.
 
 - **Persistent Speaker Profiles**: Speaker voice profiles now persist across episodes for recurring hosts.
   - New `speaker_profiles` database table stores averaged embeddings

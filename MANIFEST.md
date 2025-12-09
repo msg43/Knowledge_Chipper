@@ -2,7 +2,7 @@
 
 Complete inventory of all files in the Knowledge Chipper codebase with descriptions of actual functionality.
 
-**Last Updated:** November 17, 2025
+**Last Updated:** December 9, 2025
 
 ---
 
@@ -218,6 +218,7 @@ Complete inventory of all files in the Knowledge Chipper codebase with descripti
 - `.claude/` - Claude Code AI assistant configuration and settings
 - `.cursor/` - Cursor IDE configuration and AI rules
 - `.github/` - GitHub Actions workflows and repository configuration
+  - `workflows/watch-deno-releases.yml` - GitHub Action to monitor Deno releases and create update issues (Deno required for yt-dlp YouTube downloads)
 - `.obsidian/` - Obsidian vault metadata (project documentation as Obsidian vault)
 - `.specstory/` - SpecStory configuration
 - `_deprecated/` - Deprecated code storage (vestigial modules and unused prompt files)
@@ -458,12 +459,15 @@ Contains 196 utility scripts for:
 - Development utilities
 
 Key scripts:
+- `bundle_deno.sh` - Downloads and packages Deno JavaScript runtime for DMG installer (required for yt-dlp YouTube downloads since 2025.11.12)
+- `silent_deno_installer.py` - Python script to install Deno into app bundle for DMG distribution
 - `comprehensive_episode_cleanup.py` - Clean up episode data inconsistencies
 - `fix_unified_schema.py` - Apply unified schema fixes to database
 - `add_rss_progress_indicators.py` - Add progress tracking for RSS downloads
 - `improve_rss_quality_selection.py` - Improve RSS feed quality selection
 - `optimize_rss_matching.py` - Optimize YouTube to RSS matching performance
 - `add_domain_column_to_claims.py` - Migration script to add domain column to claims table for field classification
+- `tune_diarization.py` - Grid search hyperparameter tuning for pyannote diarization based on Bredin's 2022 challenge recipe
 - `bump_version.py` - Version bumping utility
 - `update_build_date.sh` - Update build date in documentation
 
@@ -693,16 +697,16 @@ Media processing and transformation.
 
 - `__init__.py` - Processors module initialization
 - `base.py` - Base processor class with common functionality
-- `audio_processor.py` - Audio file processing (transcription, speaker detection)
+- `audio_processor.py` - Audio file processing with word-driven speaker alignment using pyannote-whisper pattern (transcription + diarization + median filter smoothing)
 - `document_processor.py` - Document processing (PDF, eBook)
-- `diarization.py` - Speaker diarization using pyannote
+- `diarization.py` - Speaker diarization using pyannote with Bredin's tuned hyperparameters and num_speakers oracle mode support
 - `html.py` - HTML document processing
 - `pdf.py` - PDF document processing
 - `registry.py` - Processor registry for dynamic processor selection
 - `rss_processor.py` - RSS feed processing
-- `speaker_processor.py` - Speaker attribution with word-level verification using voice fingerprinting. Supports persistent profiles for recurring hosts (97%+ accuracy for known speakers)
+- `speaker_processor.py` - Speaker attribution (word-driven alignment handled by audio_processor). Supports persistent profiles for recurring hosts using stable regions
 - `unified_batch_processor.py` - Unified batch processor for multiple files
-- `whisper_cpp_transcribe.py` - Whisper.cpp transcription wrapper with word-level timestamps for precise speaker attribution
+- `whisper_cpp_transcribe.py` - Transcription using pywhispercpp Python binding with DTW word-level timestamps for accurate speaker attribution
 - `youtube_download.py` - YouTube video/audio download
 
 #### PROCESSORS/HCE/
@@ -862,6 +866,13 @@ Proxy management utilities.
 
 - Proxy configuration and management utilities
 
+### SCHEMAS/
+
+Pydantic models for standardized data structures.
+
+- `__init__.py` - Schemas module initialization with public exports
+- `transcription_output.py` - Standardized JSON output schema for transcription + diarization pipeline (Word, Segment, StableRegion, TranscriptionOutput models)
+
 ### VOICE/
 
 Voice fingerprinting and speaker verification.
@@ -869,7 +880,7 @@ Voice fingerprinting and speaker verification.
 - `__init__.py` - Voice module initialization
 - `accuracy_testing.py` - Accuracy testing for voice fingerprinting
 - `speaker_verification_service.py` - Speaker verification service
-- `voice_fingerprinting.py` - Voice fingerprinting using acoustic features with persistent profile accumulation for cross-episode speaker recognition
+- `voice_fingerprinting.py` - Voice fingerprinting using acoustic features with stable region extraction and persistent profile accumulation for cross-episode speaker recognition
 
 ### WORKERS/
 

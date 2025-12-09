@@ -50,12 +50,14 @@ dependencies = [
 
     # YouTube and video
     # PRODUCTION PIN: Match requirements.txt for consistent builds
-    # NOTE: 2025.10.22 is last version before Deno/JS runtime requirement (2025.11.12+)
-    "yt-dlp==2025.10.22",  # Last tested: 2025-12-09 - See docs/YT_DLP_UPGRADE_PROCEDURE.md
+    # NOTE: yt-dlp 2025.11.12+ REQUIRES Deno runtime for YouTube downloads
+    # Deno is bundled in DMG via scripts/silent_deno_installer.py
+    "yt-dlp==2025.11.12",  # Last tested: 2025-12-09 - Requires Deno (bundled in DMG)
     "requests>=2.31.0",
 
     # ML and transcription (core) - using whisper.cpp instead of openai-whisper to save ~400MB
     # "openai-whisper>=20231117",  # Removed - pulls in torch, using whisper.cpp binary instead
+    "pywhispercpp>=1.2.0",  # Python binding for whisper.cpp with DTW word timestamps
     "pydub>=0.25.1",  # Audio processing and manipulation
 
     # LLM APIs
@@ -98,6 +100,7 @@ diarization = [
     "torch>=2.1.0",
     "transformers>=4.35.0",
     "pyannote.audio>=4.0.1",  # v4.0+ fixes Python 3.13 syntax warnings, 4.0.1 adds community-1 model
+    "pyannote-whisper @ git+https://github.com/yinruiqing/pyannote-whisper.git",  # Battle-tested word-driven alignment
     # NOTE: Do NOT install torchcodec - it segfaults with PyTorch 2.8.0
     "huggingface_hub>=0.20.0",  # Required for model downloads
     "librosa>=0.10.0",  # Required for voice fingerprinting

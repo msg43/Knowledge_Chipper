@@ -1,0 +1,141 @@
+name: Watch Deno Releases
+
+# Check for new Deno releases weekly and create an issue if update available
+# Deno is required for yt-dlp YouTube support (>= 2025.11.12)
+
+on:
+  schedule:
+    # Run every Monday at 9am UTC
+    - cron: '0 9 * * 1'
+  workflow_dispatch:  # Allow manual triggering
+
+env:
+  # Current bundled version - UPDATE THIS when upgrading
+  CURRENT_DENO_VERSION: '2.5.6'
+
+jobs:
+  check-deno-release:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Get latest Deno release
+      id: deno_release
+      run: |
+        # Fetch latest release from GitHub API
+        LATEST=$(curl -s https://api.github.com/repos/denoland/deno/releases/latest | jq -r '.tag_name')
+        # Remove 'v' prefix if present
+        LATEST_VERSION="${LATEST#v}"
+        echo "latest_version=$LATEST_VERSION" >> $GITHUB_OUTPUT
+        echo "Latest Deno version: $LATEST_VERSION"
+        echo "Current bundled version: ${{ env.CURRENT_DENO_VERSION }}"
+    
+    - name: Compare versions
+      id: compare
+      run: |
+        CURRENT="${{ env.CURRENT_DENO_VERSION }}"
+        LATEST="${{ steps.deno_release.outputs.latest_version }}"
+        
+        if [ "$CURRENT" = "$LATEST" ]; then
+          echo "update_available=false" >> $GITHUB_OUTPUT
+          echo "✅ Deno is up to date ($CURRENT)"
+        else
+          echo "update_available=true" >> $GITHUB_OUTPUT
+          echo "⚠️ Update available: $CURRENT -> $LATEST"
+        fi
+    
+    - name: Check for existing issue
+      id: check_issue
+      if: steps.compare.outputs.update_available == 'true'
+      run: |
+        LATEST="${{ steps.deno_release.outputs.latest_version }}"
+        
+        # Search for existing open issues about this version
+        EXISTING=$(gh issue list \
+          --label "dependency-update" \
+          --state open \
+          --search "Deno $LATEST" \
+          --json number \
+          --jq 'length')
+        
+        if [ "$EXISTING" -gt 0 ]; then
+          echo "issue_exists=true" >> $GITHUB_OUTPUT
+          echo "Issue already exists for Deno $LATEST"
+        else
+          echo "issue_exists=false" >> $GITHUB_OUTPUT
+        fi
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Create update issue
+      if: steps.compare.outputs.update_available == 'true' && steps.check_issue.outputs.issue_exists == 'false'
+      run: |
+        LATEST="${{ steps.deno_release.outputs.latest_version }}"
+        CURRENT="${{ env.CURRENT_DENO_VERSION }}"
+        
+        gh issue create \
+          --title "🦕 Update Deno: $CURRENT → $LATEST" \
+          --label "dependency-update,deno" \
+          --body "## Deno Update Available
+
+A new version of Deno has been released.
+
+| | Version |
+|---|---|
+| **Current** | $CURRENT |
+| **Latest** | $LATEST |
+
+### Why This Matters
+Deno is required for yt-dlp YouTube downloads (yt-dlp >= 2025.11.12).
+Keeping Deno updated ensures:
+- Security patches
+- Performance improvements
+- Compatibility with YouTube changes
+
+### Release Notes
+https://github.com/denoland/deno/releases/tag/v$LATEST
+
+### Update Checklist
+- [ ] Review release notes for breaking changes
+- [ ] Update \`DENO_VERSION\` in:
+  - \`scripts/bundle_deno.sh\`
+  - \`scripts/silent_deno_installer.py\`
+  - \`.github/workflows/watch-deno-releases.yml\`
+- [ ] Test YouTube downloads with new version
+- [ ] Update CHANGELOG.md
+- [ ] Create new DMG build
+
+### Testing Commands
+\`\`\`bash
+# Update Deno locally
+brew upgrade deno
+
+# Or install specific version
+curl -fsSL https://deno.land/install.sh | sh -s v$LATEST
+
+# Test yt-dlp with new Deno
+yt-dlp --verbose https://www.youtube.com/watch?v=dQw4w9WgXcQ
+\`\`\`
+
+---
+*This issue was automatically created by the Deno release watcher.*"
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Summary
+      run: |
+        echo "## Deno Version Check Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "| | Version |" >> $GITHUB_STEP_SUMMARY
+        echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+        echo "| Current | ${{ env.CURRENT_DENO_VERSION }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Latest | ${{ steps.deno_release.outputs.latest_version }} |" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        if [ "${{ steps.compare.outputs.update_available }}" = "true" ]; then
+          echo "⚠️ **Update available!**" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "✅ **Up to date**" >> $GITHUB_STEP_SUMMARY
+        fi

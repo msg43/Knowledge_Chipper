@@ -634,6 +634,14 @@ if [ -f "\$APP_DIR/setup_bundled_models.sh" ]; then
     echo "OLLAMA_HOME: \$OLLAMA_HOME" >> "\$LOG_FILE"
 fi
 
+# Check for bundled Deno and set up environment (REQUIRED for yt-dlp YouTube downloads)
+if [ -f "\$APP_DIR/setup_bundled_deno.sh" ]; then
+    echo "Setting up bundled Deno for yt-dlp..." >> "\$LOG_FILE"
+    source "\$APP_DIR/setup_bundled_deno.sh"
+    echo "DENO_BUNDLED: \$DENO_BUNDLED" >> "\$LOG_FILE"
+    echo "DENO_PATH: \$DENO_PATH" >> "\$LOG_FILE"
+fi
+
 # Set up Python environment - use manual setup to avoid hardcoded paths
 export VIRTUAL_ENV="\$APP_DIR/venv"
 export PATH="\$VIRTUAL_ENV/bin:\$PATH"
@@ -1220,6 +1228,40 @@ if [ "$MAKE_DMG" -eq 1 ] || { [ "$SKIP_INSTALL" -eq 1 ] && [ "${IN_APP_UPDATER:-
   else
     echo "❌ CRITICAL: whisper.cpp installer not found at: $SCRIPT_DIR/install_whisper_cpp_binary.py"
     echo "   DMG MUST include whisper.cpp for local transcription capability"
+    echo "   Build terminated - all required scripts must be present"
+    exit 1
+  fi
+
+  # Install Deno for yt-dlp YouTube support (REQUIRED for yt-dlp >= 2025.11.12)
+  echo "🦕 Installing Deno for yt-dlp YouTube support..."
+  echo "##PERCENT## 95 Installing Deno"
+
+  if [ -f "$SCRIPT_DIR/silent_deno_installer.py" ]; then
+    # Use our silent installer to embed Deno in the app bundle
+    echo "   Using: $SCRIPT_DIR/silent_deno_installer.py"
+    echo "   Target: $BUILD_APP_PATH"
+    if "$PYTHON_BIN" "$SCRIPT_DIR/silent_deno_installer.py" --app-bundle "$BUILD_APP_PATH" --quiet; then
+      echo "✅ Deno successfully installed in app bundle"
+      # Verify the installation worked
+      DENO_BIN="$BUILD_APP_PATH/Contents/MacOS/bin/deno"
+      if [ -f "$DENO_BIN" ]; then
+        echo "   ✓ Deno binary verified at: $DENO_BIN"
+        # Show version
+        "$DENO_BIN" --version | head -1 | sed 's/^/   ✓ /'
+      else
+        echo "❌ CRITICAL: Deno binary not found after installation"
+        echo "   DMG MUST include Deno for yt-dlp YouTube downloads"
+        exit 1
+      fi
+    else
+      echo "❌ CRITICAL: Deno installation failed"
+      echo "   DMG MUST include Deno for yt-dlp YouTube downloads (required since yt-dlp 2025.11.12)"
+      echo "   Build terminated - all dependencies must succeed"
+      exit 1
+    fi
+  else
+    echo "❌ CRITICAL: Silent Deno installer not found at: $SCRIPT_DIR/silent_deno_installer.py"
+    echo "   DMG MUST include Deno for yt-dlp YouTube downloads"
     echo "   Build terminated - all required scripts must be present"
     exit 1
   fi

@@ -311,7 +311,17 @@ class SpeakerDiarizationProcessor(BaseProcessor):
 
                         # Configure parameters based on sensitivity level
                         # Initialize variables that will be used across different pipeline components
-                        if self.sensitivity == "dialogue":
+                        if self.sensitivity == "bredin":
+                            # BREDIN MODE: Hervé Bredin's 2022 challenge winning configuration
+                            # Optimized for podcast/interview content with word-driven alignment
+                            # Reference: https://herve.niderb.fr/posts/2022-12-02-how-I-won-2022-diarization-challenges.html
+                            threshold = 0.70  # From pyannote issue #1599 - proven for similar voices
+                            min_duration_on = 0.0  # Allow all speech segments
+                            min_cluster_size = 12  # Prevents tiny spurious clusters
+                            logger.info(
+                                "🏆 Using BREDIN mode: Hervé Bredin's optimized parameters for podcasts"
+                            )
+                        elif self.sensitivity == "dialogue":
                             # DIALOGUE MODE: Optimized for interviews with quick back-and-forth exchanges
                             # Captures short interjections like "uh huh", "precisely", "right"
                             threshold = 0.50  # Lower threshold for clearer speaker separation
@@ -357,7 +367,15 @@ class SpeakerDiarizationProcessor(BaseProcessor):
                             pipeline.segmentation.min_duration_on = min_duration_on
 
                             # Optimize silence detection based on sensitivity
-                            if self.sensitivity == "dialogue":
+                            if self.sensitivity == "bredin":
+                                pipeline.segmentation.min_duration_off = (
+                                    0.0  # Bredin recipe: allow all pauses to split speech
+                                )
+                                logger.info(
+                                    f"🏆 Bredin mode: min_duration_on={min_duration_on}s, "
+                                    f"min_duration_off=0.0s (maximum sensitivity)"
+                                )
+                            elif self.sensitivity == "dialogue":
                                 pipeline.segmentation.min_duration_off = (
                                     0.15  # Very quick turn-taking detection (150ms)
                                 )
@@ -965,7 +983,13 @@ class SpeakerDiarizationProcessor(BaseProcessor):
                             flush=True,
                         )
 
-                        result = self._pipeline(audio_input)
+                        # Check for num_speakers parameter (oracle mode for known speaker count)
+                        num_speakers = kwargs.get("num_speakers")
+                        if num_speakers:
+                            logger.info(f"🎯 Oracle mode: forcing {num_speakers} speakers")
+                            result = self._pipeline(audio_input, num_speakers=num_speakers)
+                        else:
+                            result = self._pipeline(audio_input)
                         print(f"[THREAD] Pipeline returned result", flush=True)
                         sys.stdout.flush()
                         return result

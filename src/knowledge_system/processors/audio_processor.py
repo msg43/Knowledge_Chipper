@@ -53,7 +53,7 @@ class AudioProcessor(BaseProcessor):
 
     def __init__(
         self,
-        normalize_audio: bool = True,
+        normalize_audio: bool = False,  # Disabled: YouTube/podcasts are already normalized (-14/-16 LUFS)
         target_format: str = "wav",
         device: str | None = None,
         temp_dir: str | Path | None = None,
@@ -67,7 +67,7 @@ class AudioProcessor(BaseProcessor):
         preloaded_transcriber=None,
         preloaded_diarizer=None,
         db_service=None,
-        remove_silence: bool = True,
+        remove_silence: bool = False,  # Disabled: Professional content rarely has long silences
     ) -> None:
         self.normalize_audio = normalize_audio
         self.target_format = target_format
@@ -365,20 +365,171 @@ class AudioProcessor(BaseProcessor):
     def _merge_diarization(
         self, transcription_data: dict, diarization_segments: list
     ) -> dict:
-        """Merge speaker labels into transcription segments."""
-        if not diarization_segments or "segments" not in transcription_data:
+        """Merge speaker labels using word-driven alignment (pyannote-whisper pattern).
+        
+        This method implements the battle-tested word-driven alignment approach:
+        1. Assign speaker to each word based on midpoint timestamp
+        2. Apply median filter to smooth speaker labels
+        3. Merge consecutive words with same speaker into segments
+        
+        Falls back to segment-based matching if no word timestamps available.
+        """
+        if not diarization_segments:
             return transcription_data
 
-        logger.info(
-            f"Merging {len(diarization_segments)} speaker segments with {len(transcription_data['segments'])} transcription segments"
-        )
+        # Check if we have word-level timestamps (from DTW)
+        words = transcription_data.get("words", [])
+        
+        if words:
+            logger.info(
+                f"📝 Using word-driven alignment with {len(words)} words and "
+                f"{len(diarization_segments)} diarization segments"
+            )
+            return self._merge_diarization_word_driven(
+                transcription_data, diarization_segments, words
+            )
+        else:
+            # Fallback to segment-based matching (legacy behavior)
+            logger.info(
+                f"⚠️ No word timestamps, falling back to segment-based alignment with "
+                f"{len(diarization_segments)} diarization segments"
+            )
+            return self._merge_diarization_segment_based(
+                transcription_data, diarization_segments
+            )
 
-        # For each transcription segment, find overlapping speaker segments
+    def _merge_diarization_word_driven(
+        self, transcription_data: dict, diarization_segments: list, words: list
+    ) -> dict:
+        """Word-driven alignment based on pyannote-whisper's diarize_text pattern.
+        
+        This is the battle-tested approach that assigns speakers at word midpoints
+        and applies median filtering to smooth speaker labels.
+        """
+        from collections import Counter
+        
+        # Step 1: Assign speaker to each word based on midpoint
+        for word in words:
+            midpoint = (word.get("start", 0) + word.get("end", 0)) / 2
+            speaker = self._get_speaker_at_time(midpoint, diarization_segments)
+            word["speaker"] = speaker
+        
+        # Step 2: Apply median filter to smooth speaker labels (window=5)
+        words = self._apply_median_filter(words, window=5)
+        
+        # Step 3: Merge consecutive words with same speaker into segments
+        merged_segments = self._merge_words_into_segments(words)
+        
+        # Update transcription data
+        transcription_data["words"] = words
+        transcription_data["segments"] = merged_segments
+        
+        # Log statistics
+        speaker_counts = Counter(w.get("speaker") for w in words if w.get("speaker"))
+        logger.info(f"✅ Word-driven alignment complete: {dict(speaker_counts)}")
+        
+        return transcription_data
+
+    def _get_speaker_at_time(self, time_point: float, diarization_segments: list) -> str | None:
+        """Get the speaker active at a specific timestamp.
+        
+        This implements the core of pyannote-whisper's word-to-speaker assignment.
+        """
+        for segment in diarization_segments:
+            seg_start = segment.get("start", 0)
+            seg_end = segment.get("end", 0)
+            
+            if seg_start <= time_point <= seg_end:
+                return segment.get("speaker", "SPEAKER_00")
+        
+        return None
+
+    def _apply_median_filter(self, words: list, window: int = 5) -> list:
+        """Apply median filter to smooth speaker labels and eliminate single-word flips.
+        
+        This is adapted from the whisper-pyannote pattern to improve speaker
+        attribution accuracy at transition points.
+        """
+        from collections import Counter
+        
+        for i, word in enumerate(words):
+            start = max(0, i - window // 2)
+            end = min(len(words), i + window // 2 + 1)
+            
+            # Get surrounding speaker labels
+            labels = [w.get("speaker") for w in words[start:end] if w.get("speaker")]
+            
+            if labels:
+                # Assign most common speaker label in window
+                word["speaker"] = Counter(labels).most_common(1)[0][0]
+        
+        return words
+
+    def _merge_words_into_segments(self, words: list) -> list:
+        """Merge consecutive words with same speaker into segments.
+        
+        This implements pyannote-whisper's merge_sentence pattern.
+        """
+        if not words:
+            return []
+        
+        segments = []
+        current_segment = None
+        
+        for word in words:
+            speaker = word.get("speaker")
+            word_text = word.get("word", word.get("text", "")).strip()
+            
+            if not word_text:
+                continue
+            
+            if current_segment is None:
+                # Start first segment
+                current_segment = {
+                    "speaker": speaker,
+                    "start": word.get("start", 0),
+                    "end": word.get("end", 0),
+                    "words": [word],
+                    "text_parts": [word_text],
+                }
+            elif speaker == current_segment["speaker"]:
+                # Continue current segment
+                current_segment["end"] = word.get("end", current_segment["end"])
+                current_segment["words"].append(word)
+                current_segment["text_parts"].append(word_text)
+            else:
+                # Speaker changed - finalize current segment and start new one
+                current_segment["text"] = " ".join(current_segment["text_parts"])
+                del current_segment["text_parts"]
+                segments.append(current_segment)
+                
+                current_segment = {
+                    "speaker": speaker,
+                    "start": word.get("start", 0),
+                    "end": word.get("end", 0),
+                    "words": [word],
+                    "text_parts": [word_text],
+                }
+        
+        # Don't forget the last segment
+        if current_segment:
+            current_segment["text"] = " ".join(current_segment["text_parts"])
+            del current_segment["text_parts"]
+            segments.append(current_segment)
+        
+        return segments
+
+    def _merge_diarization_segment_based(
+        self, transcription_data: dict, diarization_segments: list
+    ) -> dict:
+        """Legacy segment-based diarization merge (fallback when no word timestamps)."""
+        if "segments" not in transcription_data:
+            return transcription_data
+
         for transcript_segment in transcription_data["segments"]:
             start = transcript_segment.get("start", 0)
             end = transcript_segment.get("end", 0)
 
-            # Find the speaker with the most overlap in this time range
             speaker = self._find_dominant_speaker(start, end, diarization_segments)
             if speaker:
                 transcript_segment["speaker"] = speaker
@@ -2747,7 +2898,7 @@ class AudioProcessor(BaseProcessor):
 
 def process_audio_for_transcription(
     audio_path: str | Path,
-    normalize: bool = True,
+    normalize: bool = False,  # Disabled: YouTube/podcasts are already normalized
     device: str | None = None,
     temp_dir: str | Path | None = None,
     model: str = "base",
