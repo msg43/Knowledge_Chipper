@@ -451,7 +451,28 @@ Before committing to YouTube transcripts, we MUST test empirically:
 
 ## 4. Proposed Architecture
 
-### 4.1 New Pipeline Overview
+> **⚠️ CRITICAL ARCHITECTURE DECISION: Single-Stage vs Dual-Stage Extraction**
+>
+> After completing this plan, we conducted a deep analysis of whether to use:
+> - **Single-stage**: Extract + score claims in one LLM call
+> - **Dual-stage**: Extract candidates → Filter/score separately
+>
+> **Conclusion**: **Dual-stage architecture is recommended** despite higher upfront cost.
+>
+> **Key rationale**:
+> - Debuggability: Can see what was extracted AND what was rejected
+> - Re-scoring: Change methodology later for $10 vs $70 per 10K podcasts (7× savings)
+> - Model flexibility: Use cheap model for extraction, quality model for scoring
+> - Experimentation: Test new scoring approaches without re-extracting
+>
+> **See**: `EXTRACTION_ARCHITECTURE_ANALYSIS.md` for 38-page deep dive with:
+> - Detailed pros/cons of each approach
+> - Cost-benefit analysis with real numbers
+> - Real-world scenarios and performance comparisons
+> - LLM prompting analysis
+> - Final recommendation with implementation details
+
+### 4.1 New Pipeline Overview (DUAL-STAGE RECOMMENDED)
 
 ```
 Audio/Video Source
@@ -460,24 +481,34 @@ Audio/Video Source
    OR
 [Option B: Whisper Transcription] (10 min, compute)
   ↓
-[Single LLM Call] Extract ALL entities (30 sec, $0.01-$0.33)
-  - Claims
-  - Jargon
-  - People
-  - Concepts
-  - Cross-references between entities
+[STAGE 1: UnifiedMiner] Extract ALL candidate claims (25 sec, $0.004)
+  - Gemini 2.0 Flash (cheap, fast, 1M context)
+  - Generous extraction (50-80 candidates)
+  - Include: claims, jargon, people, concepts
+  - Store candidates in database for re-evaluation
+  ↓
+[STAGE 2: FlagshipEvaluator] Filter & Score (12 sec, $0.14)
+  - Claude 3.5 Sonnet (quality, nuanced scoring)
+  - Accept/reject decision + dimension scoring
+  - Multi-profile importance calculation
+  - Filter to 12-20 high-value claims
   ↓
 [Post-Processing] Match evidence quotes → timestamps (5 sec)
   ↓
-[Lazy Speaker Attribution] Only for high-value claims (10 sec, $0.05)
-  - Filter: importance >= 7 (A/B tier claims)
-  - For each claim: targeted LLM call with 60-second context
+[STAGE 3: Lazy Speaker Attribution] Only for A/B-tier claims (10 sec, $0.05)
+  - Filter: importance >= 7
+  - Targeted LLM call with 60-second context per claim
   ↓
-Upload to GetReceipts.org
+Upload to SkipThePodcast.com
 ```
 
-**Total (YouTube path):** ~50 seconds, $0.06-$0.38
-**Total (Whisper path):** ~11 minutes, $0.35-$0.63
+**Total (YouTube path):** ~57 seconds, $0.19
+**Total (Whisper path):** ~11 minutes, $0.19
+
+**Alternative (Single-Stage Gemini):** ~40 seconds, $0.007
+- **Trade-off**: 3× cheaper but cannot re-score without re-extracting
+- **When to use**: Budget constrained, iteration unlikely
+- **Cost over 3 iterations**: $280 (vs $200 for dual-stage)
 
 ### 4.2 Component Breakdown
 
@@ -542,15 +573,17 @@ def get_transcript(video_url):
     return get_whisper_transcript(video_url), "whisper"
 ```
 
-#### 4.2.2 Entity Extraction Layer (Single LLM Call)
+#### 4.2.2 Entity Extraction Layer (DUAL-STAGE: Miner → Evaluator)
 
-**Purpose:** Extract all entities in one pass
+**Purpose:** Extract candidate claims, then filter to high-quality
 
-**Why single call instead of multiple:**
-1. **Consistency:** LLM sees all entities together, can cross-reference
-2. **Cheaper:** One API call instead of 4 separate calls ($0.30 vs $1.20)
-3. **Faster:** Parallel extraction instead of sequential
-4. **Better relationships:** Claims can reference "related_jargon" in same response
+**Why dual-stage instead of single call:**
+1. **Debuggability:** Can analyze what was extracted vs what was rejected
+2. **Re-scoring:** Can change scoring methodology without re-extracting (7× cost savings on iteration)
+3. **Model flexibility:** Use cheap model (Gemini) for extraction, quality model (Claude) for scoring
+4. **Experimentation:** Test different evaluation criteria on same candidates
+
+**See EXTRACTION_ARCHITECTURE_ANALYSIS.md for detailed rationale**
 
 **Implementation:**
 
@@ -2179,9 +2212,148 @@ DEFAULT_USE_CLAIMS_FIRST = False  # Revert to old pipeline
 
 ---
 
-## 10. Conclusion
+## 10. Critical Questions for Review
 
-### 10.1 Summary of Proposal
+> **This section contains questions we want another LLM to analyze and answer.**
+> **Please provide thoughtful, critical analysis of each question.**
+
+### 10.1 Architecture Questions
+
+**Q1: Is dual-stage extraction really worth the 27× cost increase over single-stage Gemini?**
+- Single-stage Gemini: $0.007/podcast
+- Dual-stage Gemini+Claude: $0.19/podcast
+- **Context**: We claim re-scoring savings justify this, but does that assumption hold?
+- **Consider**: What if we never iterate on scoring? Is the debuggability alone worth $0.18/podcast?
+- **Your analysis**: [Please evaluate ROI critically]
+
+**Q2: Will LLM-based speaker attribution actually be more accurate than acoustic diarization?**
+- Current acoustic system: ~75% accuracy (our estimate)
+- Proposed LLM system: 85-95% accuracy (our hope)
+- **Concern**: LLMs hallucinate. Will they confidently assign wrong speakers?
+- **Evidence needed**: What specific tests would validate this claim?
+- **Your analysis**: [Please assess this fundamental assumption]
+
+**Q3: Is "lazy attribution" a clever optimization or a product limitation?**
+- We only attribute speakers to A/B-tier claims (importance ≥7)
+- C/D-tier claims have no speaker attribution
+- **Trade-off**: Saves time/cost vs incomplete data
+- **User perspective**: Will users notice/care that 50% of claims have no speaker?
+- **Your analysis**: [Please evaluate user impact]
+
+**Q4: Are we overcomplicating this with multi-profile scoring?**
+- Proposed: 5 dimensions × 12 profiles = complex scoring system
+- Alternative: Single importance score (current system)
+- **Question**: Does the added complexity provide proportional value?
+- **Simplicity**: Could we get 90% of the benefit with 10% of the complexity?
+- **Your analysis**: [Please challenge the multi-profile approach]
+
+**Q5: YouTube transcript quality - are we being too optimistic?**
+- Our estimate: 70-85% accuracy for typical podcasts
+- Marketing claims we found: 66% average, 95% best-case
+- **Risk**: What if YouTube is actually 50-60% accurate?
+- **Impact**: Entire "fast path" benefit disappears
+- **Your analysis**: [Please assess this critical dependency]
+
+### 10.2 Implementation Questions
+
+**Q6: Can we really reduce complexity by 64% while adding new features?**
+- We claim: Remove 2,500 lines of diarization code
+- But also: Add multi-profile scoring, YouTube transcripts, lazy attribution
+- **Skepticism**: Net complexity might not decrease as much as projected
+- **Your analysis**: [Please examine this complexity claim]
+
+**Q7: Is our 6-8 week timeline realistic?**
+- Phase 0: 2-3 days
+- Phase 1: 1 week
+- Phase 2: 2-3 weeks
+- Phase 3: 1 week
+- Phase 4: 1 week
+- Phase 5: 1 week
+- **Risk**: Scope creep, unforeseen issues, testing time
+- **Historical data**: Similar migrations typically take how long?
+- **Your analysis**: [Please assess timeline realism]
+
+**Q8: Should we A/B test in production or fully validate in staging first?**
+- Proposed: A/B test on 100 podcasts in Phase 2
+- Alternative: Exhaustive staging testing before any production use
+- **Trade-off**: Speed to market vs risk of user-facing bugs
+- **Your analysis**: [Please recommend approach]
+
+### 10.3 Technical Questions
+
+**Q9: Will "lost in the middle" problem affect 3-hour podcast extraction?**
+- Gemini 2.0 Flash claims to solve this
+- But: Our task is extracting 50+ claims from 40K tokens
+- **Question**: Is this different enough from benchmarks that degradation might still occur?
+- **Mitigation**: We propose chunking if detected, but adds complexity
+- **Your analysis**: [Please assess this technical risk]
+
+**Q10: Fuzzy timestamp matching - will LLM paraphrasing break this?**
+- LLM extracts claim, provides "evidence quote"
+- We match quote to transcript to get timestamp
+- **Problem**: LLM might paraphrase instead of quoting exactly
+- **Our solution**: Fuzzy matching with 70% threshold
+- **Question**: Is this robust enough, or will we get ±30 second timestamp errors?
+- **Your analysis**: [Please evaluate timestamp accuracy risk]
+
+**Q11: Single LLM call for all entities - won't this hurt quality?**
+- We ask LLM to extract: claims, jargon, people, concepts in ONE call
+- **Concern**: Cognitive load on LLM - will it miss things?
+- **Alternative**: Separate calls per entity type (4× more expensive)
+- **Question**: Does parallel extraction sacrifice quality for cost?
+- **Your analysis**: [Please assess quality/cost trade-off]
+
+### 10.4 Cost Questions
+
+**Q12: What if Claude costs skyrocket or access is restricted?**
+- Our plan relies heavily on Claude 3.5 Sonnet ($0.14/podcast)
+- **Risks**: Price increases, rate limits, API changes
+- **Fallback**: Gemini or local LLM
+- **Question**: How resilient is our architecture to Claude unavailability?
+- **Your analysis**: [Please assess vendor lock-in risk]
+
+**Q13: Are we accurately accounting for re-scoring costs?**
+- We claim: Re-scoring is "free" (just re-run evaluator)
+- **Reality**: Still costs $0.14/podcast × 10,000 podcasts = $1,400
+- **Question**: Is our "$10 vs $70" comparison misleading?
+- **Your analysis**: [Please verify cost math]
+
+### 10.5 User Impact Questions
+
+**Q14: Will users notice the quality difference with YouTube transcripts?**
+- We claim: Semantic meaning preserved despite transcription errors
+- **Reality**: Claim might be garbled if technical jargon misheard
+- **Example**: "eurodollar" → "euro dollar" changes meaning
+- **Question**: How often will this create user-facing quality issues?
+- **Your analysis**: [Please assess user-visible impact]
+
+**Q15: Is eliminating full diarization a regression users will complain about?**
+- Current: Every segment has speaker label
+- New: Only high-value claims have speaker labels
+- **Assumption**: Users don't need full transcripts
+- **Question**: Are we sure? What if we're wrong?
+- **Your analysis**: [Please challenge this assumption]
+
+### 10.6 Meta Questions
+
+**Q16: Are we solving the right problem?**
+- We're focused on: Faster processing, simpler code, better attribution
+- **But**: Are these the bottlenecks preventing user success?
+- **Alternative**: Maybe claim quality/relevance matters more than speed?
+- **Your analysis**: [Please examine problem definition]
+
+**Q17: Is this overhaul worth the risk and effort?**
+- **Benefits**: 60-90% speed increase, 64% code reduction, better attribution
+- **Risks**: 6-8 weeks of dev, potential quality regressions, user complaints
+- **Alternative**: Incremental improvements to existing system
+- **Question**: Should we do this overhaul at all?
+- **Your analysis**: [Please provide go/no-go recommendation]
+
+---
+
+## 11. Conclusion
+
+### 11.1 Summary of Proposal
 
 This plan proposes replacing Knowledge Chipper's fragile 6-layer speaker diarization pipeline with a simpler **claims-first architecture**:
 
