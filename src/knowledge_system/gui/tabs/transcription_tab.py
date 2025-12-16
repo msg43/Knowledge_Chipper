@@ -1330,6 +1330,63 @@ class EnhancedTranscriptionWorker(QThread):
                             logger.debug(
                                 f"   This is normal for local files or files downloaded outside the app"
                             )
+                            
+                            # 🔧 FIX: If this is a YouTube video with no metadata in database,
+                            # try to fetch it from YouTube so we can include description in markdown
+                            if source_id:
+                                logger.info(f"🔍 Attempting to fetch YouTube metadata for {source_id}...")
+                                try:
+                                    import yt_dlp
+                                    
+                                    video_url = f"https://www.youtube.com/watch?v={source_id}"
+                                    
+                                    # Fetch metadata only (no download)
+                                    ydl_opts = {
+                                        "quiet": True,
+                                        "no_warnings": True,
+                                        "socket_timeout": 30,
+                                    }
+                                    
+                                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                                        info = ydl.extract_info(video_url, download=False)
+                                        
+                                        if info:
+                                            # Create source_record in database with metadata
+                                            tags = info.get("tags", []) or []
+                                            video_metadata = {
+                                                "uploader": info.get("uploader", ""),
+                                                "uploader_id": info.get("uploader_id", ""),
+                                                "upload_date": info.get("upload_date", ""),
+                                                "description": info.get("description", ""),
+                                                "duration_seconds": info.get("duration"),
+                                                "view_count": info.get("view_count"),
+                                                "like_count": info.get("like_count"),
+                                                "comment_count": info.get("comment_count"),
+                                                "tags_json": tags,
+                                                "categories_json": info.get("categories", []),
+                                                "thumbnail_url": info.get("thumbnail", ""),
+                                                "source_type": "youtube",
+                                                "status": "metadata_only",
+                                            }
+                                            
+                                            # Save to database
+                                            source_record = db_service.create_source(
+                                                source_id=source_id,
+                                                title=info.get("title", f"YouTube Video {source_id}"),
+                                                url=video_url,
+                                                **video_metadata,
+                                            )
+                                            
+                                            if source_record:
+                                                logger.info(f"✅ Successfully fetched and saved YouTube metadata for {source_id}")
+                                            else:
+                                                logger.warning(f"⚠️ Failed to save metadata to database for {source_id}")
+                                        else:
+                                            logger.warning(f"⚠️ Could not fetch YouTube info for {source_id}")
+                                        
+                                except Exception as e:
+                                    logger.warning(f"⚠️ Failed to fetch YouTube metadata for {source_id}: {e}")
+                                    logger.debug(f"   Error details: {e}", exc_info=True)
 
                         if source_record:
                             # Retrieve platform metadata from preloaded lists to avoid detached session issues

@@ -132,11 +132,9 @@ class ModelPreloader(QObject):
             logger.info("📥 Downloading/loading Whisper model...")
             self.transcription_model_loading.emit("Downloading Whisper model...", 50)
 
-            # The model will be loaded when first used, but we can trigger the download
-            # by checking if the binary exists and model files are available
-            whisper_cmd = self.transcriber._find_whisper_binary()
-            if not whisper_cmd:
-                raise RuntimeError("Whisper binary not found")
+            # Load the model - this will download it if not cached
+            if not self.transcriber._load_model():
+                raise RuntimeError("Failed to load Whisper model")
 
             self.transcription_model_loading.emit("Transcription model ready!", 100)
             self.transcription_ready = True
