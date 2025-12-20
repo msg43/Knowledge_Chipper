@@ -792,6 +792,85 @@ class HCEConfig(BaseModel):
     )
 
 
+class ClaimsFirstConfig(BaseModel):
+    """Claims-First Pipeline Configuration.
+    
+    The claims-first pipeline extracts claims before speaker attribution,
+    inverting the traditional speaker-first approach. This reduces processing
+    time and only attributes speakers to high-value claims.
+    """
+    
+    # Master enable flag
+    enabled: bool = Field(
+        default=False,
+        description="Enable claims-first pipeline (vs speaker-first)",
+    )
+    
+    # Transcript source settings
+    transcript_source: str = Field(
+        default="auto",
+        pattern="^(auto|youtube|whisper)$",
+        description="Transcript source: auto (try YouTube first), youtube, or whisper",
+    )
+    youtube_quality_threshold: float = Field(
+        default=0.7,
+        ge=0.0,
+        le=1.0,
+        description="Minimum quality score for YouTube transcripts (0.0-1.0)",
+    )
+    
+    # Evaluator model settings
+    evaluator_model: str = Field(
+        default="configurable",
+        pattern="^(gemini|claude|configurable)$",
+        description="Model for claim evaluation: gemini, claude, or configurable",
+    )
+    
+    # Lazy speaker attribution settings
+    lazy_attribution_min_importance: int = Field(
+        default=7,
+        ge=0,
+        le=10,
+        description="Minimum importance score for speaker attribution (0-10)",
+    )
+    context_window_seconds: int = Field(
+        default=60,
+        ge=10,
+        le=300,
+        description="Context window for speaker attribution (seconds)",
+    )
+    
+    # Advanced settings
+    store_candidates: bool = Field(
+        default=True,
+        description="Store candidate claims in database for re-evaluation",
+    )
+    fuzzy_match_threshold: float = Field(
+        default=0.7,
+        ge=0.0,
+        le=1.0,
+        description="Threshold for fuzzy quote-to-timestamp matching",
+    )
+    
+    # Model-specific settings
+    miner_model: str = Field(
+        default="gemini-2.0-flash",
+        description="Model for claim mining stage",
+    )
+    evaluator_model_gemini: str = Field(
+        default="gemini-2.0-flash",
+        description="Gemini model for evaluation",
+    )
+    evaluator_model_claude: str = Field(
+        default="claude-3-5-sonnet-20241022",
+        description="Claude model for evaluation",
+    )
+    attribution_model: str = Field(
+        default="gemini-2.0-flash",
+        description="Model for speaker attribution",
+    )
+
+
 class ProcessingMode(str):
     """Processing mode for claim extraction."""
     REALTIME = "realtime"
@@ -1135,6 +1214,7 @@ class Settings(BaseSettings):
     )
     moc: MOCConfig = Field(default_factory=MOCConfig)
     hce: HCEConfig = Field(default_factory=HCEConfig)
+    claims_first: ClaimsFirstConfig = Field(default_factory=ClaimsFirstConfig)
     batch_processing: BatchProcessingConfig = Field(default_factory=BatchProcessingConfig)
     monitoring: MonitoringConfig = Field(default_factory=MonitoringConfig)
     speaker_identification: SpeakerIdentificationConfig = Field(

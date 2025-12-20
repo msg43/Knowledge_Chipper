@@ -365,6 +365,238 @@ class UnifiedMiner:
             progress_callback=progress_callback,
         )
 
+    def mine(
+        self,
+        input_data: str | EpisodeBundle,
+        metadata: dict | None = None,
+        chunk_size: int = 15000,
+        overlap: int = 1000,
+    ) -> UnifiedMinerOutput:
+        """
+        Extract entities from text or episode (claims-first compatible).
+        
+        This method supports both:
+        1. Plain text input (claims-first mode) - creates virtual segments
+        2. EpisodeBundle input (legacy mode) - uses existing segments
+        
+        Args:
+            input_data: Either plain text string or EpisodeBundle
+            metadata: Optional metadata dict for context
+            chunk_size: Maximum characters per chunk (for plain text)
+            overlap: Character overlap between chunks
+        
+        Returns:
+            Merged UnifiedMinerOutput with all extracted entities
+        """
+        if isinstance(input_data, str):
+            # Claims-first mode: plain text without speaker labels
+            return self._mine_text(input_data, metadata, chunk_size, overlap)
+        elif isinstance(input_data, EpisodeBundle):
+            # Legacy mode: process as episode with segments
+            outputs = self.mine_episode(input_data)
+            return self._merge_outputs(outputs)
+        else:
+            raise TypeError(
+                f"input_data must be str or EpisodeBundle, got {type(input_data)}"
+            )
+
+    def _mine_text(
+        self,
+        text: str,
+        metadata: dict | None = None,
+        chunk_size: int = 15000,
+        overlap: int = 1000,
+    ) -> UnifiedMinerOutput:
+        """
+        Mine entities from plain text (internal method).
+        
+        Creates virtual segments from text and processes them.
+        """
+        if not text or not text.strip():
+            logger.warning("Empty text provided to mine()")
+            return UnifiedMinerOutput(
+                {"claims": [], "jargon": [], "people": [], "mental_models": []}
+            )
+        
+        # Create virtual segments from text
+        segments = self._create_segments_from_text(text, chunk_size, overlap)
+        
+        logger.info(f"Created {len(segments)} virtual segments from text ({len(text)} chars)")
+        
+        # Process each segment
+        outputs = []
+        for i, segment in enumerate(segments, 1):
+            logger.info(f"Mining segment {i}/{len(segments)}")
+            output = self.mine_segment(segment)
+            outputs.append(output)
+        
+        # Merge all outputs
+        return self._merge_outputs(outputs)
+
+    def _create_segments_from_text(
+        self,
+        text: str,
+        chunk_size: int = 15000,
+        overlap: int = 1000,
+    ) -> list[Segment]:
+        """
+        Create virtual Segment objects from plain text.
+        
+        Splits text into chunks respecting paragraph boundaries.
+        """
+        segments = []
+        text_length = len(text)
+        
+        # If text is short enough, use single segment
+        if text_length <= chunk_size:
+            segment = Segment(
+                segment_id="chunk_0000",
+                speaker=None,  # No speaker in claims-first mode
+                t0=0.0,
+                t1=0.0,  # Timestamps will be matched later
+                text=text.strip(),
+            )
+            return [segment]
+        
+        # Split into chunks at paragraph boundaries
+        start = 0
+        segment_idx = 0
+        
+        while start < text_length:
+            end = min(start + chunk_size, text_length)
+            
+            # Try to find paragraph boundary near end
+            if end < text_length:
+                # Look for paragraph break in last 20% of chunk
+                search_start = start + int(chunk_size * 0.8)
+                paragraph_break = text.rfind('\n\n', search_start, end)
+                if paragraph_break > search_start:
+                    end = paragraph_break
+                else:
+                    # Fall back to sentence boundary
+                    sentence_break = text.rfind('. ', search_start, end)
+                    if sentence_break > search_start:
+                        end = sentence_break + 1
+            
+            chunk_text = text[start:end].strip()
+            if chunk_text:
+                segment = Segment(
+                    segment_id=f"chunk_{segment_idx:04d}",
+                    speaker=None,
+                    t0=0.0,
+                    t1=0.0,
+                    text=chunk_text,
+                )
+                segments.append(segment)
+                segment_idx += 1
+            
+            # Move start, accounting for overlap
+            start = max(end - overlap, end)
+            if start >= text_length:
+                break
+        
+        return segments
+
+    def _merge_outputs(self, outputs: list[UnifiedMinerOutput]) -> UnifiedMinerOutput:
+        """
+        Merge multiple outputs into a single UnifiedMinerOutput.
+        
+        Deduplicates entities that appear in overlapping chunks.
+        """
+        merged = {
+            "claims": [],
+            "jargon": [],
+            "people": [],
+            "mental_models": [],
+        }
+        
+        seen_claims = set()
+        seen_jargon = set()
+        seen_people = set()
+        seen_models = set()
+        
+        for output in outputs:
+            # Merge claims (deduplicate by canonical text)
+            for claim in output.claims:
+                canonical = claim.get("canonical", "")
+                if canonical and canonical not in seen_claims:
+                    seen_claims.add(canonical)
+                    merged["claims"].append(claim)
+            
+            # Merge jargon (deduplicate by term)
+            for term in output.jargon:
+                term_text = term.get("term", "")
+                if term_text and term_text.lower() not in seen_jargon:
+                    seen_jargon.add(term_text.lower())
+                    merged["jargon"].append(term)
+            
+            # Merge people (deduplicate by name)
+            for person in output.people:
+                name = person.get("name", "")
+                if name and name.lower() not in seen_people:
+                    seen_people.add(name.lower())
+                    merged["people"].append(person)
+            
+            # Merge mental models (deduplicate by name)
+            for model in output.mental_models:
+                name = model.get("name", "")
+                if name and name.lower() not in seen_models:
+                    seen_models.add(name.lower())
+                    merged["mental_models"].append(model)
+        
+        logger.info(
+            f"Merged outputs: {len(merged['claims'])} claims, "
+            f"{len(merged['jargon'])} jargon, {len(merged['people'])} people, "
+            f"{len(merged['mental_models'])} concepts"
+        )
+        
+        return UnifiedMinerOutput(merged)
+
+
+def mine_text(
+    text: str,
+    miner_model_uri: str,
+    metadata: dict | None = None,
+    chunk_size: int = 15000,
+    overlap: int = 1000,
+    selectivity: str = "moderate",
+    content_type: str | None = None,
+) -> UnifiedMinerOutput:
+    """
+    Mine entities from plain text (claims-first mode).
+    
+    This is the primary entry point for claims-first pipeline, where we
+    extract claims from undiarized transcripts without speaker labels.
+    
+    Args:
+        text: Plain transcript text to mine
+        miner_model_uri: URI for the miner LLM model (format: "provider:model")
+        metadata: Optional metadata dict for context
+        chunk_size: Maximum characters per chunk (for long transcripts)
+        overlap: Character overlap between chunks
+        selectivity: Miner selectivity ("liberal" | "moderate" | "conservative")
+        content_type: Content type for specialized prompts
+    
+    Returns:
+        Merged UnifiedMinerOutput with all extracted entities
+    """
+    # Parse model URI
+    provider, model = parse_model_uri(miner_model_uri)
+    
+    # Create System2LLM instance
+    llm = System2LLM(provider=provider, model=model, temperature=0.3)
+    
+    # Create miner
+    miner = UnifiedMiner(
+        llm, 
+        prompt_path=None, 
+        selectivity=selectivity, 
+        content_type=content_type
+    )
+    
+    # Use the new mine() method for plain text
+    return miner.mine(text, metadata)
+
 
 def mine_episode_unified(
     episode: EpisodeBundle,

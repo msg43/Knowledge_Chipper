@@ -413,3 +413,149 @@ def evaluate_claims_flagship(
 
     evaluator = FlagshipEvaluator(llm, prompt_path)
     return evaluator.evaluate_claims(content_summary, miner_outputs)
+
+
+def evaluate_claims_simple(
+    claims: list[dict[str, Any]],
+    model_uri: str = "gemini:gemini-2.0-flash",
+    content_summary: str = "",
+) -> list[dict[str, Any]]:
+    """
+    Simplified claim evaluation for claims-first pipeline.
+    
+    Takes a list of claim dicts and returns evaluated claims with
+    accept/reject decisions and importance scores.
+    
+    Args:
+        claims: List of claim dicts from UnifiedMiner
+        model_uri: Model URI (format: "provider:model")
+        content_summary: Optional content summary for context
+    
+    Returns:
+        List of evaluated claim dicts with added fields:
+        - accepted: bool
+        - importance: float (0-10)
+        - tier: str (A/B/C/D)
+        - reasoning: str
+    """
+    if not claims:
+        return []
+    
+    # Wrap claims in UnifiedMinerOutput for compatibility
+    from .unified_miner import UnifiedMinerOutput
+    miner_output = UnifiedMinerOutput({
+        "claims": claims,
+        "jargon": [],
+        "people": [],
+        "mental_models": [],
+    })
+    
+    # Run evaluation
+    eval_output = evaluate_claims_flagship(
+        content_summary=content_summary or "Content being evaluated",
+        miner_outputs=[miner_output],
+        flagship_model_uri=model_uri,
+    )
+    
+    # Convert to simple dict format
+    evaluated = []
+    for eval_claim in eval_output.evaluated_claims:
+        claim_dict = eval_claim.raw.copy()
+        
+        # Add computed fields
+        claim_dict["accepted"] = eval_claim.is_accepted()
+        claim_dict["importance"] = eval_claim.importance
+        claim_dict["canonical"] = eval_claim.get_final_claim_text()
+        
+        # Calculate tier
+        importance = eval_claim.importance
+        if importance >= 8:
+            claim_dict["tier"] = "A"
+        elif importance >= 6:
+            claim_dict["tier"] = "B"
+        elif importance >= 4:
+            claim_dict["tier"] = "C"
+        else:
+            claim_dict["tier"] = "D"
+        
+        evaluated.append(claim_dict)
+    
+    return evaluated
+
+
+class ConfigurableFlagshipEvaluator:
+    """
+    Flagship evaluator with configurable model selection.
+    
+    Supports switching between Gemini and Claude models based on
+    content complexity or user preference.
+    """
+    
+    # Default model configurations
+    MODELS = {
+        "gemini": "gemini:gemini-2.0-flash",
+        "claude": "anthropic:claude-3-5-sonnet-20241022",
+        "gpt4": "openai:gpt-4o",
+    }
+    
+    def __init__(
+        self,
+        default_model: str = "gemini",
+        auto_upgrade_threshold: int = 50,
+    ):
+        """
+        Initialize configurable evaluator.
+        
+        Args:
+            default_model: Default model key ("gemini", "claude", "gpt4")
+            auto_upgrade_threshold: Number of claims above which to use stronger model
+        """
+        self.default_model = default_model
+        self.auto_upgrade_threshold = auto_upgrade_threshold
+        self._evaluators: dict[str, FlagshipEvaluator] = {}
+    
+    def _get_evaluator(self, model_key: str) -> FlagshipEvaluator:
+        """Get or create evaluator for a model."""
+        if model_key not in self._evaluators:
+            model_uri = self.MODELS.get(model_key, self.MODELS["gemini"])
+            provider, model = parse_model_uri(model_uri)
+            llm = System2LLM(provider=provider, model=model, temperature=0.3)
+            self._evaluators[model_key] = FlagshipEvaluator(llm)
+        return self._evaluators[model_key]
+    
+    def evaluate(
+        self,
+        claims: list[dict[str, Any]],
+        content_summary: str = "",
+        model: str | None = None,
+        auto_upgrade: bool = True,
+    ) -> list[dict[str, Any]]:
+        """
+        Evaluate claims with automatic model selection.
+        
+        Args:
+            claims: List of claim dicts
+            content_summary: Optional content summary
+            model: Override model selection ("gemini", "claude", "gpt4")
+            auto_upgrade: Whether to auto-upgrade for complex content
+        
+        Returns:
+            List of evaluated claim dicts
+        """
+        if not claims:
+            return []
+        
+        # Select model
+        if model:
+            selected_model = model
+        elif auto_upgrade and len(claims) > self.auto_upgrade_threshold:
+            # Use stronger model for large claim sets
+            selected_model = "claude"
+        else:
+            selected_model = self.default_model
+        
+        # Get model URI
+        model_uri = self.MODELS.get(selected_model, self.MODELS["gemini"])
+        
+        # Evaluate
+        return evaluate_claims_simple(claims, model_uri, content_summary)

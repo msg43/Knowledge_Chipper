@@ -5,7 +5,69 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [4.0.0] - 2025-12-20
+
+### Added (Major Architecture: Claims-First Pipeline)
+
+This release introduces the **Claims-First Architecture**, a fundamental shift in how we process podcast content. Instead of the speaker-first approach (diarization → transcription → extraction), we now extract claims first from undiarized transcripts and only attribute speakers to high-value claims.
+
+#### New Pipeline Components
+
+- **Claims-First Pipeline** (`src/knowledge_system/processors/claims_first/`)
+  - `TranscriptFetcher`: Unified interface for YouTube and Whisper transcripts
+  - `TimestampMatcher`: Fuzzy matching of evidence quotes to timestamps
+  - `LazySpeakerAttributor`: Targeted speaker attribution for A/B-tier claims only
+  - `ClaimsFirstPipeline`: Main orchestrator for the new workflow
+  - `ClaimsFirstConfig`: Configuration dataclass with validation
+
+- **Database Schema Updates** (`database/migrations/2025_12_20_claims_first_support.sql`)
+  - New columns: `timestamp_precision`, `transcript_source`, `speaker_attribution_confidence`
+  - New table: `candidate_claims` for re-evaluation support
+  - New table: `claims_first_processing_log` for tracking
+
+- **Configuration** 
+  - New `claims_first` section in `config/settings.yaml`
+  - New `ClaimsFirstConfig` in `config.py`
+  - Configurable evaluator model selection (Gemini/Claude)
+
+#### Updated Components
+
+- **UnifiedMiner**: Now accepts plain text input (no speaker labels required)
+  - New `mine()` method for claims-first mode
+  - Text chunking with overlap for long transcripts
+  - Output merging and deduplication
+
+- **FlagshipEvaluator**: Added configurable model selection
+  - New `evaluate_claims_simple()` convenience function
+  - New `ConfigurableFlagshipEvaluator` with auto-upgrade
+
+- **AudioProcessor**: Added claims-first flag
+  - New `use_claims_first` parameter
+  - New `process_claims_first()` method
+  - Automatic diarization skip in claims-first mode
+
+#### New Scripts
+
+- `scripts/apply_claims_first_migration.py`: Database migration script
+- `scripts/validate_claims_first.py`: Validation on test podcasts
+
+#### Benefits
+
+- **Faster Processing**: Skip diarization for YouTube content with good transcripts
+- **Lower Cost**: Only attribute speakers to important claims (A/B tier)
+- **Simpler Code**: Reduced dependency on pyannote/torch for new pipeline
+- **Better Quality**: LLM-based speaker attribution using context
+
+#### Rollback
+
+The speaker-first codebase is preserved:
+- Git tag: `v3.5.0-speaker-first-final`
+- Git branch: `speaker-first-archive`
+- Config toggle: `claims_first.enabled: false`
+
+---
+
+## [3.5.0] - Previous Release
 
 ### Changed (Major Refactor: Word-Driven Speaker Alignment)
 - **Transcription Backend**: Replaced whisper.cpp subprocess calls with `pywhispercpp` Python binding

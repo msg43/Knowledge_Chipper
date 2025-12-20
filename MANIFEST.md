@@ -117,6 +117,12 @@ Complete inventory of all files in the Knowledge Chipper codebase with descripti
 - `SESSION_BASED_ANTI_BOT_COMPLETE.md` - Completion documentation for session-based anti-bot system
 - `SESSION_BASED_ANTI_BOT_IMPLEMENTATION.md` - Implementation details for session-based anti-bot detection avoidance
 
+### Documentation - Claims-First Architecture (December 2025)
+
+- `CLAIMS_FIRST_ARCHITECTURE_OVERHAUL_PLAN.md` - Original design document for claims-first architecture migration: speaker-first problems, proposed solution, implementation phases, risk analysis
+- `EXTRACTION_ARCHITECTURE_ANALYSIS.md` - Deep analysis of single-stage vs dual-stage extraction, recommending dual-stage with Gemini mining + Claude evaluation
+- `CLAIMS_FIRST_MIGRATION_GUIDE.md` - User guide for migrating to claims-first pipeline: configuration options, rollback instructions, troubleshooting
+
 ### Documentation - Architecture and Systems
 
 - `docs/FILE_ORGANIZATION.md` - Comprehensive guide to output file organization: explains directory structure (transcripts/, summaries/, moc/, exports/), file naming conventions, relationship between transcript and summary files, database as source of truth, and how to find/regenerate files. Addresses common confusion about where files are saved and why they don't overwrite each other.
@@ -212,6 +218,11 @@ Complete inventory of all files in the Knowledge Chipper codebase with descripti
 - `test_summarize_tab_selection.py` - Test script for Summarize tab selection functionality
 - `test_web_canonical_upload.py` - Automated test script for web-canonical upload workflow (device auth + upload)
 - `debug_flagship_model.py` - Utility script for debugging the flagship model
+
+### Claims-First Pipeline Scripts (December 2025)
+
+- `scripts/apply_claims_first_migration.py` - Database migration script for claims-first schema changes
+- `scripts/validate_claims_first.py` - Validation script to test claims-first pipeline on podcasts
 
 ### Hidden/Configuration Directories
 
@@ -556,12 +567,24 @@ SQL migration files for database schema changes.
 - `migration_004_channel_host_mappings.py` - Python migration for channel mappings
 - `system2_migration.py` - System 2 processing tables migration
 - `2025_12_07_persistent_speaker_profiles.sql` - Persistent speaker profiles for cross-episode voice recognition
+- `2025_12_20_claims_first_support.sql` - Claims-first pipeline database schema: new columns for transcript source/quality, candidate_claims table for re-evaluation, claims_first_processing_log for metrics
 
 ### EXAMPLES/
 
 Example code and usage demonstrations.
 
 - Example scripts demonstrating API usage and integration patterns
+
+### PROCESSORS/CLAIMS_FIRST/ (December 2025)
+
+Claims-first pipeline module for extracting claims before speaker attribution.
+
+- `__init__.py` - Module initialization with public API exports
+- `config.py` - ClaimsFirstConfig dataclass with validation and enum types
+- `transcript_fetcher.py` - TranscriptFetcher class for YouTube/Whisper transcript abstraction with quality assessment
+- `timestamp_matcher.py` - TimestampMatcher class for fuzzy matching evidence quotes to transcript timestamps
+- `lazy_speaker_attribution.py` - LazySpeakerAttributor class for targeted LLM-based speaker attribution
+- `pipeline.py` - ClaimsFirstPipeline orchestrator coordinating transcript → extraction → evaluation → attribution
 
 ### GUI/
 

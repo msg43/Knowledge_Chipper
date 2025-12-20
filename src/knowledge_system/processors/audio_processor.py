@@ -49,7 +49,14 @@ if not FFMPEG_AVAILABLE:
 
 
 class AudioProcessor(BaseProcessor):
-    """Processes audio files for transcription pipeline with automatic retry and failure logging."""
+    """Processes audio files for transcription pipeline with automatic retry and failure logging.
+    
+    Supports two processing modes:
+    1. Speaker-first (legacy): Diarization → Transcription → Speaker Assignment
+    2. Claims-first (new): Transcription → Claim Extraction → Lazy Speaker Attribution
+    
+    The claims-first mode skips diarization and only attributes speakers to high-value claims.
+    """
 
     def __init__(
         self,
@@ -68,6 +75,8 @@ class AudioProcessor(BaseProcessor):
         preloaded_diarizer=None,
         db_service=None,
         remove_silence: bool = False,  # Disabled: Professional content rarely has long silences
+        use_claims_first: bool = False,  # NEW: Use claims-first pipeline instead of speaker-first
+        claims_first_config: dict | None = None,  # NEW: Configuration for claims-first pipeline
     ) -> None:
         self.normalize_audio = normalize_audio
         self.target_format = target_format
@@ -82,6 +91,16 @@ class AudioProcessor(BaseProcessor):
         self.require_diarization = require_diarization
         self.db_service = db_service
         self.remove_silence = remove_silence
+        
+        # Claims-first pipeline configuration
+        self.use_claims_first = use_claims_first
+        self.claims_first_config = claims_first_config or {}
+        
+        if self.use_claims_first:
+            logger.info("🚀 Claims-first pipeline enabled - skipping diarization")
+            # Disable diarization in claims-first mode
+            self.enable_diarization = False
+            self.require_diarization = False
 
         # Store preloaded models
         self.preloaded_diarizer = preloaded_diarizer
@@ -2823,6 +2842,91 @@ class AudioProcessor(BaseProcessor):
             )
 
         return ProcessorResult(success=False, errors=[final_error])
+
+    def process_claims_first(
+        self,
+        audio_path: Path,
+        source_url: str = "",
+        metadata: dict | None = None,
+        **kwargs: Any,
+    ) -> ProcessorResult:
+        """
+        Process audio using the claims-first pipeline.
+        
+        This bypasses diarization and speaker segmentation, instead:
+        1. Transcribing audio with Whisper
+        2. Extracting claims from undiarized transcript
+        3. Attributing speakers only to high-value claims
+        
+        Args:
+            audio_path: Path to audio file
+            source_url: Original source URL (for YouTube transcript fallback)
+            metadata: Episode metadata (title, description, etc.)
+            **kwargs: Additional processing arguments
+        
+        Returns:
+            ProcessorResult with claims-first output
+        """
+        from knowledge_system.processors.claims_first import (
+            ClaimsFirstConfig,
+            ClaimsFirstPipeline,
+        )
+        
+        logger.info(f"🚀 Starting claims-first processing for: {audio_path}")
+        
+        # Build config from instance settings
+        config_dict = {
+            "enabled": True,
+            **self.claims_first_config,
+        }
+        config = ClaimsFirstConfig.from_dict(config_dict)
+        
+        # Create pipeline
+        pipeline = ClaimsFirstPipeline(config=config)
+        
+        try:
+            # Run claims-first pipeline
+            result = pipeline.process(
+                source_url=source_url,
+                audio_path=audio_path,
+                metadata=metadata or {},
+            )
+            
+            # Convert to ProcessorResult
+            return ProcessorResult(
+                success=True,
+                output=result.transcript.text,
+                metadata={
+                    "claims_first": True,
+                    "transcript_source": result.transcript.source_type.value,
+                    "transcript_quality": result.transcript.quality_score,
+                    "total_claims": result.total_claims,
+                    "a_tier_claims": len(result.a_tier_claims),
+                    "b_tier_claims": len(result.b_tier_claims),
+                    "attributed_claims": len(result.attributed_claims),
+                    "processing_stats": result.processing_stats,
+                    "claims": [
+                        {
+                            "canonical": c.canonical,
+                            "importance": c.importance,
+                            "tier": c.tier,
+                            "timestamp_start": c.timestamp.timestamp_start if c.timestamp else None,
+                            "timestamp_end": c.timestamp.timestamp_end if c.timestamp else None,
+                            "speaker": c.speaker.speaker_name if c.speaker else None,
+                            "speaker_confidence": c.speaker.confidence if c.speaker else None,
+                        }
+                        for c in result.claims
+                    ],
+                },
+            )
+            
+        except Exception as e:
+            logger.error(f"❌ Claims-first processing failed: {e}")
+            return ProcessorResult(
+                success=False,
+                errors=[f"Claims-first processing failed: {str(e)}"],
+                metadata={"claims_first": True, "error": str(e)},
+            )
 
     def process_batch(
         self, inputs: list[Any], dry_run: bool = False, **kwargs: Any
