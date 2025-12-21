@@ -957,6 +957,74 @@ class AudioProcessor(BaseProcessor):
             logger.warning(f"Could not extract audio metadata: {e}")
             return {"filename": audio_path.name, "error": str(e)}
 
+    def _hyperlink_timestamps(self, text: str, base_url: str) -> str:
+        """Convert timestamps in text to clickable YouTube links."""
+        import re
+        
+        if not base_url:
+            return text
+        
+        # Clean URL (remove existing parameters)
+        base_url = base_url.split('&')[0].split('#')[0]
+        
+        def parse_timestamp_to_seconds(timestamp: str) -> int:
+            """Convert timestamp string to seconds."""
+            parts = timestamp.split(':')
+            if len(parts) == 2:
+                return int(parts[0]) * 60 + int(parts[1])
+            elif len(parts) == 3:
+                return int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
+            return 0
+        
+        # Pattern 1: Timestamp ranges in parentheses (1:16-1:28)
+        text = re.sub(
+            r'\((\d{1,2}:\d{2})-(\d{1,2}:\d{2})\)',
+            lambda m: f"([{m.group(1)}]({base_url}&t={parse_timestamp_to_seconds(m.group(1))}s)-[{m.group(2)}]({base_url}&t={parse_timestamp_to_seconds(m.group(2))}s))",
+            text
+        )
+        
+        # Pattern 2: Single timestamps in parentheses (0:55)
+        text = re.sub(
+            r'\((\d{1,2}:\d{2})\)',
+            lambda m: f"[{m.group(1)}]({base_url}&t={parse_timestamp_to_seconds(m.group(1))}s)",
+            text
+        )
+        
+        # Pattern 3: Timestamps in square brackets [7:12] (but not already hyperlinked)
+        text = re.sub(
+            r'\[(\d{1,2}:\d{2})\](?!\()',
+            lambda m: f"[{m.group(1)}]({base_url}&t={parse_timestamp_to_seconds(m.group(1))}s)",
+            text
+        )
+        
+        # Pattern 4: Bold timestamps **00:06**
+        text = re.sub(
+            r'\*\*(\d{1,2}:\d{2})\*\*',
+            lambda m: f"**[{m.group(1)}]({base_url}&t={parse_timestamp_to_seconds(m.group(1))}s)**",
+            text
+        )
+        
+        # Pattern 5: Timestamps with // separator "00:00 //"
+        text = re.sub(
+            r'(\d{2}:\d{2}) //',
+            lambda m: f"[{m.group(1)}]({base_url}&t={parse_timestamp_to_seconds(m.group(1))}s) //",
+            text
+        )
+        
+        # Pattern 6: Standalone chapter timestamps (line-by-line)
+        lines = text.split('\n')
+        processed_lines = []
+        for line in lines:
+            stripped = line.strip()
+            if re.match(r'^(\d{1,2}:\d{2})$', stripped):
+                timestamp = stripped
+                seconds = parse_timestamp_to_seconds(timestamp)
+                processed_lines.append(f"[{timestamp}]({base_url}&t={seconds}s)")
+            else:
+                processed_lines.append(line)
+        
+        return '\n'.join(processed_lines)
+    
     def _format_duration(self, seconds: float) -> str:
         """Format duration in seconds to MM:SS or HH:MM:SS format."""
         if seconds is None:
@@ -1296,15 +1364,24 @@ class AudioProcessor(BaseProcessor):
             if description_text:
                 # Use "YouTube Description" for YouTube videos, "Description" for others
                 if source_type == "YouTube":
-                    lines.append("## YouTube Description")
+                    lines.append("## Description")
                 else:
                     lines.append("## Description")
                 lines.append("")
-                for desc_line in description_text.strip().splitlines():
-                    if desc_line:
-                        lines.append(f"> {desc_line}")
-                    else:
-                        lines.append(">")
+                # Hyperlink timestamps in description
+                description_with_links = self._hyperlink_timestamps(description_text, source_metadata.get('url', ''))
+                for desc_line in description_with_links.strip().splitlines():
+                    lines.append(desc_line)
+                lines.append("")
+            
+            # Add YouTube AI Summary if available
+            youtube_ai_summary = source_metadata.get('youtube_ai_summary')
+            if youtube_ai_summary and source_type == "YouTube":
+                lines.append("## YouTube AI Summary")
+                lines.append("")
+                # Hyperlink timestamps in AI summary
+                ai_summary_with_links = self._hyperlink_timestamps(youtube_ai_summary, source_metadata.get('url', ''))
+                lines.append(ai_summary_with_links)
                 lines.append("")
         else:
             lines.append("## File Metadata")
@@ -1325,6 +1402,9 @@ class AudioProcessor(BaseProcessor):
         # Full transcript section
         lines.append("## Full Transcript")
         lines.append("")
+        if source_metadata and source_type == "YouTube":
+            lines.append("> **Note**: This transcript was extracted from YouTube's automatic captions. Click any timestamp to jump to that point in the video.")
+            lines.append("")
 
         segments = transcription_data.get("segments", [])
         if segments:
@@ -1357,11 +1437,17 @@ class AudioProcessor(BaseProcessor):
                 # Only show speaker label if it changed from last paragraph (for readability in monologues)
                 if speaker_label and speaker_label != last_flushed_speaker:
                     if include_timestamps and paragraph_start_time is not None:
-                        # Format: **Speaker** [timestamp]
+                        # Format: **Speaker** [timestamp] (hyperlinked for YouTube)
                         timestamp_str = self._format_duration(
                             int(round(paragraph_start_time))
                         )
-                        lines.append(f"**{speaker_label}** [{timestamp_str}]")
+                        # Check if this is a YouTube video to add hyperlink
+                        if source_metadata and source_metadata.get('url') and 'youtube.com' in source_metadata.get('url', ''):
+                            timestamp_seconds = int(round(paragraph_start_time))
+                            video_url = source_metadata['url'].split('&')[0].split('#')[0]
+                            lines.append(f"**{speaker_label}** [[{timestamp_str}]({video_url}&t={timestamp_seconds}s)]")
+                        else:
+                            lines.append(f"**{speaker_label}** [{timestamp_str}]")
                     else:
                         # Format: **Speaker**
                         lines.append(f"**{speaker_label}**")
@@ -1371,7 +1457,13 @@ class AudioProcessor(BaseProcessor):
                     timestamp_str = self._format_duration(
                         int(round(paragraph_start_time))
                     )
-                    lines.append(f"[{timestamp_str}]")
+                    # Check if this is a YouTube video to add hyperlink
+                    if source_metadata and source_metadata.get('url') and 'youtube.com' in source_metadata.get('url', ''):
+                        timestamp_seconds = int(round(paragraph_start_time))
+                        video_url = source_metadata['url'].split('&')[0].split('#')[0]
+                        lines.append(f"[[{timestamp_str}]({video_url}&t={timestamp_seconds}s)]")
+                    else:
+                        lines.append(f"[{timestamp_str}]")
 
                 # Add paragraph text
                 lines.append(paragraph_text)

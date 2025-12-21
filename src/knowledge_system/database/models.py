@@ -133,6 +133,11 @@ class MediaSource(Base):
     summary_generated_at = Column(DateTime)
     summary_generated_by_model = Column(String)
 
+    # YouTube AI Summary (scraped from YouTube's AI feature)
+    youtube_ai_summary = Column(Text)
+    youtube_ai_summary_fetched_at = Column(DateTime)
+    youtube_ai_summary_method = Column(String)  # 'playwright_scraper' or 'api'
+
     # Summary metrics
     input_length = Column(Integer)
     output_length = Column(Integer)
