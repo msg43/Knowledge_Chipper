@@ -530,6 +530,47 @@ SELECT * FROM claims WHERE hidden = 0;
 
 ---
 
+### YouTube AI Summary Comparison (Experimental)
+
+**New Feature:** Compare YouTube's AI-generated summaries with local LLM summaries.
+
+**Requirements:**
+- Playwright (auto-installed)
+- YouTube account (logged in to Chrome, Safari, or Firefox)
+- Optional: YouTube Premium (for best results)
+
+**Quick Start:**
+```bash
+python compare_youtube_summaries.py <youtube_url>
+```
+
+**How It Works:**
+1. Loads your YouTube cookies from your browser
+2. Uses Playwright to automate clicking "Ask" → "Summarize"
+3. Waits 5-10 seconds for YouTube to generate summary
+4. Scrapes the result
+5. Simultaneously generates local LLM summary for comparison
+
+**Example Output:**
+```
+🤖 YOUTUBE AI SUMMARY (8 seconds)
+───────────────────────────────────────
+[YouTube's AI-generated summary...]
+
+🧠 LOCAL LLM SUMMARY (127 seconds)
+───────────────────────────────────────
+[Local LLM summary...]
+
+📊 COMPARISON
+───────────────────────────────────────
+Speed: YouTube was 15.9x faster
+Length: Local was 1.27x longer
+```
+
+**Note:** YouTube AI summaries may require YouTube Premium and are not available in all regions. The system automatically falls back to local LLM summarization if YouTube scraping fails.
+
+---
+
 ## Common Use Cases
 
 ### 📚 Research & Academic
