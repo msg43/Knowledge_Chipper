@@ -2374,15 +2374,17 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         self.timestamps_checkbox.toggled.connect(self._on_setting_changed)
         layout.addWidget(self.timestamps_checkbox, 0, 4)
 
+        # Diarization checkbox - now hidden (replaced by claims-first)
         self.diarization_checkbox = QCheckBox("Enable speaker diarization")
+        self.diarization_checkbox.setChecked(False)  # Always disabled
+        self.diarization_checkbox.setEnabled(False)  # Disable UI control
         self.diarization_checkbox.setToolTip(
-            "Identify and separate different speakers in the audio. "
-            "Requires a HuggingFace token and additional dependencies. "
-            "Useful for meetings, interviews, or conversations with multiple speakers."
+            "<b>DEPRECATED in v4.0.0</b><br/><br/>"
+            "Speaker diarization is replaced by Claims-First Mode.<br/>"
+            "Use the 'Claims-First Mode' checkbox below for speaker attribution."
         )
-        self.diarization_checkbox.toggled.connect(self._on_setting_changed)
-        self.diarization_checkbox.toggled.connect(self._on_diarization_toggled)
-        layout.addWidget(self.diarization_checkbox, 0, 5)
+        self.diarization_checkbox.setVisible(False)  # Hide from UI
+        # layout.addWidget(self.diarization_checkbox, 0, 5)  # Hidden
 
         # DISABLED: Color-coded transcripts feature causes YAML corruption
         # The enhanced markdown with HTML color codes breaks YAML frontmatter parsing
@@ -2440,15 +2442,20 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         self.overwrite_checkbox.toggled.connect(self._on_setting_changed)
         layout.addWidget(self.overwrite_checkbox, 1, 4)
 
-        # REMOVED in v4.0.0: Speaker assignment replaced by claims-first
-        self.speaker_assignment_checkbox = QCheckBox("Enable speaker assignment (removed)")
-        self.speaker_assignment_checkbox.setChecked(False)
-        self.speaker_assignment_checkbox.setEnabled(False)
-        self.speaker_assignment_checkbox.setToolTip(
-            "REMOVED in v4.0.0: Speaker assignment via diarization replaced by claims-first architecture. "
-            "Use claims-first pipeline for speaker attribution."
+        # Claims-First Mode Toggle (v4.0.0+)
+        self.claims_first_checkbox = QCheckBox("Claims-First Mode")
+        self.claims_first_checkbox.setChecked(True)  # Default enabled
+        self.claims_first_checkbox.setToolTip(
+            "<b>Claims-First Mode (v4.0.0+)</b><br/><br/>"
+            "When enabled, extracts high-value claims first, then attributes speakers only "
+            "to important claims. This is faster and more efficient than the legacy "
+            "speaker-first pipeline.<br/><br/>"
+            "• Uses YouTube transcripts by default (instant)<br/>"
+            "• Falls back to Whisper for low-quality transcripts<br/>"
+            "• Speaker attribution only for A/B-tier claims"
         )
-        layout.addWidget(self.speaker_assignment_checkbox, 1, 5)
+        self.claims_first_checkbox.toggled.connect(self._on_setting_changed)
+        layout.addWidget(self.claims_first_checkbox, 1, 5)
 
         # YouTube to RSS mapping checkbox
         # POSITIONED ABOVE Proxy selector per user request
@@ -4001,9 +4008,9 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
             "language": self.language_combo.currentText(),  # Always pass the language, including "auto"
             "format": self.format_combo.currentText(),
             "timestamps": self.timestamps_checkbox.isChecked(),
-            "diarization": self.diarization_checkbox.isChecked(),
+            "diarization": False,  # Deprecated - use claims_first
             "overwrite": self.overwrite_checkbox.isChecked(),
-            "enable_speaker_assignment": self.speaker_assignment_checkbox.isChecked(),
+            "enable_claims_first": self.claims_first_checkbox.isChecked(),
             "enable_color_coding": False,  # Always disabled - causes YAML corruption
             "output_dir": self.output_dir_input.text().strip() or None,
             # Thread management handled by dynamic resource system
@@ -4098,7 +4105,7 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
                 self.format_combo,
                 self.timestamps_checkbox,
                 self.diarization_checkbox,
-                self.speaker_assignment_checkbox,
+                self.claims_first_checkbox,
                 self.color_coded_checkbox,
                 self.enable_rss_mapping_checkbox,
                 self.proxy_mode_combo,
@@ -4200,23 +4207,16 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
                         self.tab_name, "include_timestamps", True
                     )
                 )
-                self.diarization_checkbox.setChecked(
-                    self.gui_settings.get_checkbox_state(
-                        self.tab_name,
-                        "enable_diarization",
-                        True,  # Default to True for local transcription
-                    )
-                )
+                # Diarization is deprecated - always false
+                self.diarization_checkbox.setChecked(False)
 
-                # Load speaker assignment settings
-                self.speaker_assignment_checkbox.setChecked(
+                # Load claims-first settings (v4.0.0+)
+                self.claims_first_checkbox.setChecked(
                     self.gui_settings.get_checkbox_state(
-                        self.tab_name, "enable_speaker_assignment", True
+                        self.tab_name, "enable_claims_first", True  # Default enabled
                     )
                 )
-                # ALWAYS start color-coded checkbox as unchecked (ignore saved settings)
-                # This is a user preference that should default to off each session
-                # Users complained it kept getting re-enabled from saved state
+                # Color-coded checkbox is deprecated - always false
                 self.color_coded_checkbox.setChecked(False)
 
             finally:
@@ -4347,20 +4347,22 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
                 "include_timestamps",
                 self.timestamps_checkbox.isChecked(),
             )
+            # Claims-first mode (v4.0.0+)
+            self.gui_settings.set_checkbox_state(
+                self.tab_name,
+                "enable_claims_first",
+                self.claims_first_checkbox.isChecked(),
+            )
+            # Legacy checkboxes (deprecated but kept for backwards compatibility)
             self.gui_settings.set_checkbox_state(
                 self.tab_name,
                 "enable_diarization",
-                self.diarization_checkbox.isChecked(),
-            )
-            self.gui_settings.set_checkbox_state(
-                self.tab_name,
-                "enable_speaker_assignment",
-                self.speaker_assignment_checkbox.isChecked(),
+                False,  # Always disabled
             )
             self.gui_settings.set_checkbox_state(
                 self.tab_name,
                 "enable_color_coding",
-                self.color_coded_checkbox.isChecked(),
+                False,  # Always disabled
             )
             self.gui_settings.set_checkbox_state(
                 self.tab_name, "overwrite_existing", self.overwrite_checkbox.isChecked()

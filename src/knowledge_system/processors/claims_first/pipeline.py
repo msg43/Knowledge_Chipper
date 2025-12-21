@@ -135,25 +135,102 @@ class ClaimsFirstPipeline:
         """Lazy-load UnifiedMiner."""
         if self._unified_miner is None:
             from knowledge_system.processors.hce.unified_miner import UnifiedMiner
-            self._unified_miner = UnifiedMiner(
-                llm_provider="gemini",
-                model=self.config.miner_model,
+            from knowledge_system.processors.hce.models.llm_system2 import System2LLM
+            
+            # Check which providers are available
+            def _is_google_available():
+                try:
+                    import google.generativeai
+                    return True
+                except ImportError:
+                    return False
+            
+            # Determine provider from miner_model config
+            configured_model = self.config.miner_model.lower()
+            
+            if "gemini" in configured_model:
+                # Gemini requested - check if Google is available
+                if _is_google_available():
+                    provider = "google"
+                    model = self.config.miner_model
+                else:
+                    # Fall back to OpenAI
+                    logger.warning(
+                        "Google AI not installed, falling back to OpenAI for miner"
+                    )
+                    provider = "openai"
+                    model = "gpt-4o-mini"
+            elif "claude" in configured_model:
+                provider = "anthropic"
+                model = self.config.miner_model
+            elif "gpt" in configured_model:
+                provider = "openai"
+                model = self.config.miner_model
+            else:
+                # Default to OpenAI
+                provider = "openai"
+                model = "gpt-4o-mini"
+            
+            llm = System2LLM(
+                provider=provider,
+                model=model,
+                temperature=0.3,
             )
+            self._unified_miner = UnifiedMiner(llm=llm)
         return self._unified_miner
     
     def _get_flagship_evaluator(self):
         """Lazy-load FlagshipEvaluator."""
         if self._flagship_evaluator is None:
-            from knowledge_system.processors.hce.flagship_evaluator import FlagshipEvaluator
-            
-            # Determine which model to use
-            model = self.config.get_evaluator_model_name()
-            provider = "gemini" if "gemini" in model else "anthropic"
-            
-            self._flagship_evaluator = FlagshipEvaluator(
-                llm_provider=provider,
-                model=model,
+            from knowledge_system.processors.hce.flagship_evaluator import (
+                FlagshipEvaluator,
+                ConfigurableFlagshipEvaluator,
             )
+            from knowledge_system.processors.hce.models.llm_system2 import System2LLM
+            
+            # Check which providers are available
+            def _is_google_available():
+                try:
+                    import google.generativeai
+                    return True
+                except ImportError:
+                    return False
+            
+            # Use ConfigurableFlagshipEvaluator for flexible model selection
+            evaluator_model = self.config.evaluator_model.value
+            
+            if evaluator_model == "configurable":
+                # Use auto-upgrade based on claim count
+                self._flagship_evaluator = ConfigurableFlagshipEvaluator(
+                    default_model="openai",  # Default to OpenAI
+                    auto_upgrade_threshold=50,
+                )
+            else:
+                # Determine provider from model name
+                model_name = self.config.get_evaluator_model_name()
+                
+                if "gemini" in model_name.lower():
+                    if _is_google_available():
+                        provider = "google"
+                    else:
+                        logger.warning(
+                            "Google AI not installed, falling back to OpenAI for evaluator"
+                        )
+                        provider = "openai"
+                        model_name = "gpt-4o"
+                elif "claude" in model_name.lower():
+                    provider = "anthropic"
+                else:
+                    provider = "openai"
+                    if not any(x in model_name.lower() for x in ["gpt", "openai"]):
+                        model_name = "gpt-4o"  # Default to GPT-4o
+                
+                llm = System2LLM(
+                    provider=provider,
+                    model=model_name,
+                    temperature=0.3,
+                )
+                self._flagship_evaluator = FlagshipEvaluator(llm=llm)
         return self._flagship_evaluator
     
     def process(

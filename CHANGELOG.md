@@ -85,8 +85,17 @@ The speaker-first code can be restored from Git if needed:
 
 #### Modified Files (Speaker Features Disabled)
 - `audio_processor.py` - Diarization calls return no-op with warning
-- `transcription_tab.py` - Speaker assignment checkbox disabled
+- `transcription_tab.py` - Speaker assignment checkbox replaced with Claims-First toggle
 - `model_preloader.py` - Diarization preloading is a no-op
+- `queue_tab.py` - Stage names updated for claims-first pipeline
+
+#### GUI Changes
+- **Transcription Tab**: New "Claims-First Mode" checkbox (default enabled)
+- **Queue Tab**: Updated stage names (Extract Claims, Evaluate Claims, Attribution)
+- Removed deprecated diarization and speaker assignment UI elements
+
+#### Documentation
+- New `CLAIMS_FIRST_MIGRATION_GUIDE.md` with step-by-step migration instructions
 
 ---
 

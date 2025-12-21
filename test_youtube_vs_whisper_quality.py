@@ -123,19 +123,20 @@ def get_youtube_transcript(video_url: str) -> tuple[str, dict]:
     start_time = time.time()
 
     try:
-        # Get transcript
-        transcript_list = YouTubeTranscriptApi.get_transcript(video_id)
+        # Get transcript (API v1.0+ uses instance.fetch() and returns objects)
+        api = YouTubeTranscriptApi()
+        transcript_list = api.fetch(video_id)
 
         # Format as continuous text with timestamps
         full_text = []
         segments = []
 
         for entry in transcript_list:
-            full_text.append(entry['text'])
+            full_text.append(entry.text)
             segments.append({
-                'start': entry['start'],
-                'duration': entry['duration'],
-                'text': entry['text']
+                'start': entry.start,
+                'duration': entry.duration,
+                'text': entry.text
             })
 
         transcript_text = ' '.join(full_text)
@@ -265,28 +266,80 @@ def calculate_wer(reference: str, hypothesis: str) -> float:
     return wer
 
 
-def extract_claims_mock(transcript_text: str, metadata: dict) -> list[dict]:
+def extract_claims_real(transcript_text: str, metadata: dict) -> list[dict]:
     """
-    Mock claim extraction (replace with actual HCE pipeline integration).
-
-    For now, returns mock claims to demonstrate the comparison structure.
-    TODO: Integrate with actual unified_miner.py
+    Real claim extraction using HCE pipeline.
+    
+    Uses UnifiedMiner for candidate extraction and FlagshipEvaluator for scoring.
     """
-    # TODO: Replace with actual claim extraction
-    # from knowledge_system.processors.hce.unified_miner import UnifiedMiner
-    # miner = UnifiedMiner(...)
-    # result = miner.mine(transcript_text, metadata)
+    try:
+        from knowledge_system.processors.hce.unified_miner import UnifiedMiner
+        from knowledge_system.processors.hce.flagship_evaluator import FlagshipEvaluator
+        
+        logger.info("🔍 Running real HCE claim extraction...")
+        
+        # Stage 1: Mine candidate claims from transcript
+        miner = UnifiedMiner()
+        
+        # UnifiedMiner expects full text - use the mine() method for claims-first
+        miner_output = miner.mine(transcript_text, metadata)
+        
+        if not miner_output or not miner_output.claims:
+            logger.warning("⚠️ No claims extracted by UnifiedMiner")
+            return []
+        
+        logger.info(f"  📋 Mined {len(miner_output.claims)} candidate claims")
+        
+        # Stage 2: Evaluate and score claims
+        evaluator = FlagshipEvaluator()
+        
+        # Create content summary for evaluator
+        content_summary = metadata.get('title', 'Podcast transcript')
+        if metadata.get('description'):
+            content_summary += f": {metadata['description'][:200]}"
+        
+        eval_output = evaluator.evaluate_claims(content_summary, [miner_output])
+        
+        if not eval_output or not eval_output.evaluated_claims:
+            logger.warning("⚠️ No claims after evaluation")
+            return []
+        
+        logger.info(f"  ✅ Evaluated {len(eval_output.evaluated_claims)} claims")
+        
+        # Convert to dict format for compatibility
+        claims = []
+        for claim in eval_output.evaluated_claims:
+            claims.append({
+                'canonical': getattr(claim, 'canonical', str(claim)),
+                'evidence': getattr(claim, 'evidence', ''),
+                'importance': getattr(claim, 'importance', 5),
+                'confidence': getattr(claim, 'confidence', 0.7),
+                'tier': getattr(claim, 'tier', 'C'),
+                'speaker': getattr(claim, 'speaker', 'Unknown'),
+            })
+        
+        return claims
+        
+    except Exception as e:
+        logger.error(f"❌ HCE extraction failed: {e}")
+        logger.warning("⚠️ Falling back to mock extraction")
+        return extract_claims_fallback(transcript_text, metadata)
 
-    logger.warning("⚠️ Using MOCK claim extraction (TODO: integrate with HCE pipeline)")
 
-    # Mock: Generate fake claims for demonstration
+def extract_claims_fallback(transcript_text: str, metadata: dict) -> list[dict]:
+    """
+    Fallback mock claim extraction when HCE is unavailable.
+    """
+    logger.warning("⚠️ Using FALLBACK claim extraction (HCE unavailable)")
+
+    # Generate basic claims based on transcript length
     num_words = len(transcript_text.split())
     num_claims = max(5, num_words // 500)  # Roughly 1 claim per 500 words
 
     claims = []
     for i in range(num_claims):
         claims.append({
-            'canonical': f'Mock claim {i+1} extracted from transcript',
+            'canonical': f'Fallback claim {i+1} extracted from transcript',
             'evidence': transcript_text[:100],
             'importance': 5 + (i % 5),  # 5-9
             'confidence': 0.7 + (i % 3) * 0.1,  # 0.7-0.9
@@ -353,13 +406,13 @@ def compare_transcripts(video_url: str, whisper_model: str = "medium") -> dict:
 
     # Extract claims from both
     logger.info("\n🔍 Extracting claims from YouTube transcript...")
-    yt_claims = extract_claims_mock(yt_text, yt_meta)
+    yt_claims = extract_claims_real(yt_text, yt_meta)
     yt_stats = analyze_claims(yt_claims)
 
     logger.info(f"✅ YouTube claims: {yt_stats['total']} total ({yt_stats['a_tier']} A-tier, {yt_stats['b_tier']} B-tier)")
 
     logger.info("\n🔍 Extracting claims from Whisper transcript...")
-    whisper_claims = extract_claims_mock(whisper_text, whisper_meta)
+    whisper_claims = extract_claims_real(whisper_text, whisper_meta)
     whisper_stats = analyze_claims(whisper_claims)
 
     logger.info(f"✅ Whisper claims: {whisper_stats['total']} total ({whisper_stats['a_tier']} A-tier, {whisper_stats['b_tier']} B-tier)")

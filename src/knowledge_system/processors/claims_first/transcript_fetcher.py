@@ -211,7 +211,7 @@ class TranscriptFetcher:
         if self._youtube_api is None:
             try:
                 from youtube_transcript_api import YouTubeTranscriptApi
-                self._youtube_api = YouTubeTranscriptApi
+                self._youtube_api = YouTubeTranscriptApi()
             except ImportError:
                 raise ImportError(
                     "youtube-transcript-api not installed. "
@@ -220,15 +220,15 @@ class TranscriptFetcher:
         
         logger.info(f"Fetching YouTube transcript for video {video_id}")
         
-        # Get transcript
-        transcript_data = self._youtube_api.get_transcript(video_id)
+        # Get transcript (API v1.0+ uses .fetch() and returns objects)
+        transcript_data = self._youtube_api.fetch(video_id)
         
-        # Convert to our format
+        # Convert to our format (new API returns objects with .text, .start, .duration attrs)
         segments = [
             TranscriptSegment(
-                text=item['text'],
-                start=item['start'],
-                duration=item['duration'],
+                text=item.text,
+                start=item.start,
+                duration=item.duration,
             )
             for item in transcript_data
         ]

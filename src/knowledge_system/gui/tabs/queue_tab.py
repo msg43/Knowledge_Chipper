@@ -41,13 +41,17 @@ STATUS_COLORS = {
     "skipped": QColor(240, 240, 240),
 }
 
-# Stage display names
+# Stage display names (Claims-First Pipeline v4.0.0+)
 STAGE_NAMES = {
     "download": "Download",
-    "transcription": "Transcription",
+    "transcription": "Transcript",  # YouTube or Whisper
+    "claim_extraction": "Extract Claims",  # UnifiedMiner
+    "claim_evaluation": "Evaluate Claims",  # FlagshipEvaluator
+    "speaker_attribution": "Attribution",  # Lazy speaker attribution
+    # Legacy stage names for backwards compatibility
     "summarization": "Summarization",
-    "hce_mining": "HCE Mining",
-    "flagship_evaluation": "Flagship Eval",
+    "hce_mining": "Extract Claims",
+    "flagship_evaluation": "Evaluate Claims",
 }
 
 

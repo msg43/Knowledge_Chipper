@@ -48,6 +48,7 @@ def main():
         "2025_08_18_hce.sql",
         "2025_08_18_hce_compat.sql",
         "2025_08_18_hce_columns.sql",
+        "2025_12_20_claims_first_support.sql",  # Claims-first architecture support
     ]
 
     success = True

@@ -419,7 +419,8 @@ class UnifiedMiner:
             )
         
         # Create virtual segments from text
-        segments = self._create_segments_from_text(text, chunk_size, overlap)
+        source_id = metadata.get("source_id", "claims_first") if metadata else "claims_first"
+        segments = self._create_segments_from_text(text, chunk_size, overlap, source_id=source_id)
         
         logger.info(f"Created {len(segments)} virtual segments from text ({len(text)} chars)")
         
@@ -438,6 +439,7 @@ class UnifiedMiner:
         text: str,
         chunk_size: int = 15000,
         overlap: int = 1000,
+        source_id: str = "claims_first",
     ) -> list[Segment]:
         """
         Create virtual Segment objects from plain text.
@@ -450,10 +452,11 @@ class UnifiedMiner:
         # If text is short enough, use single segment
         if text_length <= chunk_size:
             segment = Segment(
+                source_id=source_id,
                 segment_id="chunk_0000",
-                speaker=None,  # No speaker in claims-first mode
-                t0=0.0,
-                t1=0.0,  # Timestamps will be matched later
+                speaker="UNKNOWN",  # Claims-first: speaker assigned later
+                t0="0.0",
+                t1="0.0",  # Timestamps will be matched later
                 text=text.strip(),
             )
             return [segment]
@@ -481,10 +484,11 @@ class UnifiedMiner:
             chunk_text = text[start:end].strip()
             if chunk_text:
                 segment = Segment(
+                    source_id=source_id,
                     segment_id=f"chunk_{segment_idx:04d}",
-                    speaker=None,
-                    t0=0.0,
-                    t1=0.0,
+                    speaker="UNKNOWN",  # Claims-first: speaker assigned later
+                    t0="0.0",  # Timestamps as strings
+                    t1="0.0",  # Will be refined by timestamp matcher
                     text=chunk_text,
                 )
                 segments.append(segment)
@@ -516,11 +520,12 @@ class UnifiedMiner:
         seen_models = set()
         
         for output in outputs:
-            # Merge claims (deduplicate by canonical text)
+            # Merge claims (deduplicate by claim_text or canonical)
             for claim in output.claims:
-                canonical = claim.get("canonical", "")
-                if canonical and canonical not in seen_claims:
-                    seen_claims.add(canonical)
+                # Handle both claim_text (from miner) and canonical (normalized)
+                claim_text = claim.get("claim_text") or claim.get("canonical") or ""
+                if claim_text and claim_text not in seen_claims:
+                    seen_claims.add(claim_text)
                     merged["claims"].append(claim)
             
             # Merge jargon (deduplicate by term)

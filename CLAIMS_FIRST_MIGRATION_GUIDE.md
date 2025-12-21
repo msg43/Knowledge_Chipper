@@ -1,276 +1,181 @@
-# Claims-First Migration Guide
-
-This guide explains how to migrate from the speaker-first pipeline to the claims-first architecture.
+# Claims-First Architecture Migration Guide
 
 ## Overview
 
-The claims-first architecture inverts the traditional processing order:
+Version 4.0.0 introduces a fundamental architectural change: **Claims-First Processing**. This inverts the traditional speaker-first pipeline where transcripts were fully diarized before any claim extraction could begin.
 
-| Speaker-First (Old) | Claims-First (New) |
-|---------------------|-------------------|
-| 1. Diarization | 1. Transcription |
-| 2. Transcription | 2. Claim Extraction |
-| 3. Speaker Assignment | 3. Evaluation & Filtering |
-| 4. Claim Extraction | 4. Timestamp Matching |
-| 5. Evaluation | 5. **Lazy** Speaker Attribution |
+### What Changed
 
-## Benefits
+| **Before (Speaker-First)** | **After (Claims-First)** |
+|---------------------------|-------------------------|
+| Diarization required (30-45 min) | YouTube transcripts used first (instant) |
+| Speaker attribution for ALL text | Speaker attribution only for A/B-tier claims |
+| Whisper transcription always | Whisper only as fallback |
+| pyannote dependency required | No pyannote dependency |
+| Voice fingerprinting used | Lazy contextual attribution |
 
-- **Faster**: YouTube transcripts in ~5 seconds vs 10-15 min Whisper
-- **Cheaper**: Only attribute speakers to important claims
-- **Simpler**: No diarization dependency for new pipeline
-- **Better**: LLM understands context better than acoustic matching
+## Migration Steps
 
-## Prerequisites
+### 1. Update Dependencies
 
-1. **Database Migration**: Run the migration script first
-   ```bash
-   python scripts/apply_claims_first_migration.py
-   ```
+The following dependencies are **no longer required**:
+- `pyannote.audio` - Speaker diarization
+- `speechbrain` - Voice embeddings
+- `torch-audio` - Audio processing for fingerprinting
 
-2. **Optional Dependencies**: The claims-first pipeline uses:
-   - `youtube-transcript-api` for YouTube transcripts
-   - Existing Whisper for fallback transcription
-   - Existing LLM adapters for claim extraction
+You can remove them from your environment:
+```bash
+pip uninstall pyannote.audio speechbrain
+```
 
-## Enabling Claims-First
+### 2. Apply Database Migration
 
-### Option 1: Configuration File
+The database migration adds new columns and tables for claims-first processing:
 
-Edit `config/settings.yaml`:
+```bash
+cd /path/to/Knowledge_Chipper
+source venv/bin/activate
+python -c "
+from knowledge_system.database.apply_hce_migrations import apply_migration
+from pathlib import Path
+apply_migration(
+    'knowledge_system.db', 
+    Path('src/knowledge_system/database/migrations/2025_12_20_claims_first_support.sql')
+)
+"
+```
 
+### 3. Update Configuration
+
+Claims-first mode is now enabled by default. To verify or modify settings:
+
+**config/settings.yaml:**
 ```yaml
 claims_first:
   enabled: true
-  transcript_source: auto  # auto, youtube, or whisper
+  transcript_source: "auto"  # auto, youtube, whisper
   youtube_quality_threshold: 0.7
-  evaluator_model: configurable  # gemini, claude, or configurable
-  lazy_attribution_min_importance: 7
+  lazy_attribution_min_importance: 7  # Only attribute speakers for importance >= 7
 ```
 
-### Option 2: Python Code
+### 4. GUI Changes
 
-```python
-from knowledge_system.processors.audio_processor import AudioProcessor
+The Transcription tab now has a "Claims-First Mode" checkbox instead of the deprecated speaker assignment options:
 
-# Create processor with claims-first enabled
-processor = AudioProcessor(
-    use_claims_first=True,
-    claims_first_config={
-        "transcript_source": "auto",
-        "youtube_quality_threshold": 0.7,
-        "lazy_attribution_min_importance": 7,
-    }
-)
+- ✅ **Claims-First Mode** (new): Use the new pipeline
+- ❌ ~~Enable speaker diarization~~ (removed)
+- ❌ ~~Enable speaker assignment~~ (removed)
 
-# Process with claims-first
-result = processor.process_claims_first(
-    audio_path=Path("/path/to/audio.mp3"),
-    source_url="https://youtube.com/watch?v=...",
-    metadata={"title": "Episode Title"}
-)
+## New Pipeline Stages
+
+### Claims-First Pipeline Flow
+
 ```
+1. TRANSCRIPT ACQUISITION
+   ├── Try YouTube transcript (instant, free)
+   │   └── Quality check: word count, error markers
+   └── Fallback to Whisper (10-20 min)
+       └── Local transcription with timestamps
 
-### Option 3: Direct Pipeline Access
+2. CLAIM EXTRACTION (UnifiedMiner)
+   ├── Chunk transcript (~15k chars per chunk)
+   ├── Extract claims with GPT-4o-mini (fast, cheap)
+   └── Output: Raw candidate claims
 
-```python
-from knowledge_system.processors.claims_first import (
-    ClaimsFirstConfig,
-    ClaimsFirstPipeline,
-)
+3. CLAIM EVALUATION (FlagshipEvaluator)
+   ├── Score claims on multiple dimensions
+   │   ├── Epistemic value (0-10)
+   │   ├── Actionability (0-10)
+   │   └── Uniqueness (0-10)
+   ├── Assign tiers: A (≥8), B (6-7), C (<6)
+   └── Filter: Only keep A/B tier
 
-config = ClaimsFirstConfig(
-    enabled=True,
-    transcript_source="auto",
-)
+4. TIMESTAMP MATCHING
+   ├── Match claim quotes to transcript segments
+   └── Precision: word-level (Whisper) or segment (YouTube)
 
-pipeline = ClaimsFirstPipeline(config=config)
-
-result = pipeline.process(
-    source_url="https://youtube.com/watch?v=...",
-    audio_path=Path("/path/to/audio.mp3"),
-    metadata={"title": "Episode Title"}
-)
-
-# Access results
-print(f"Total claims: {result.total_claims}")
-print(f"A-tier claims: {len(result.a_tier_claims)}")
-print(f"Attributed: {len(result.attributed_claims)}")
-```
-
-## Configuration Options
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `enabled` | `false` | Master enable flag |
-| `transcript_source` | `auto` | `auto`, `youtube`, or `whisper` |
-| `youtube_quality_threshold` | `0.7` | Min quality for YouTube transcripts |
-| `evaluator_model` | `configurable` | `gemini`, `claude`, or `configurable` |
-| `lazy_attribution_min_importance` | `7` | Min importance for speaker attribution |
-| `context_window_seconds` | `60` | Context for speaker attribution |
-| `store_candidates` | `true` | Store candidates for re-evaluation |
-| `fuzzy_match_threshold` | `0.7` | Quote-to-timestamp match threshold |
-
-## Transcript Sources
-
-### Auto Mode (Recommended)
-
-1. Try YouTube transcript first (~5 seconds)
-2. Assess quality using heuristics
-3. Fall back to Whisper if quality < threshold
-
-### YouTube Only
-
-Forces use of YouTube's auto-generated transcripts. Best for:
-- High-volume processing
-- Cost-sensitive scenarios
-- English content with clear audio
-
-### Whisper Only
-
-Forces Whisper transcription. Best for:
-- Non-YouTube sources
-- Critical accuracy requirements
-- Poor quality YouTube transcripts
-
-## Lazy Speaker Attribution
-
-Only claims with importance >= `lazy_attribution_min_importance` get speaker attribution.
-
-### Attribution Signals
-
-The LLM uses these signals:
-
-1. **First-person language**: "my research", "I think"
-2. **Expertise matching**: Topic vs guest credentials
-3. **Turn-taking patterns**: Question → claim → response
-4. **Metadata**: Guest names from description
-5. **Self-introductions**: "I'm [name] and..."
-
-### Attribution Result
-
-```python
-result.claims[0].speaker  # SpeakerAttribution or None
-
-# If attributed:
-speaker = result.claims[0].speaker
-print(speaker.speaker_name)  # "Dr. Jane Smith"
-print(speaker.confidence)    # 0.85
-print(speaker.is_host)       # False
-print(speaker.reasoning)     # ["Expert content", "Used 'my research'"]
+5. SPEAKER ATTRIBUTION (Lazy, A/B only)
+   ├── Use contextual clues from transcript
+   ├── Match against known speakers in metadata
+   └── Skip C-tier claims entirely
 ```
 
 ## Rollback
 
-If issues arise, you can roll back:
+The speaker-first codebase is preserved for rollback if needed:
 
-### Immediate (Config Toggle)
+- **Git tag:** `v3.5.0-speaker-first-final`
+- **Git branch:** `speaker-first-archive`
+- **Config toggle:** Set `claims_first.enabled: false`
 
-```yaml
-claims_first:
-  enabled: false
-```
-
-### Full Rollback (Git)
-
+To rollback:
 ```bash
-# Checkout the preserved tag
-git checkout v3.5.0-speaker-first-final
-
-# Or the archive branch
 git checkout speaker-first-archive
+# Or restore from tag:
+git checkout v3.5.0-speaker-first-final
 ```
 
-## A/B Testing
+## Benefits
 
-Run both pipelines in parallel to compare:
+### Speed Improvements
+- **10-20x faster** for podcasts with good YouTube transcripts
+- Skip 30-45 minute diarization entirely
+- Parallel claim extraction across chunks
 
-```python
-# Speaker-first
-processor_sf = AudioProcessor(use_claims_first=False, enable_diarization=True)
-result_sf = processor_sf.process(audio_path)
+### Cost Savings
+- No expensive voice processing
+- Cheaper LLM calls (GPT-4o-mini for extraction)
+- Only evaluate high-value claims
 
-# Claims-first
-processor_cf = AudioProcessor(use_claims_first=True)
-result_cf = processor_cf.process_claims_first(audio_path, source_url=url)
-
-# Compare
-print(f"Speaker-first claims: {len(result_sf.metadata.get('claims', []))}")
-print(f"Claims-first claims: {result_cf.metadata['total_claims']}")
-```
-
-## Validation
-
-Run the validation script:
-
-```bash
-# Test on 20 podcasts from database
-python scripts/validate_claims_first.py --use-db --count 20
-
-# Test on curated test URLs
-python scripts/validate_claims_first.py --count 5
-
-# YouTube transcripts only
-python scripts/validate_claims_first.py --youtube-only
-```
-
-## Database Changes
-
-New columns in `claims`:
-- `timestamp_precision`: `word` or `segment`
-- `transcript_source`: `youtube`, `whisper`, or `manual`
-- `speaker_attribution_confidence`: 0.0-1.0
-
-New columns in `media_sources`:
-- `transcript_source`: Which transcript was used
-- `transcript_quality_score`: YouTube quality assessment
-- `used_claims_first_pipeline`: Boolean flag
-
-New tables:
-- `candidate_claims`: Pre-filtering candidates for re-evaluation
-- `claims_first_processing_log`: Processing metrics and timing
+### Quality Focus
+- Focus processing on claims that matter
+- Higher signal-to-noise ratio
+- Reduced "claim spam" from low-value extractions
 
 ## Troubleshooting
 
-### "youtube-transcript-api not installed"
+### YouTube transcript not available
+Some videos don't have auto-generated transcripts. The pipeline will automatically fall back to Whisper.
 
-```bash
-pip install youtube-transcript-api
-```
+### Low quality transcripts
+If YouTube transcript quality is below threshold (default 0.7), the pipeline upgrades to Whisper automatically.
 
-### YouTube transcript quality too low
+### Speaker attribution not working
+Speaker attribution only applies to A/B-tier claims (importance ≥ 7). C-tier claims are intentionally not attributed.
 
-Lower the threshold or force Whisper:
+### Missing Google AI package
+If you see "Google AI package not installed", the pipeline falls back to OpenAI (GPT-4o-mini). This is fine - OpenAI is reliable and works well.
 
-```yaml
-claims_first:
-  youtube_quality_threshold: 0.5  # Lower threshold
-  # OR
-  transcript_source: whisper  # Force Whisper
-```
+## API Changes
 
-### No speaker attribution
-
-Check that claims have importance >= `lazy_attribution_min_importance`:
-
+### Removed APIs
 ```python
-# Lower the threshold
-config = ClaimsFirstConfig(lazy_attribution_min_importance=5)
+# These no longer exist:
+from knowledge_system.processors.diarization import SpeakerDiarizationProcessor
+from knowledge_system.voice import VoiceFingerprintProcessor, SpeakerVerificationService
+from knowledge_system.gui.dialogs import SpeakerAssignmentDialog
 ```
 
-### Slow processing
+### New APIs
+```python
+# Use these instead:
+from knowledge_system.processors.claims_first import (
+    ClaimsFirstPipeline,
+    ClaimsFirstConfig,
+    TranscriptFetcher,
+)
 
-Use YouTube-only mode for maximum speed:
+# Process a podcast:
+config = ClaimsFirstConfig(enabled=True)
+pipeline = ClaimsFirstPipeline(config)
+result = pipeline.process("https://youtube.com/watch?v=...", metadata={...})
 
-```yaml
-claims_first:
-  transcript_source: youtube
+# Access results:
+print(f"Extracted {result.total_claims} claims")
+for claim in result.a_tier_claims:
+    print(f"  {claim.canonical}")
 ```
 
 ## Questions?
 
-See also:
-- `CLAIMS_FIRST_ARCHITECTURE_OVERHAUL_PLAN.md` - Original design document
-- `EXTRACTION_ARCHITECTURE_ANALYSIS.md` - Analysis of extraction approaches
-- `tests/test_claims_first_pipeline.py` - Test suite with examples
-
+Open an issue at: https://github.com/msg43/Knowledge_Chipper/issues

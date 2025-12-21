@@ -39,7 +39,7 @@ class ClaimsFirstConfig:
         fuzzy_match_threshold: Threshold for fuzzy quote matching (0.0-1.0)
     """
     
-    enabled: bool = False
+    enabled: bool = True  # Claims-first mode is now the default
     transcript_source: TranscriptSource = TranscriptSource.AUTO
     youtube_quality_threshold: float = 0.7
     evaluator_model: EvaluatorModel = EvaluatorModel.CONFIGURABLE
@@ -49,10 +49,12 @@ class ClaimsFirstConfig:
     fuzzy_match_threshold: float = 0.7
     
     # Model-specific settings
-    miner_model: str = "gemini-2.0-flash"
+    # Default to GPT-4o-mini for reliability; use "gemini-2.0-flash" if Google AI installed
+    miner_model: str = "gpt-4o-mini"
     evaluator_model_gemini: str = "gemini-2.0-flash"
     evaluator_model_claude: str = "claude-3-5-sonnet-20241022"
-    attribution_model: str = "gemini-2.0-flash"
+    evaluator_model_openai: str = "gpt-4o"  # Fallback when Gemini not available
+    attribution_model: str = "gpt-4o-mini"
     
     def __post_init__(self):
         """Validate configuration values."""
