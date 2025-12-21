@@ -210,62 +210,86 @@ async def extract_ai_summary(page) -> str:
         
         # Click Summarize
         await summarize_button.click()
-        print(f"  Waiting for YouTube to generate summary (5-15 seconds)...")
+        print(f"  Waiting for YouTube to generate summary (10-20 seconds for long videos)...")
         
-        # Wait for summary to generate - be patient
-        await page.wait_for_timeout(8000)  # Initial 8 second wait
+        # Wait longer for initial generation - long videos take more time
+        await page.wait_for_timeout(12000)  # Initial 12 second wait
         
-        # Poll for summary content with longer timeout
-        max_wait = 45  # Increased from 30 to 45 seconds
+        # Poll for summary content with much longer timeout
+        max_wait = 60  # Increased to 60 seconds for long videos
         start = asyncio.get_event_loop().time()
         last_length = 0
         stable_count = 0
+        last_text = ""
         
         while (asyncio.get_event_loop().time() - start) < max_wait:
+            # Try to get the entire engagement panel content
             selectors = [
-                'ytd-engagement-panel-section-list-renderer [id="content"] p',
-                'ytd-engagement-panel-section-list-renderer p',
-                '[role="article"] p',
-                '.response-content p',
-                'div[class*="summary"] p',
+                'ytd-engagement-panel-section-list-renderer [id="content"]',
+                'ytd-engagement-panel-section-list-renderer',
+                '[role="article"]',
+                '.response-content',
             ]
             
             for selector in selectors:
                 try:
-                    elements = await page.query_selector_all(selector)
-                    if elements:
-                        # Get all paragraph text
-                        texts = []
-                        for elem in elements:
-                            text = await elem.inner_text()
-                            # Filter out UI elements and keep only content
-                            if text and len(text) > 20 and not text.startswith('Hello!') and 'Curious about' not in text:
-                                texts.append(text)
+                    panel = await page.query_selector(selector)
+                    if panel:
+                        # Get all text from the panel
+                        full_text = await panel.inner_text()
                         
-                        if texts:
-                            full_text = '\n\n'.join(texts)
-                            current_length = len(full_text)
+                        # Filter out UI noise
+                        lines = full_text.split('\n')
+                        filtered_lines = []
+                        
+                        skip_phrases = [
+                            'Hello!',
+                            'Curious about',
+                            'Not sure what to ask',
+                            'Choose something:',
+                            'Follow along using the transcript',
+                            'Show transcript',
+                        ]
+                        
+                        for line in lines:
+                            line = line.strip()
+                            # Skip empty lines and UI elements
+                            if not line or any(phrase in line for phrase in skip_phrases):
+                                continue
+                            # Skip very short lines that are likely UI elements
+                            if len(line) < 15:
+                                continue
+                            filtered_lines.append(line)
+                        
+                        if filtered_lines:
+                            clean_text = '\n\n'.join(filtered_lines)
+                            current_length = len(clean_text)
                             
-                            # Check if summary has stopped growing (stable for 3 checks)
-                            if current_length == last_length:
+                            # Check if summary has stopped growing
+                            if current_length == last_length and clean_text == last_text:
                                 stable_count += 1
-                                if stable_count >= 3 and current_length > 200:
-                                    # Summary is complete
+                                # Need 5 stable checks for long summaries
+                                if stable_count >= 5 and current_length > 300:
                                     print(f"  ✅ Summary complete ({current_length} chars)")
-                                    return full_text
+                                    return clean_text
                             else:
+                                if current_length > last_length:
+                                    print(f"  📝 Summary growing... ({current_length} chars)")
                                 stable_count = 0
                                 last_length = current_length
-                                print(f"  📝 Summary growing... ({current_length} chars)")
-                except:
+                                last_text = clean_text
+                            
+                            break  # Found content, no need to try other selectors
+                except Exception as e:
+                    logger.debug(f"Selector {selector} failed: {e}")
                     continue
             
             await page.wait_for_timeout(2000)  # Check every 2 seconds
         
         # Return what we have even if timeout
         if last_length > 100:
-            print(f"  ⚠️  Timeout but got partial summary ({last_length} chars)")
-            return full_text
+            print(f"  ⚠️  Timeout but got summary ({last_length} chars)")
+            return last_text
         
         return "YouTube AI summary generation timed out"
         
