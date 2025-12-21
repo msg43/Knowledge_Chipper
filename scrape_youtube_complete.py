@@ -34,6 +34,11 @@ async def scrape_complete_video_data(url: str) -> dict:
         'errors': []
     }
     
+    # First, get rich metadata from yt-dlp
+    print(f"📋 Getting metadata from yt-dlp...")
+    ytdlp_metadata = get_ytdlp_metadata(url)
+    result['metadata'].update(ytdlp_metadata)
+    
     try:
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
@@ -53,10 +58,10 @@ async def scrape_complete_video_data(url: str) -> dict:
                 await page.goto(url, wait_until='networkidle', timeout=15000)
                 await page.wait_for_timeout(3000)  # Extra wait for dynamic content
                 
-                # Extract metadata from page
-                print(f"📋 Extracting metadata...")
-                metadata = await extract_metadata(page, url)
-                result['metadata'] = metadata
+                # Extract additional metadata from page (supplement yt-dlp data)
+                print(f"📋 Extracting page metadata...")
+                page_metadata = await extract_metadata(page, url)
+                result['metadata'].update(page_metadata)
                 
                 # Get transcript
                 print(f"📝 Getting transcript...")
@@ -78,6 +83,67 @@ async def scrape_complete_video_data(url: str) -> dict:
         result['errors'].append(str(e))
     
     return result
+
+
+def get_ytdlp_metadata(url: str) -> dict:
+    """Get rich metadata from yt-dlp."""
+    try:
+        import yt_dlp
+        
+        ydl_opts = {
+            'quiet': True,
+            'no_warnings': True,
+            'extract_flat': False,
+        }
+        
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+            
+            # Extract video ID
+            video_id = info.get('id', url.split('v=')[1].split('&')[0] if 'v=' in url else 'unknown')
+            
+            # Format upload date
+            upload_date = info.get('upload_date', '')
+            if upload_date and len(upload_date) == 8:
+                from datetime import datetime
+                try:
+                    dt = datetime.strptime(upload_date, '%Y%m%d')
+                    upload_date = dt.strftime('%Y-%m-%dT00:00:00')
+                except:
+                    pass
+            
+            # Format duration
+            duration_seconds = info.get('duration', 0)
+            minutes = int(duration_seconds // 60)
+            seconds = int(duration_seconds % 60)
+            duration_formatted = f"{minutes}:{seconds:02d}"
+            
+            return {
+                'video_id': video_id,
+                'title': info.get('title', 'Unknown'),
+                'uploader': info.get('uploader', 'Unknown'),
+                'uploader_id': info.get('uploader_id', ''),
+                'upload_date': upload_date,
+                'duration': duration_formatted,
+                'duration_seconds': duration_seconds,
+                'view_count': info.get('view_count', 0),
+                'description': info.get('description', ''),
+                'tags': info.get('tags', []),
+                'categories': info.get('categories', []),
+                'thumbnail_url': info.get('thumbnail', ''),
+                'language': info.get('language', 'en'),
+                'url': url,
+            }
+    except Exception as e:
+        logger.error(f"Error getting yt-dlp metadata: {e}")
+        # Return minimal metadata
+        video_id = url.split('v=')[1].split('&')[0] if 'v=' in url else 'unknown'
+        return {
+            'video_id': video_id,
+            'url': url,
+            'title': 'Unknown',
+            'uploader': 'Unknown',
+        }
 
 
 async def extract_metadata(page, url: str) -> dict:
@@ -303,20 +369,44 @@ def format_markdown_output(data: dict) -> str:
     metadata = data['metadata']
     base_url = metadata.get('url', '').split('&')[0].split('#')[0]  # Clean URL
     
-    # Format duration if available
-    duration_str = "Unknown"
-    
     # Format date
     generated_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    fetched_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     
-    # Build YAML frontmatter
+    # Build YAML frontmatter (matching Steve Bannon format)
     frontmatter_lines = [
         f'title: "{metadata.get("title", "Unknown Title")}"',
+        f'source: "{metadata.get("url", "")}"',
         f'video_id: "{metadata.get("video_id", "unknown")}"',
+        f'language: "{metadata.get("language", "en")}"',
+        f'type: "YouTube AI + Transcript"',
         f'uploader: "{metadata.get("uploader", "Unknown")}"',
-        f'url: "{metadata.get("url", "")}"',
-        f'generated: "{generated_date}"',
     ]
+    
+    # Add upload_date if available
+    if metadata.get('upload_date'):
+        frontmatter_lines.append(f'upload_date: "{metadata.get("upload_date")}"')
+    
+    # Add duration
+    if metadata.get('duration'):
+        frontmatter_lines.append(f'duration: "{metadata.get("duration")}"')
+    
+    # Add view_count
+    if metadata.get('view_count'):
+        frontmatter_lines.append(f'view_count: {metadata.get("view_count")}')
+    
+    # Add tags if available
+    tags = metadata.get('tags', [])
+    if tags:
+        # Format tags as YAML array
+        tags_yaml = '[' + ', '.join(f'"{tag}"' for tag in tags[:20]) + ']'  # Limit to 20 tags
+        frontmatter_lines.append(f'tags: {tags_yaml}')
+        frontmatter_lines.append(f'# Total tags: {len(tags)}')
+    
+    # Add model and device info
+    frontmatter_lines.append('model: "YouTube Transcript + AI Summary"')
+    frontmatter_lines.append('device: "Playwright Scraper"')
+    frontmatter_lines.append(f'fetched: "{fetched_date}"')
     
     frontmatter = '\n'.join(frontmatter_lines)
     
@@ -410,20 +500,21 @@ def format_markdown_output(data: dict) -> str:
     ai_summary = hyperlink_timestamps(data.get('ai_summary', 'AI summary not available'), base_url)
     transcript = hyperlink_timestamps(data.get('transcript', 'Transcript not available'), base_url)
     
-    # Build markdown content
+    # Build thumbnail reference
+    video_id = metadata.get('video_id', 'unknown')
+    thumbnail_line = f"![Video Thumbnail](Thumbnails/{video_id}_thumbnail.jpg)"
+    
+    # Build watch link
+    watch_link = f"**🎥 [Watch on YouTube]({base_url})**"
+    
+    # Build markdown content (matching Steve Bannon format)
     markdown = f"""---
 {frontmatter}
 ---
 
-# {metadata.get('title', 'Unknown Title')}
+{thumbnail_line}
 
-## Video Metadata
-
-- **Title**: {metadata.get('title', 'Unknown')}
-- **Channel**: {metadata.get('uploader', 'Unknown')}
-- **Video ID**: {metadata.get('video_id', 'unknown')}
-- **URL**: [{metadata.get('url', '')}]({metadata.get('url', '')})
-- **Generated**: {generated_date}
+{watch_link}
 
 ## Description
 
@@ -444,6 +535,29 @@ def format_markdown_output(data: dict) -> str:
 """
     
     return markdown
+
+
+def download_thumbnail(thumbnail_url: str, video_id: str, output_dir: Path) -> bool:
+    """Download video thumbnail."""
+    try:
+        import requests
+        
+        thumbnail_dir = output_dir / "Thumbnails"
+        thumbnail_dir.mkdir(parents=True, exist_ok=True)
+        
+        thumbnail_path = thumbnail_dir / f"{video_id}_thumbnail.jpg"
+        
+        # Download thumbnail
+        response = requests.get(thumbnail_url, timeout=10)
+        response.raise_for_status()
+        
+        thumbnail_path.write_bytes(response.content)
+        print(f"📸 Downloaded thumbnail: {thumbnail_path}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Failed to download thumbnail: {e}")
+        return False
 
 
 def main():
@@ -483,12 +597,20 @@ def main():
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(markdown, encoding='utf-8')
     
+    # Download thumbnail
+    thumbnail_url = data['metadata'].get('thumbnail_url')
+    video_id = data['metadata'].get('video_id', 'unknown')
+    if thumbnail_url:
+        download_thumbnail(thumbnail_url, video_id, output_path.parent)
+    
     print(f"\n{'='*70}")
     print(f"✅ Complete video data scraped successfully!")
     print(f"{'='*70}\n")
     print(f"📄 Saved to: {output_path}")
     print(f"📝 Transcript: {len(data['transcript'])} characters")
     print(f"🤖 AI Summary: {len(data['ai_summary'])} characters")
+    if data['metadata'].get('tags'):
+        print(f"🏷️  Tags: {len(data['metadata'].get('tags', []))} tags")
     print(f"\n{'='*70}\n")
     
     # Also print the markdown to console
