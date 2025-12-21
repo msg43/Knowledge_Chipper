@@ -71,6 +71,12 @@ class MediaSource(Base):
     source_type = Column(String, nullable=False)
     title = Column(String, nullable=False)
     url = Column(String, nullable=False)
+    
+    # DESCRIPTION - Source-provided description (not a summary):
+    # - YouTube: Video description
+    # - RSS: Show notes
+    # - PDF: Abstract or introduction
+    # - Podcast: Episode description
     description = Column(Text)
 
     # Author/Creator info (from platform)
@@ -128,13 +134,20 @@ class MediaSource(Base):
     # Episode-specific fields (for source_type='episode')
     # Moved from Episode table - episode data is now stored directly in MediaSource
     subtitle = Column(String)
-    short_summary = Column(Text)
-    long_summary = Column(Text)
+    
+    # SUMMARIES - Multiple types for comparison and testing:
+    # 1. short_summary: Knowledge_Chipper's short summary (local LLM)
+    # 2. long_summary: Knowledge_Chipper's long summary (local LLM)
+    # 3. youtube_ai_summary: YouTube's AI-generated summary (scraped)
+    # This allows comparison between YouTube AI vs Knowledge_Chipper summaries
+    short_summary = Column(Text)  # Knowledge_Chipper short summary (local LLM)
+    long_summary = Column(Text)   # Knowledge_Chipper long summary (local LLM)
     summary_generated_at = Column(DateTime)
-    summary_generated_by_model = Column(String)
-
-    # YouTube AI Summary (scraped from YouTube's AI feature)
-    youtube_ai_summary = Column(Text)
+    summary_generated_by_model = Column(String)  # Model used for Knowledge_Chipper summaries
+    
+    # YouTube AI Summary (scraped from YouTube's "Ask" feature)
+    # Only populated for YouTube videos when scraping is enabled
+    youtube_ai_summary = Column(Text)  # YouTube's AI-generated summary
     youtube_ai_summary_fetched_at = Column(DateTime)
     youtube_ai_summary_method = Column(String)  # 'playwright_scraper' or 'api'
 
