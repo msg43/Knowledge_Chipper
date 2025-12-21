@@ -1,8 +1,10 @@
 """
 Model Pre-loader for Transcription Tab
 
-Pre-loads transcription and diarization models in the background to eliminate
+Pre-loads transcription models in the background to eliminate
 initialization delays when the user starts processing.
+
+Note: Diarization has been removed in v4.0.0 in favor of claims-first architecture.
 """
 
 from __future__ import annotations
@@ -14,8 +16,9 @@ from typing import TYPE_CHECKING, Any, Optional
 
 from PyQt6.QtCore import QObject, pyqtSignal
 
-if TYPE_CHECKING:
-    from knowledge_system.processors.diarization import SpeakerDiarizationProcessor
+# REMOVED in v4.0.0: Diarization replaced by claims-first architecture
+# if TYPE_CHECKING:
+#     from knowledge_system.processors.diarization import SpeakerDiarizationProcessor
 
 from knowledge_system.logger import get_logger
 from knowledge_system.processors.audio_processor import AudioProcessor
@@ -23,8 +26,7 @@ from knowledge_system.processors.whisper_cpp_transcribe import (
     WhisperCppTranscribeProcessor,
 )
 
-# IMPORTANT: Import diarization lazily to avoid torchcodec segfault at GUI startup
-# torchcodec has ABI issues and crashes on import, so we only load it when actually needed
+# REMOVED in v4.0.0: Diarization replaced by claims-first architecture
 # from knowledge_system.processors.diarization import SpeakerDiarizationProcessor, is_diarization_available
 
 logger = get_logger(__name__)
@@ -53,7 +55,8 @@ class ModelPreloader(QObject):
 
         # Model instances (None until loaded)
         self.transcriber: WhisperCppTranscribeProcessor | None = None
-        self.diarizer: SpeakerDiarizationProcessor | None = None
+        # REMOVED in v4.0.0: Diarization replaced by claims-first
+        self.diarizer = None
 
         # Loading state
         self.transcription_loading = False
@@ -157,83 +160,25 @@ class ModelPreloader(QObject):
             self.transcription_loading = False
 
     def _start_diarization_loading(self):
-        """Start loading diarization model."""
-        # Skip diarization loading in testing mode to avoid threading shutdown issues
-        import os
-
-        if os.environ.get("KNOWLEDGE_CHIPPER_TESTING_MODE") == "1":
-            logger.info(
-                "🧪 Testing mode: Skipping diarization model preload to avoid threading issues"
-            )
-            return
-
-        # Safe to preload now - torchcodec has been completely removed
-        # Lazy import to avoid any potential startup issues
-        try:
-            from knowledge_system.processors.diarization import is_diarization_available
-        except Exception as e:
-            logger.warning(f"Could not import diarization module: {e}")
-            return
-
-        if not is_diarization_available():
-            logger.warning("Diarization not available, skipping preload")
-            return
-
-        if self.diarization_loading or self.diarization_ready:
-            logger.debug("Diarization model already loading or ready")
-            return
-
-        logger.info("✅ Starting diarization model preloading...")
-
-        self.diarization_loading = True
-        self._diarization_thread = threading.Thread(
-            target=self._load_diarization_model,
-            daemon=True,
-            name="DiarizationModelLoader",
-        )
-        self._diarization_thread.start()
+        """Start loading diarization model.
+        
+        REMOVED in v4.0.0: Diarization replaced by claims-first architecture.
+        This method is now a no-op.
+        """
+        # REMOVED in v4.0.0: Diarization replaced by claims-first
+        logger.info("⚠️ Diarization removed in v4.0.0, skipping preload")
+        self.diarization_ready = True  # Mark as ready (nothing to load)
+        self.diarization_model_ready.emit()
+        return
 
     def _load_diarization_model(self):
-        """Load diarization model in background thread."""
-        try:
-            from knowledge_system.processors.diarization import (
-                SpeakerDiarizationProcessor,
-            )
-
-            logger.info("🔄 Loading diarization model...")
-            self.diarization_model_loading.emit("Loading diarization model...", 10)
-
-            # Create diarizer
-            self.diarizer = SpeakerDiarizationProcessor(
-                device=self.device,
-                hf_token=self.hf_token,
-                progress_callback=self._diarization_progress_callback,
-            )
-
-            # Trigger model loading by calling _load_pipeline
-            # This will download the model if not cached
-            logger.info("📥 Downloading/loading diarization model...")
-            self.diarization_model_loading.emit("Downloading diarization model...", 50)
-
-            # Pre-load the pipeline to trigger model download
-            self.diarizer._load_pipeline()
-
-            self.diarization_model_loading.emit("Diarization model ready!", 100)
-            self.diarization_ready = True
-            self.diarization_model_ready.emit()
-
-            logger.info("✅ Diarization model preloaded successfully")
-
-            # Check if both models are ready
-            if self.transcription_ready and self.diarization_ready:
-                self.preloading_complete.emit()
-                logger.info("🎉 All models preloaded successfully!")
-
-        except Exception as e:
-            logger.error(f"Failed to preload diarization model: {e}")
-            self.preloading_error.emit(f"Diarization model loading failed: {e}")
-        finally:
-            self.diarization_loading = False
+        """Load diarization model in background thread.
+        
+        REMOVED in v4.0.0: Diarization replaced by claims-first architecture.
+        This method is now a no-op.
+        """
+        # REMOVED in v4.0.0: Nothing to load
+        pass
 
     def _transcription_progress_callback(self, message: str, progress: int = 0):
         """Progress callback for transcription model loading."""
@@ -245,11 +190,12 @@ class ModelPreloader(QObject):
 
     def get_preloaded_models(
         self,
-    ) -> tuple[
-        WhisperCppTranscribeProcessor | None, SpeakerDiarizationProcessor | None
-    ]:
-        """Get the preloaded model instances."""
-        return self.transcriber, self.diarizer
+    ) -> tuple[WhisperCppTranscribeProcessor | None, None]:
+        """Get the preloaded model instances.
+        
+        Note: Diarizer is always None in v4.0.0+ (removed).
+        """
+        return self.transcriber, None
 
     def is_ready(self) -> bool:
         """Check if all required models are ready."""

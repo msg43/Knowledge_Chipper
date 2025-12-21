@@ -272,51 +272,13 @@ class AudioProcessor(BaseProcessor):
             )
             return None
 
-        try:
-            from .diarization import (
-                SpeakerDiarizationProcessor,
-                get_diarization_installation_instructions,
-                is_diarization_available,
-            )
-
-            # Check if diarization is available
-            if not is_diarization_available():
-                logger.warning(
-                    "Diarization not available. Skipping speaker identification."
-                )
-                logger.info(get_diarization_installation_instructions())
-                return None
-
-            logger.info("Running speaker diarization...")
-
-            # Get diarization sensitivity from settings
-            from ..config import get_settings
-
-            settings = get_settings()
-            sensitivity = getattr(
-                settings.speaker_identification,
-                "diarization_sensitivity",
-                "conservative",
-            )
-
-            diarizer = SpeakerDiarizationProcessor(
-                hf_token=self.hf_token,
-                device=self.device,
-                progress_callback=self.progress_callback,
-                sensitivity=sensitivity,
-            )
-            result = diarizer.process(audio_path, **diarization_kwargs)
-            if result.success:
-                logger.info(
-                    f"Diarization completed with {len(result.data)} speaker segments"
-                )
-                return result.data
-            else:
-                logger.warning(f"Diarization failed: {result.errors}")
-                return None
-        except Exception as e:
-            logger.warning(f"Diarization failed: {e}")
-            return None
+        # REMOVED in v4.0.0: Speaker diarization replaced by claims-first architecture
+        # Use claims_first.LazySpeakerAttributor for speaker attribution instead
+        logger.warning(
+            "⚠️ Speaker diarization has been removed in v4.0.0. "
+            "Use claims-first pipeline with use_claims_first=True for speaker attribution."
+        )
+        return None
 
     def _process_with_streaming(
         self,
@@ -340,20 +302,11 @@ class AudioProcessor(BaseProcessor):
             diarizer = None
 
             if diarization_enabled:
-                from .diarization import (
-                    SpeakerDiarizationProcessor,
-                    is_diarization_available,
+                # REMOVED in v4.0.0: Speaker diarization replaced by claims-first
+                logger.warning(
+                    "⚠️ Diarization removed in v4.0.0. Use claims-first pipeline instead."
                 )
-
-                if is_diarization_available():
-                    diarizer = SpeakerDiarizationProcessor(
-                        hf_token=self.hf_token,
-                        device=self.device,
-                        progress_callback=self.progress_callback,
-                    )
-                else:
-                    logger.warning("Diarization not available for streaming processing")
-                    diarization_enabled = False
+                diarization_enabled = False
 
             # Prepare kwargs
             streaming_diarization_kwargs = diarization_config.copy()
@@ -641,6 +594,10 @@ class AudioProcessor(BaseProcessor):
     ) -> dict:
         """
         Handle speaker assignment workflow after diarization completion.
+        
+        REMOVED in v4.0.0: Speaker assignment via diarization has been replaced
+        by claims-first architecture. Use process_claims_first() instead for
+        speaker attribution via LazySpeakerAttributor.
 
         Args:
             transcript_data: Transcription data with speaker segments
@@ -649,222 +606,13 @@ class AudioProcessor(BaseProcessor):
             kwargs: Processing kwargs that may contain GUI settings
 
         Returns:
-            Updated transcript data with real speaker names
+            Original transcript data unchanged
         """
-        try:
-            # Check if speaker assignment is enabled
-            enable_speaker_assignment = kwargs.get("enable_speaker_assignment", True)
-            if not enable_speaker_assignment:
-                logger.info("Speaker assignment disabled, keeping generic speaker IDs")
-                return transcript_data
-
-            # Import speaker processing components
-            from .speaker_processor import SpeakerProcessor
-
-            # Prepare speaker data for assignment
-            speaker_processor = SpeakerProcessor()
-
-            # Extract transcript segments for processing
-            transcript_segments = transcript_data.get("segments", [])
-
-            # Get metadata from all sources (non-destructive multi-source approach)
-            source_id = kwargs.get("source_id")
-            if source_id and self.db_service:
-                logger.info(f"🔍 Retrieving metadata from all sources for {source_id}")
-                all_metadata = self.db_service.get_all_source_metadata(source_id)
-
-                # Log what we found
-                primary = all_metadata.get("primary_source")
-                aliases = all_metadata.get("aliased_sources", [])
-                if primary:
-                    logger.info(
-                        f"   Primary: {primary.get('source_type')} - {primary.get('title', '')[:50]}..."
-                    )
-                for i, alias in enumerate(aliases, 1):
-                    logger.info(
-                        f"   Alias #{i}: {alias.get('source_type')} - {alias.get('title', '')[:50]}..."
-                    )
-            else:
-                # Fallback for non-database sources (local files, etc.)
-                logger.debug("No source_id or db_service, using metadata from kwargs")
-                all_metadata = {
-                    "primary_source": kwargs.get("metadata", {}),
-                    "aliased_sources": [],
-                }
-
-            # Extract word-level timestamps if available (from whisper.cpp --output-words)
-            word_timestamps = transcript_data.get("words", [])
-            if word_timestamps:
-                logger.info(f"📝 Word timestamps available: {len(word_timestamps)} words for fine-grained attribution")
-
-            # Prepare speaker data with multi-source metadata for enhanced suggestions
-            speaker_data_list = speaker_processor.prepare_speaker_data(
-                diarization_segments,
-                transcript_segments,
-                word_timestamps=word_timestamps,
-                metadata=all_metadata,
-                audio_path=recording_path,
-            )
-
-            if not speaker_data_list:
-                logger.warning("No speaker data prepared for assignment")
-                return transcript_data
-
-            logger.info(f"✅ Found {len(speaker_data_list)} speakers for assignment")
-
-            # Check if MVP LLM is already available (quick check, no downloads)
-            mvp_available = False
-            try:
-                from ..utils.mvp_llm_setup import get_mvp_llm_setup
-
-                mvp_setup = get_mvp_llm_setup()
-                if mvp_setup.is_mvp_ready():
-                    # LLM is already set up - use it!
-                    mvp_available = True
-                    logger.info("✅ MVP LLM is ready - will use AI speaker suggestions")
-                    if self.progress_callback:
-                        self.progress_callback("🤖 Using AI-powered speaker suggestions")
-                else:
-                    # LLM not ready - don't block to install it
-                    logger.info(
-                        "MVP LLM not ready - using basic suggestions to avoid delays"
-                    )
-                    if self.progress_callback:
-                        self.progress_callback(
-                            "💡 Using basic speaker suggestions (LLM not available)"
-                        )
-            except Exception as e:
-                logger.debug(f"Could not check MVP LLM status: {e}")
-                if self.progress_callback:
-                    self.progress_callback("💡 Using basic speaker suggestions")
-
-            # Prepare metadata dictionary for speaker assignment
-            metadata = (
-                all_metadata.get("primary_source", {}).copy() if all_metadata else {}
-            )
-
-            # Store MVP availability for speaker processor to use
-            if mvp_available:
-                metadata["mvp_llm_available"] = True
-
-            # CRITICAL: Store output_dir in metadata so speaker assignment can regenerate markdown
-            output_dir = kwargs.get("output_dir")
-            if output_dir:
-                metadata["output_dir"] = output_dir
-
-            # Check if we're in GUI mode and can show dialog
-            show_dialog = kwargs.get("show_speaker_dialog", True)
-            gui_mode = kwargs.get("gui_mode", False)
-            testing_mode = os.environ.get("KNOWLEDGE_CHIPPER_TESTING_MODE") == "1"
-
-            # ADDITIONAL SAFETY: Check if GUI mode is False (testing indicator)
-            if not gui_mode:
-                logger.info("🧪 GUI mode disabled - skipping speaker assignment dialog")
-                show_dialog = False
-
-            # NEVER show dialogs during testing mode, regardless of other flags
-            if testing_mode:
-                logger.info(
-                    "🧪 Testing mode: Skipping speaker assignment dialog (forced)"
-                )
-                show_dialog = False
-
-            # IMPORTANT: For non-blocking speaker assignment, queue the task
-            # and return immediately with generic speaker IDs
-            if (
-                show_dialog
-                and gui_mode
-                and not testing_mode
-                and not os.environ.get("KNOWLEDGE_CHIPPER_TESTING_MODE")
-            ):
-                # Queue speaker assignment task for later processing
-                from knowledge_system.utils.speaker_assignment_queue import (
-                    get_speaker_assignment_queue,
-                )
-
-                queue = get_speaker_assignment_queue()
-
-                # Get video_id and transcript_id from kwargs or enhanced_metadata
-                video_id = (
-                    kwargs.get("video_id")
-                    or kwargs.get("source_id")
-                    or kwargs.get("database_media_id")
-                )
-                transcript_id = kwargs.get("transcript_id") or kwargs.get(
-                    "database_transcript_id"
-                )
-
-                if video_id and transcript_id:
-                    # Queue the assignment task
-                    task_id = queue.add_task(
-                        video_id=video_id,
-                        transcript_id=transcript_id,
-                        speaker_data_list=speaker_data_list,
-                        recording_path=recording_path,
-                        metadata=metadata,
-                    )
-
-                    logger.info(
-                        f"Queued speaker assignment task {task_id} for {recording_path}. "
-                        f"Processing will continue without blocking."
-                    )
-
-                    # If we have a callback, use it to trigger the dialog non-blocking
-                    if self.speaker_assignment_callback:
-                        # Pass task_id and multi-source metadata to the dialog
-                        # Use all_metadata (multi-source) instead of metadata (single-source)
-                        enhanced_metadata = (
-                            all_metadata.copy()
-                            if isinstance(all_metadata, dict)
-                            else {}
-                        )
-                        enhanced_metadata["task_id"] = task_id
-
-                        # This should be non-blocking - just emit a signal
-                        self.speaker_assignment_callback(
-                            speaker_data_list, recording_path, enhanced_metadata
-                        )
-                else:
-                    logger.warning(
-                        f"Cannot queue speaker assignment without video_id ({video_id}) "
-                        f"and transcript_id ({transcript_id})"
-                    )
-
-                # Return transcript with generic speaker IDs immediately
-                logger.info(
-                    "Returning transcript with generic speaker IDs. "
-                    "Speaker names will be updated when user completes assignment."
-                )
-                return transcript_data
-            else:
-                if testing_mode:
-                    logger.info("🧪 Testing mode: Skipping speaker assignment dialog")
-
-                # Non-GUI mode or testing: try to load existing assignments or use suggestions
-                assignments = self._get_automatic_speaker_assignments(
-                    speaker_data_list, recording_path
-                )
-
-                if assignments:
-                    updated_data = speaker_processor.apply_speaker_assignments(
-                        transcript_data, assignments, recording_path, speaker_data_list
-                    )
-                    logger.info(f"Applied automatic speaker assignments: {assignments}")
-                    return updated_data
-                else:
-                    # Save AI suggestions even if no assignments made (for learning)
-                    speaker_processor.save_speaker_processing_session(
-                        recording_path, speaker_data_list
-                    )
-                    logger.info(
-                        "No automatic speaker assignments available, but saved AI suggestions for learning"
-                    )
-                    return transcript_data
-
-        except Exception as e:
-            logger.error(f"Error in speaker assignment workflow: {e}")
-            # Return original data if speaker assignment fails
-            return transcript_data
+        logger.warning(
+            "⚠️ Speaker assignment removed in v4.0.0. "
+            "Use claims-first pipeline (process_claims_first) for speaker attribution."
+        )
+        return transcript_data
 
     def _show_speaker_assignment_dialog(
         self, speaker_data_list: list, recording_path: str, metadata: dict = None
@@ -2035,72 +1783,15 @@ class AudioProcessor(BaseProcessor):
                 )
 
                 if use_parallel and diarization_enabled:
-                    # Run transcription and diarization in parallel
-                    logger.info(
-                        "🚀 Using parallel processing for transcription + diarization"
+                    # REMOVED in v4.0.0: Parallel diarization replaced by claims-first
+                    logger.warning(
+                        "⚠️ Diarization removed in v4.0.0. Using transcription only. "
+                        "Use claims-first pipeline for speaker attribution."
                     )
-                    speedup_estimates = estimate_parallel_speedup(audio_duration)
-                    logger.info(
-                        f"Expected speedup: {speedup_estimates['speedup_factor']:.1f}x "
-                        f"(saving {speedup_estimates['time_saved']:.1f}s)"
-                    )
+                    # Fall through to sequential processing
+                    diarization_enabled = False
 
-                    with AsyncTranscriptionManager(max_workers=2) as async_manager:
-                        # Prepare diarization processor and kwargs
-                        from .diarization import (
-                            SpeakerDiarizationProcessor,
-                            is_diarization_available,
-                        )
-
-                        diarization_kwargs = diarization_config.copy()
-                        if under_pressure:
-                            diarization_kwargs.update(
-                                mitigations.get("diarization", {})
-                            )
-
-                        if is_diarization_available():
-                            # Use preloaded diarizer if available, otherwise create new one
-                            if (
-                                hasattr(self, "preloaded_diarizer")
-                                and self.preloaded_diarizer
-                            ):
-                                diarizer = self.preloaded_diarizer
-                                logger.info("✅ Using preloaded diarization model")
-                            else:
-                                diarizer = SpeakerDiarizationProcessor(
-                                    hf_token=self.hf_token,
-                                    device=self.device,
-                                    progress_callback=self.progress_callback,
-                                )
-                                logger.info("🔄 Created new diarization model instance")
-
-                            # Run both in parallel
-                            (
-                                transcription_result,
-                                diarization_result,
-                            ) = async_manager.process_parallel(
-                                audio_path=output_path,
-                                transcriber=self.transcriber,
-                                diarizer=diarizer,
-                                transcription_kwargs={
-                                    "device": device or self.device,
-                                    **optimized_kwargs,
-                                },
-                                diarization_kwargs=diarization_kwargs,
-                                progress_callback=self.progress_callback,
-                            )
-                        else:
-                            # Fallback to transcription only if diarization not available
-                            logger.warning(
-                                "Diarization not available, running transcription only"
-                            )
-                            transcription_result = self.transcriber.process(
-                                output_path,
-                                device=device or self.device,
-                                **optimized_kwargs,
-                            )
-                            diarization_result = None
-                else:
+                if True:  # Always use sequential processing now
                     # Sequential processing (original behavior)
                     logger.info("Using sequential processing")
                     transcription_result = self.transcriber.process(
@@ -2332,104 +2023,13 @@ class AudioProcessor(BaseProcessor):
                             "duration_seconds": audio_duration,
                         }
 
-                        # CRITICAL: Apply automatic speaker assignments BEFORE saving markdown
-                        # This ensures the markdown file has real names, not SPEAKER_00
+                        # REMOVED in v4.0.0: Automatic speaker assignment via diarization
+                        # Use claims-first pipeline for speaker attribution instead
                         if diarization_successful and diarization_segments:
-                            logger.info(
-                                "🎯 Applying automatic speaker assignments before saving..."
+                            logger.warning(
+                                "⚠️ Speaker assignment removed in v4.0.0. "
+                                "Use claims-first pipeline for speaker attribution."
                             )
-                            logger.info(
-                                f"   Diarization successful: {diarization_successful}"
-                            )
-                            logger.info(
-                                f"   Diarization segments count: {len(diarization_segments) if diarization_segments else 0}"
-                            )
-                            try:
-                                from .speaker_processor import SpeakerProcessor
-
-                                speaker_processor = SpeakerProcessor()
-                                transcript_segments = final_data.get("segments", [])
-
-                                # Get metadata from all sources (non-destructive multi-source approach)
-                                source_id = kwargs.get("source_id")
-                                if source_id and self.db_service:
-                                    logger.info(
-                                        f"🔍 Retrieving metadata from all sources for {source_id}"
-                                    )
-                                    all_metadata = (
-                                        self.db_service.get_all_source_metadata(
-                                            source_id
-                                        )
-                                    )
-                                else:
-                                    # Fallback for non-database sources (local files, etc.)
-                                    logger.debug(
-                                        "No source_id or db_service, using metadata from kwargs"
-                                    )
-                                    metadata_for_speaker = kwargs.get(
-                                        "source_metadata"
-                                    ) or kwargs.get("metadata", {})
-                                    all_metadata = {
-                                        "primary_source": metadata_for_speaker,
-                                        "aliased_sources": [],
-                                    }
-
-                                # Extract word-level timestamps if available (from whisper.cpp --output-words)
-                                word_timestamps = final_data.get("words", [])
-                                if word_timestamps:
-                                    logger.info(f"📝 Word timestamps available: {len(word_timestamps)} words")
-
-                                # Prepare speaker data with multi-source metadata for enhanced suggestions
-                                speaker_data_list = speaker_processor.prepare_speaker_data(
-                                    diarization_segments,
-                                    transcript_segments,
-                                    word_timestamps=word_timestamps,
-                                    metadata=all_metadata,
-                                    audio_path=str(
-                                        output_path
-                                    ),  # Pass converted WAV path for voice fingerprinting (same file used for diarization)
-                                )
-
-                                if speaker_data_list:
-                                    # Get automatic assignments (from DB, AI, or fallback)
-                                    assignments = (
-                                        self._get_automatic_speaker_assignments(
-                                            speaker_data_list, str(path)
-                                        )
-                                    )
-
-                                    if assignments:
-                                        # Apply assignments to transcript data
-                                        final_data = (
-                                            speaker_processor.apply_speaker_assignments(
-                                                final_data,
-                                                assignments,
-                                                str(path),
-                                                speaker_data_list,
-                                            )
-                                        )
-                                        logger.info(
-                                            f"✅ Applied automatic speaker assignments: {assignments}"
-                                        )
-                                        # Store assignments for reference
-                                        final_data["speaker_assignments"] = assignments
-                                    else:
-                                        logger.warning(
-                                            "⚠️ No automatic speaker assignments could be generated"
-                                        )
-                                else:
-                                    logger.warning(
-                                        "⚠️ No speaker data prepared for automatic assignment"
-                                    )
-                            except Exception as e:
-                                logger.error(
-                                    f"❌ Failed to apply automatic speaker assignments: {e}",
-                                    exc_info=True,
-                                )
-                                # Add failure info to metadata so user can see what happened
-                                enhanced_metadata["speaker_assignment_failed"] = True
-                                enhanced_metadata["speaker_assignment_error"] = str(e)
-                                # Continue anyway - markdown will have generic SPEAKER_00 labels
                         else:
                             # 🚨 CRITICAL: This block should NOT be reached if diarization was enabled!
                             if diarization_enabled:

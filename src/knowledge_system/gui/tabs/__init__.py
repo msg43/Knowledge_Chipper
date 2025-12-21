@@ -6,7 +6,10 @@ from .introduction_tab import IntroductionTab
 from .process_tab import ProcessTab
 from .prompts_tab import PromptsTab
 from .queue_tab import QueueTab
-from .speaker_attribution_tab import SpeakerAttributionTab
+
+# REMOVED in v4.0.0: Speaker attribution tab replaced by claims-first architecture
+# from .speaker_attribution_tab import SpeakerAttributionTab
+
 from .summarization_tab import SummarizationTab
 from .summary_cleanup_tab import SummaryCleanupTab
 
@@ -36,7 +39,7 @@ __all__ = [
     "SummarizationTab",
     "QueueTab",
     "ClaimSearchTab",
-    "SpeakerAttributionTab",
+    # "SpeakerAttributionTab",  # REMOVED in v4.0.0
     "SummaryCleanupTab",
     "SyncStatusTab",
     "CloudUploadsTab",

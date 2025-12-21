@@ -2440,13 +2440,14 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         self.overwrite_checkbox.toggled.connect(self._on_setting_changed)
         layout.addWidget(self.overwrite_checkbox, 1, 4)
 
-        self.speaker_assignment_checkbox = QCheckBox("Enable speaker assignment")
-        self.speaker_assignment_checkbox.setChecked(True)
+        # REMOVED in v4.0.0: Speaker assignment replaced by claims-first
+        self.speaker_assignment_checkbox = QCheckBox("Enable speaker assignment (removed)")
+        self.speaker_assignment_checkbox.setChecked(False)
+        self.speaker_assignment_checkbox.setEnabled(False)
         self.speaker_assignment_checkbox.setToolTip(
-            "Show interactive dialog to assign real names to detected speakers. "
-            "Allows you to identify speakers and create color-coded transcripts."
+            "REMOVED in v4.0.0: Speaker assignment via diarization replaced by claims-first architecture. "
+            "Use claims-first pipeline for speaker attribution."
         )
-        self.speaker_assignment_checkbox.toggled.connect(self._on_setting_changed)
         layout.addWidget(self.speaker_assignment_checkbox, 1, 5)
 
         # YouTube to RSS mapping checkbox
@@ -3302,59 +3303,17 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
     ):
         """
         Handle speaker assignment request from worker thread (non-blocking).
-        Shows the dialog on the main thread but doesn't wait for completion.
-        The dialog will update the database directly when completed.
+        
+        REMOVED in v4.0.0: Speaker assignment replaced by claims-first architecture.
         """
-        try:
-            logger.info(
-                f"Main thread showing speaker assignment dialog for task {task_id}"
-            )
-
-            # Import dialog and queue lazily to avoid circular deps
-            from knowledge_system.utils.speaker_assignment_queue import (
-                get_speaker_assignment_queue,
-            )
-
-            from ..dialogs.speaker_assignment_dialog import SpeakerAssignmentDialog
-
-            queue = get_speaker_assignment_queue()
-
-            # Create and show dialog (non-modal so processing can continue)
-            dialog = SpeakerAssignmentDialog(
-                speaker_data_list, recording_path, metadata, self
-            )
-
-            # Connect completion signal to update the task in queue
-            def on_dialog_completed():
-                assignments = dialog.get_assignments()
-                queue.complete_task(task_id, assignments)
-                logger.info(f"Speaker assignment completed for task {task_id}")
-
-            def on_dialog_cancelled():
-                queue.complete_task(task_id, None)
-                logger.info(f"Speaker assignment cancelled for task {task_id}")
-
-            dialog.speaker_assignments_completed.connect(on_dialog_completed)
-            dialog.assignment_cancelled.connect(on_dialog_cancelled)
-
-            # Show dialog non-modally to allow other dialogs to stack up
-            dialog.show()  # Non-modal - allows multiple dialogs
-
-            # Append info to log
-            self.append_log(
-                f"✅ Speaker assignment dialog opened for {Path(recording_path).name}. "
-                f"Processing continues in background..."
-            )
-
-        except Exception as e:
-            logger.error(f"Error showing speaker assignment dialog: {e}")
-            # If dialog fails, still complete the task
-            from knowledge_system.utils.speaker_assignment_queue import (
-                get_speaker_assignment_queue,
-            )
-
-            queue = get_speaker_assignment_queue()
-            queue.complete_task(task_id, None)
+        # REMOVED in v4.0.0: Speaker assignment via diarization replaced by claims-first
+        logger.warning(
+            "⚠️ Speaker assignment removed in v4.0.0. "
+            "Use claims-first pipeline for speaker attribution."
+        )
+        self.append_log(
+            "⚠️ Speaker assignment removed in v4.0.0 - use claims-first pipeline"
+        )
 
     def _update_transcription_step(self, step_description: str, progress_percent: int):
         """Update real-time transcription step display."""
@@ -4081,42 +4040,15 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
 
         # Check speaker diarization requirements
         if self.diarization_checkbox.isChecked():
-            # Check if diarization is available
-            try:
-                from knowledge_system.processors.diarization import (
-                    get_diarization_installation_instructions,
-                    is_diarization_available,
-                )
-
-                # TODO: Temporary fix - dependencies are installed but check may fail in GUI context
-                # Skip the installation dialog loop and proceed with a simple availability check
-                if not is_diarization_available():
-                    # Try one more time with a direct import test
-                    try:
-                        pass
-
-                        from knowledge_system.logger import get_logger
-
-                        logger = get_logger(__name__)
-                        logger.info(
-                            "Diarization dependencies available via direct import test"
-                        )
-                    except ImportError:
-                        self.show_error(
-                            "Missing Diarization Dependencies",
-                            "Speaker diarization requires additional dependencies.\n\n"
-                            + get_diarization_installation_instructions()
-                            + "\n\nAlternatively, disable speaker diarization to proceed.",
-                        )
-                        return False
-            except ImportError:
-                self.show_error(
-                    "Missing Dependency",
-                    "Speaker diarization requires 'pyannote.audio' to be installed.\n\n"
-                    "Install it with: pip install -e '.[diarization]'\n\n"
-                    "Please install this dependency or disable speaker diarization.",
-                )
-                return False
+            # REMOVED in v4.0.0: Speaker diarization replaced by claims-first architecture
+            self.show_warning(
+                "Feature Removed",
+                "Speaker diarization has been removed in v4.0.0.\n\n"
+                "Use the claims-first pipeline for speaker attribution instead.\n\n"
+                "The checkbox will be unchecked automatically.",
+            )
+            self.diarization_checkbox.setChecked(False)
+            # Continue processing without diarization
 
             # Check if HuggingFace token is configured
             hf_token = getattr(self.settings.api_keys, "huggingface_token", None)
@@ -4647,11 +4579,11 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         self.append_log(f"🔧 {status}")
 
     def _on_diarization_toggled(self, checked: bool):
-        """Handle toggling of diarization checkbox."""
-        # Enable/disable speaker assignment options based on diarization setting
-        self.speaker_assignment_checkbox.setEnabled(checked)
+        """Handle toggling of diarization checkbox.
+        
+        REMOVED in v4.0.0: Diarization and speaker assignment replaced by claims-first.
+        """
+        # REMOVED in v4.0.0: Speaker assignment is always disabled
+        # self.speaker_assignment_checkbox.setEnabled(checked)
         # Note: color_coded_checkbox is always disabled (feature causes YAML issues)
-
-        if not checked:
-            # If diarization is disabled, also disable speaker assignment features
-            self.speaker_assignment_checkbox.setChecked(False)
+        pass

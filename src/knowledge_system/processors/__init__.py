@@ -1,9 +1,16 @@
-"""Processors for the Knowledge System."""
+"""Processors for the Knowledge System.
+
+Note: Speaker diarization has been removed in v4.0.0 in favor of claims-first architecture.
+Use the claims_first module for claim extraction without speaker assignment.
+"""
 
 # AudioProcessor removed - functionality moved to WhisperCppTranscribeProcessor
 # from .audio_processor import AudioProcessor
 from .base import BaseProcessor, ProcessorResult
-from .diarization import SpeakerDiarizationProcessor
+
+# REMOVED in v4.0.0: Speaker diarization moved to claims-first architecture
+# from .diarization import SpeakerDiarizationProcessor
+
 from .document_processor import DocumentProcessor
 from .html import HTMLProcessor
 from .pdf import PDFProcessor
@@ -30,5 +37,5 @@ __all__ = [
     "PDFProcessor",
     "HTMLProcessor",
     "RSSProcessor",
-    "SpeakerDiarizationProcessor",
+    # "SpeakerDiarizationProcessor",  # REMOVED in v4.0.0
 ]

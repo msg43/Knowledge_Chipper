@@ -58,12 +58,35 @@ This release introduces the **Claims-First Architecture**, a fundamental shift i
 - **Simpler Code**: Reduced dependency on pyannote/torch for new pipeline
 - **Better Quality**: LLM-based speaker attribution using context
 
-#### Rollback
+### Removed (Speaker-First Pipeline)
 
-The speaker-first codebase is preserved:
-- Git tag: `v3.5.0-speaker-first-final`
-- Git branch: `speaker-first-archive`
-- Config toggle: `claims_first.enabled: false`
+The following files have been **deleted** as part of the claims-first migration. 
+The speaker-first code can be restored from Git if needed:
+- **Git tag**: `v3.5.0-speaker-first-final`
+- **Git branch**: `speaker-first-archive`
+
+#### Deleted Processor Files
+- `src/knowledge_system/processors/diarization.py` - Speaker diarization processor
+- `src/knowledge_system/processors/speaker_processor.py` - Speaker assignment processor
+
+#### Deleted Voice Processing Files  
+- `src/knowledge_system/voice/voice_fingerprinting.py` - Acoustic voice fingerprinting
+- `src/knowledge_system/voice/speaker_verification_service.py` - Speaker verification
+- `src/knowledge_system/voice/accuracy_testing.py` - Voice accuracy testing
+
+#### Deleted GUI Components
+- `src/knowledge_system/gui/tabs/speaker_attribution_tab.py` - Speaker Attribution tab
+- `src/knowledge_system/gui/dialogs/speaker_assignment_dialog.py` - Speaker assignment dialog
+- `src/knowledge_system/gui/dialogs/batch_speaker_dialog.py` - Batch speaker dialog
+- `src/knowledge_system/gui/dialogs/hce_update_dialog.py` - HCE update dialog
+
+#### Deleted Utility Files
+- `src/knowledge_system/utils/speaker_assignment_queue.py` - Speaker assignment queue
+
+#### Modified Files (Speaker Features Disabled)
+- `audio_processor.py` - Diarization calls return no-op with warning
+- `transcription_tab.py` - Speaker assignment checkbox disabled
+- `model_preloader.py` - Diarization preloading is a no-op
 
 ---
 
