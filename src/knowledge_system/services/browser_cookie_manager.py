@@ -69,8 +69,8 @@ class BrowserCookieManager:
                 'value': cookie.value,
                 'domain': cookie.domain,
                 'path': cookie.path,
-                'secure': cookie.secure,
-                'httpOnly': cookie.has_nonstandard_attr('HttpOnly') if hasattr(cookie, 'has_nonstandard_attr') else False,
+                'secure': bool(cookie.secure),  # Ensure boolean, not int
+                'httpOnly': bool(cookie.has_nonstandard_attr('HttpOnly')) if hasattr(cookie, 'has_nonstandard_attr') else False,
             }
             
             # Add expiry if present
