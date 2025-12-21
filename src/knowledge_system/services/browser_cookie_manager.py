@@ -76,8 +76,8 @@ class BrowserCookieManager:
                 }
                 
                 # Handle expires field carefully - Playwright is very strict
-                # Valid values: -1 (session cookie) or positive unix timestamp
-                # Invalid: None, 0, negative numbers (except -1), non-numeric
+                # Valid values: -1 (session cookie) or positive unix timestamp IN SECONDS
+                # Chrome sometimes stores timestamps in microseconds - need to convert
                 if hasattr(cookie, 'expires') and cookie.expires is not None:
                     try:
                         expires_value = int(cookie.expires)
@@ -87,7 +87,14 @@ class BrowserCookieManager:
                             # Session cookie
                             playwright_cookie['expires'] = -1
                         elif expires_value > 0:
-                            # Valid timestamp
+                            # Check if this is microseconds (Chrome sometimes does this)
+                            # Unix timestamps in seconds are ~10 digits (e.g., 1735689600 for 2025)
+                            # Microseconds would be ~16 digits (e.g., 1735689600000000)
+                            if expires_value > 10000000000:  # More than 10 digits = microseconds
+                                # Convert microseconds to seconds
+                                expires_value = expires_value // 1000000
+                                logger.debug(f"Cookie {cookie.name} had microsecond timestamp, converted to seconds")
+                            
                             playwright_cookie['expires'] = expires_value
                         else:
                             # Invalid (0 or negative except -1) - skip expires field
@@ -109,6 +116,8 @@ class BrowserCookieManager:
                 else:
                     playwright_cookie['sameSite'] = 'Lax'  # Default
                 
+                # Final validation before adding
+                self._validate_playwright_cookie(playwright_cookie)
                 playwright_cookies.append(playwright_cookie)
                 
             except Exception as e:
@@ -131,6 +140,19 @@ class BrowserCookieManager:
         logger.info(f"Cookie file provided: {cookie_file}")
         # TODO: Implement Netscape cookie file parsing if needed
         return []
+    
+    def _validate_playwright_cookie(self, cookie: Dict[str, Any]) -> None:
+        """
+        Validate a cookie dict before passing to Playwright.
+        Raises exception if invalid.
+        """
+        # Check expires field if present
+        if 'expires' in cookie:
+            expires = cookie['expires']
+            if not isinstance(expires, (int, float)):
+                raise ValueError(f"expires must be numeric, got {type(expires)}")
+            if expires != -1 and expires <= 0:
+                raise ValueError(f"expires must be -1 or positive, got {expires}")
     
     def has_valid_cookies(self) -> bool:
         """Check if we have valid YouTube authentication cookies."""
