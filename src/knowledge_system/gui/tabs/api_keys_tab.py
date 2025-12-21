@@ -103,17 +103,17 @@ class APIKeysTab(BaseTab):
         instructions_text = QLabel(
             """🔑 API Key Configuration Guide:
 
-• PacketStream Credentials: Alternative for YouTube access with residential proxies.
-  Sign up at: https://packetstream.io (Username + Auth Key required)
-
-• OpenAI API Key: Required for GPT-based summarization.
+• OpenAI API Key: For GPT-based summarization and claims extraction.
   Get your key at: https://platform.openai.com/api-keys
 
-• Anthropic API Key: Required for Claude-based summarization.
+• Anthropic API Key: For Claude-based summarization.
   Get your key at: https://console.anthropic.com/
 
-• HuggingFace Token: Required for speaker diarization (separating different speakers in audio).
-  Get your free token at: https://huggingface.co/settings/tokens"""
+• Google API Key: For Gemini-based claims extraction.
+  Get your key at: https://aistudio.google.com/apikey
+
+• PacketStream Credentials: Alternative for YouTube access with residential proxies.
+  Sign up at: https://packetstream.io (Username + Auth Key required)"""
         )
         instructions_text.setWordWrap(True)
         # Dark background with light text for better readability
@@ -181,6 +181,24 @@ class APIKeysTab(BaseTab):
             0,
         )
 
+        # Google API Key (Gemini)
+        self.google_key_edit = QLineEdit()
+        self.google_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        self.google_key_edit.setPlaceholderText("AIza...")
+        self._add_field_with_info(
+            layout,
+            "Google API Key:",
+            self.google_key_edit,
+            "Your Google AI API key for Gemini models.\n"
+            "• Get your key at: https://aistudio.google.com/apikey\n"
+            "• Format: AIza...\n"
+            "• Used for: Claims extraction and analysis with Gemini models\n"
+            "• Models: gemini-2.0-flash (default), gemini-1.5-pro, gemini-1.5-flash\n"
+            "• Cost: Free tier available, pay-per-token for higher usage",
+            4,
+            0,
+        )
+
         # HuggingFace Token
         self.huggingface_token_edit = QLineEdit()
         self.huggingface_token_edit.setEchoMode(QLineEdit.EchoMode.Password)
@@ -211,13 +229,12 @@ class APIKeysTab(BaseTab):
             layout,
             "HuggingFace Token:",
             self.huggingface_token_edit,
-            "Your HuggingFace access token (optional, for speaker diarization).\n"
+            "Your HuggingFace access token (optional, for advanced ML models).\n"
             "• Get your token at: https://huggingface.co/settings/tokens\n"
             "• Format: hf_...\n"
-            "• Used for: Speaker diarization (identifying different speakers in audio)\n"
-            "• Cost: Free for most models, some premium models may require subscription\n"
-            "• Note: Only needed if you want to identify different speakers in transcriptions",
-            4,
+            "• Used for: Advanced ML models (embeddings, specialized processing)\n"
+            "• Cost: Free for most models, some premium models may require subscription",
+            5,
             0,
             trailing_widgets=[self.hf_token_help_btn],
         )
@@ -243,7 +260,7 @@ class APIKeysTab(BaseTab):
             "• Cost: Pay-per-GB pricing model\n"
             "• Benefits: Residential IPs, sticky sessions, automatic rotation\n"
             "• Alternative to: Bright Data for reliable YouTube access",
-            5,
+            6,
             0,
         )
 
@@ -261,7 +278,7 @@ class APIKeysTab(BaseTab):
             "• Security: Stored securely in local credentials file\n"
             "• Format: Alphanumeric string provided by PacketStream\n"
             "• Required for: All PacketStream proxy operations",
-            6,
+            7,
             0,
         )
 
@@ -948,6 +965,18 @@ class APIKeysTab(BaseTab):
                 "••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••"
             )
 
+        # Load Google API key
+        if (
+            hasattr(self.settings.api_keys, "google_api_key")
+            and self.settings.api_keys.google_api_key
+        ):
+            self._actual_api_keys[
+                "google_api_key"
+            ] = self.settings.api_keys.google_api_key
+            self.google_key_edit.setText(
+                "••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••"
+            )
+
         # Load HuggingFace token
         if self.settings.api_keys.huggingface_token:
             self._actual_api_keys[
@@ -1110,6 +1139,12 @@ class APIKeysTab(BaseTab):
             if not anthropic_key.startswith("••"):
                 self.settings.api_keys.anthropic_api_key = anthropic_key
 
+            google_key = self._actual_api_keys.get(
+                "google_api_key", self.google_key_edit.text().strip()
+            )
+            if not google_key.startswith("••"):
+                self.settings.api_keys.google_api_key = google_key
+
             huggingface_token = self._actual_api_keys.get(
                 "huggingface_token", self.huggingface_token_edit.text().strip()
             )
@@ -1182,6 +1217,10 @@ class APIKeysTab(BaseTab):
                     or "",  # Use alias 'openai'
                     "anthropic": self.settings.api_keys.anthropic_api_key
                     or "",  # Use alias 'anthropic'
+                    "google": getattr(
+                        self.settings.api_keys, "google_api_key", ""
+                    )
+                    or "",  # Google Gemini API key
                     "hf_token": self.settings.api_keys.huggingface_token
                     or "",  # Use alias 'hf_token'
                     # Persist Bright Data API key so it survives app restarts

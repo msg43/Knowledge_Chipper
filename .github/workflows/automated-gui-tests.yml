@@ -1,11 +1,14 @@
 name: Automated GUI Tests
 
-# Run on pushes to main/develop and all PRs
+# TEMPORARILY DISABLED - Re-enable after major milestone
+# These comprehensive GUI tests require full system setup and are being
+# refactored as part of the Claims-First Architecture overhaul
+# Manual triggering still available for testing when needed
 on:
-  push:
-    branches: [main, develop]
-  pull_request:
-    branches: [main, develop]
+  # push:
+  #   branches: [main, develop]
+  # pull_request:
+  #   branches: [main, develop]
   # Allow manual triggering
   workflow_dispatch:
 

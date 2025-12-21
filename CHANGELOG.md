@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [4.0.0] - 2025-12-20
+## [4.0.0] - 2025-12-21
 
 ### Added (Major Architecture: Claims-First Pipeline)
 
@@ -96,6 +96,32 @@ The speaker-first code can be restored from Git if needed:
 
 #### Documentation
 - New `CLAIMS_FIRST_MIGRATION_GUIDE.md` with step-by-step migration instructions
+
+### Added (Google Gemini LLM Support)
+
+Comprehensive support for Google Gemini LLMs, matching existing support for OpenAI, Anthropic, and Ollama.
+
+#### New Provider Support
+- **GoogleProvider** in `src/knowledge_system/utils/llm_providers.py`
+  - Full async support using `google-genai` package
+  - Structured JSON output via response schema
+  - Token estimation and rate limiting
+
+- **LLM Adapter Integration** in `src/knowledge_system/core/llm_adapter.py`
+  - `_call_google()` method for Gemini API calls
+  - Default model: `gemini-2.0-flash`
+  - Environment variable support: `GOOGLE_API_KEY` or `GEMINI_API_KEY`
+
+#### Configuration
+- New `google_api_key` field in `APIKeysConfig` (`src/knowledge_system/config.py`)
+- Updated `pyproject.toml` and `requirements.txt` with `google-genai` dependency
+- Model selection via `provider: "google"` and `model: "gemini-2.0-flash"` in config
+
+#### Available Models
+- `gemini-2.0-flash` (default) - Fast, efficient model
+- `gemini-2.0-flash-exp` - Experimental features
+- `gemini-1.5-pro` - Higher capability model
+- `gemini-1.5-flash` - Balanced speed/quality
 
 ---
 

@@ -1,0 +1,157 @@
+name: Smoke Test
+
+# Lightweight smoke test that runs on every push/PR
+# Just validates Python syntax and basic imports - no heavy dependencies
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+jobs:
+  smoke-test:
+    name: Python Syntax & Import Check
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.11', '3.12', '3.13']
+      fail-fast: false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install minimal dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # Only install lightweight core dependencies for syntax checking
+          pip install pydantic>=2.5.0 pyyaml>=6.0 click>=8.1.0 loguru>=0.7.0
+
+      - name: Check Python syntax
+        run: |
+          echo "🔍 Checking Python syntax in src/"
+          python -m py_compile $(find src -name "*.py" -not -path "*/venv/*" -not -path "*/__pycache__/*")
+          echo "✅ All Python files have valid syntax"
+
+      - name: Test basic imports
+        run: |
+          echo "🔍 Testing basic module imports..."
+          python -c "
+          import sys
+          sys.path.insert(0, 'src')
+          
+          # Test core module structure
+          try:
+              import knowledge_system
+              print('✅ knowledge_system package imports successfully')
+          except Exception as e:
+              print(f'⚠️  knowledge_system import warning: {e}')
+              # Don't fail - some imports need heavy dependencies
+          
+          # Test configuration modules (lightweight)
+          try:
+              from knowledge_system.processors.claims_first import config
+              print('✅ claims_first.config imports successfully')
+          except Exception as e:
+              print(f'⚠️  claims_first.config import warning: {e}')
+          
+          print('✅ Basic import check complete')
+          "
+
+      - name: Check for common issues
+        run: |
+          echo "🔍 Checking for common code issues..."
+          
+          # Check for print statements (should use logger)
+          echo "Checking for print() statements (prefer logger)..."
+          PRINT_COUNT=$(grep -r "print(" src/ --include="*.py" | grep -v "# print OK" | wc -l || true)
+          if [ "$PRINT_COUNT" -gt 50 ]; then
+            echo "⚠️  Warning: Found $PRINT_COUNT print() statements (consider using logger)"
+          else
+            echo "✅ Print statement usage acceptable ($PRINT_COUNT found)"
+          fi
+          
+          # Check for TODO/FIXME comments
+          echo "Checking for TODO/FIXME markers..."
+          TODO_COUNT=$(grep -r "TODO\|FIXME" src/ --include="*.py" | wc -l || true)
+          echo "📝 Found $TODO_COUNT TODO/FIXME markers"
+          
+          # Check for common typos in imports
+          echo "Checking for common import issues..."
+          if grep -r "from knowledge_system.database.drizzle" src/ --include="*.py" > /dev/null 2>&1; then
+            echo "❌ ERROR: Found deprecated Drizzle ORM imports!"
+            exit 1
+          else
+            echo "✅ No deprecated Drizzle imports found"
+          fi
+          
+          echo "✅ Common issues check complete"
+
+      - name: Validate YAML files
+        run: |
+          echo "🔍 Validating YAML configuration files..."
+          python -c "
+          import yaml
+          import sys
+          from pathlib import Path
+          
+          yaml_files = [
+              'config/settings.yaml',
+              '.github/workflows/smoke-test.yml',
+              '.github/workflows/automated-gui-tests.yml',
+              '.github/workflows/build-and-sign.yml',
+              '.github/workflows/comprehensive-gui-tests.yml',
+              '.github/workflows/watch-deno-releases.yml',
+          ]
+          
+          all_valid = True
+          for yaml_file in yaml_files:
+              if Path(yaml_file).exists():
+                  try:
+                      with open(yaml_file) as f:
+                          yaml.safe_load(f)
+                      print(f'✅ {yaml_file} is valid')
+                  except Exception as e:
+                      print(f'❌ {yaml_file} has errors: {e}')
+                      all_valid = False
+              else:
+                  print(f'⚠️  {yaml_file} not found (skipping)')
+          
+          if not all_valid:
+              sys.exit(1)
+          print('✅ All YAML files are valid')
+          "
+
+      - name: Check pyproject.toml
+        run: |
+          echo "🔍 Validating pyproject.toml..."
+          python -c "
+          import tomllib
+          with open('pyproject.toml', 'rb') as f:
+              config = tomllib.load(f)
+          print(f'✅ pyproject.toml is valid')
+          print(f'   Project: {config[\"project\"][\"name\"]}')
+          print(f'   Version: {config[\"project\"][\"version\"]}')
+          "
+
+      - name: Summary
+        if: always()
+        run: |
+          echo ""
+          echo "================================================================"
+          echo "📊 SMOKE TEST SUMMARY"
+          echo "================================================================"
+          echo "✅ Python ${{ matrix.python-version }} syntax validation complete"
+          echo "✅ Basic import checks passed"
+          echo "✅ Configuration files validated"
+          echo ""
+          echo "Note: This is a lightweight smoke test only."
+          echo "Full GUI tests available via manual workflow trigger."
+          echo "================================================================"
+

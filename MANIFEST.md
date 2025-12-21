@@ -2,7 +2,7 @@
 
 Complete inventory of all files in the Knowledge Chipper codebase with descriptions of actual functionality.
 
-**Last Updated:** December 9, 2025
+**Last Updated:** December 21, 2025
 
 ---
 
@@ -492,7 +492,7 @@ Main application package.
 
 - `__init__.py` - Package initialization, version info, public API exports
 - `__main__.py` - Entry point for running as module (`python -m knowledge_system`)
-- `config.py` - Configuration management (loads settings, environment variables, defaults)
+- `config.py` - Configuration management (loads settings, environment variables, defaults). Includes `APIKeysConfig` with support for OpenAI, Anthropic, **Google Gemini**, HuggingFace, and other providers
 - `errors.py` - Custom exception hierarchy for domain-specific errors
 - `logger.py` - Logging configuration and setup for application-wide logging
 - `logger_system2.py` - Structured logging for System 2 processing (package root level)
@@ -510,7 +510,7 @@ Core orchestration and processing coordination.
 - `dynamic_parallelization.py` - Dynamic parallelization system for optimal resource usage based on hardware specs
 - `enhanced_hce_pipeline.py` - Enhanced HCE pipeline with dynamic parallelization
 - `intelligent_processing_coordinator.py` - Intelligent coordinator with adaptive strategies for the entire processing pipeline
-- `llm_adapter.py` - LLM provider abstraction layer (OpenAI, Anthropic, Ollama) with advanced features like rate limiting, cost tracking, and hardware-aware concurrency
+- `llm_adapter.py` - LLM provider abstraction layer (OpenAI, Anthropic, **Google Gemini**, Ollama) with advanced features like rate limiting, cost tracking, and hardware-aware concurrency
 - `parallel_processor.py` - Parallel processing integration for multi-core systems
 - `processing_config.py` - Processing configuration management
 - `segment_processor.py` - Segment-level processing coordination
@@ -675,8 +675,10 @@ Main application tabs (17 total).
 - `question_review_tab.py` - Question mapping review and approval tab (NEW: Nov 2025)
 - `queue_tab.py` - Queue tab for real-time pipeline status visualization
 - `review_tab_system2.py` - Review tab for System 2 processing results and claim evaluation
-- `speaker_attribution_tab.py` - Speaker attribution configuration tab
 - `summarization_tab.py` - Summarization (Sunrise) tab with database browser supporting sortable columns including Date Added
+
+**DELETED in v4.0.0:**
+- ~~`speaker_attribution_tab.py`~~ - Replaced by claims-first pipeline
 - `summary_cleanup_tab.py` - Summary cleanup and validation tab
 - `sync_status_tab.py` - Synchronization status tab for cloud services
 - `transcription_tab.py` - Transcription configuration and execution tab
@@ -720,17 +722,19 @@ Media processing and transformation.
 
 - `__init__.py` - Processors module initialization
 - `base.py` - Base processor class with common functionality
-- `audio_processor.py` - Audio file processing with word-driven speaker alignment using pyannote-whisper pattern (transcription + diarization + median filter smoothing)
+- `audio_processor.py` - Audio file processing with transcription support; diarization features deprecated in v4.0.0 (see claims-first pipeline)
 - `document_processor.py` - Document processing (PDF, eBook)
-- `diarization.py` - Speaker diarization using pyannote with Bredin's tuned hyperparameters and num_speakers oracle mode support
 - `html.py` - HTML document processing
 - `pdf.py` - PDF document processing
 - `registry.py` - Processor registry for dynamic processor selection
 - `rss_processor.py` - RSS feed processing
-- `speaker_processor.py` - Speaker attribution (word-driven alignment handled by audio_processor). Supports persistent profiles for recurring hosts using stable regions
 - `unified_batch_processor.py` - Unified batch processor for multiple files
-- `whisper_cpp_transcribe.py` - Transcription using pywhispercpp Python binding with DTW word-level timestamps for accurate speaker attribution
+- `whisper_cpp_transcribe.py` - Transcription using pywhispercpp Python binding with DTW word-level timestamps
 - `youtube_download.py` - YouTube video/audio download
+
+**DELETED in v4.0.0 (Claims-First Migration):**
+- ~~`diarization.py`~~ - Replaced by claims-first pipeline (restore from `speaker-first-archive` branch if needed)
+- ~~`speaker_processor.py`~~ - Replaced by claims-first pipeline
 
 #### PROCESSORS/HCE/
 
@@ -898,12 +902,14 @@ Pydantic models for standardized data structures.
 
 ### VOICE/
 
-Voice fingerprinting and speaker verification.
+Voice fingerprinting and speaker verification. **DEPRECATED in v4.0.0 - replaced by claims-first pipeline.**
 
-- `__init__.py` - Voice module initialization
-- `accuracy_testing.py` - Accuracy testing for voice fingerprinting
-- `speaker_verification_service.py` - Speaker verification service
-- `voice_fingerprinting.py` - Voice fingerprinting using acoustic features with stable region extraction and persistent profile accumulation for cross-episode speaker recognition
+- `__init__.py` - Voice module initialization (exports removed)
+
+**DELETED in v4.0.0 (Claims-First Migration):**
+- ~~`accuracy_testing.py`~~ - Replaced by claims-first pipeline
+- ~~`speaker_verification_service.py`~~ - Replaced by claims-first pipeline
+- ~~`voice_fingerprinting.py`~~ - Replaced by claims-first pipeline (restore from `speaker-first-archive` branch if needed)
 
 ### WORKERS/
 

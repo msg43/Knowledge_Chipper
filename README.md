@@ -2,9 +2,9 @@
 
 > **Transform hours of content into structured knowledge in minutes**
 
-Turn YouTube videos, podcasts, audio files, and documents into searchable claims, speaker-attributed transcripts, and organized knowledge — all processed locally on your Mac with AI.
+Turn YouTube videos, podcasts, audio files, and documents into searchable claims, structured transcripts, and organized knowledge — all processed locally on your Mac with AI.
 
-**Version 3.5.0** | **macOS Application** | **Offline-First + Cloud Sync**
+**Version 4.0.0** | **macOS Application** | **Offline-First + Cloud Sync**
 
 ---
 
@@ -12,9 +12,10 @@ Turn YouTube videos, podcasts, audio files, and documents into searchable claims
 
 Skip the Podcast is a macOS desktop application that extracts structured knowledge from your media and documents. Instead of listening to 3-hour podcasts or reading 200-page PDFs, the app:
 
-✅ **Transcribes** audio/video with speaker identification
+✅ **Transcribes** audio/video using Whisper AI (offline)
 ✅ **Extracts** key claims, people, concepts, and terminology
 ✅ **Scores** each claim by importance, novelty, and credibility
+✅ **Attributes** speakers only to high-value claims (claims-first approach)
 ✅ **Organizes** everything in a searchable knowledge database
 ✅ **Syncs** to GetReceipts.org for web access and sharing
 
@@ -30,14 +31,16 @@ Skip the Podcast is a macOS desktop application that extracts structured knowled
 - Import documents (PDF, Word, Markdown, TXT)
 
 **2. Automatic Processing**
-The app processes your content through a multi-stage pipeline:
+The app processes your content through a claims-first pipeline:
 
 ```
-Download/Load → Transcribe → Speaker ID → Extract Claims → Upload to Web
-     ↓              ↓            ↓              ↓              ↓
-  YouTube      Whisper AI   Voice Print    AI Analysis   GetReceipts.org
-   yt-dlp      (offline)    (97% acc)     (local/cloud)  (web canonical)
+Download/Load → Transcribe → Extract Claims → Evaluate & Score → Upload to Web
+     ↓              ↓              ↓                ↓              ↓
+  YouTube      Whisper AI    LLM Mining      Flagship Model   GetReceipts.org
+   yt-dlp      (offline)    (local/cloud)   (A/B/C tiers)    (web canonical)
 ```
+
+*Speaker attribution is applied only to high-value (A/B-tier) claims, using LLM context analysis.*
 
 **3. Review & Upload**
 - Claims appear in the **Review Tab** with importance scores (A/B/C tiers)
@@ -165,7 +168,7 @@ The app can use local AI (offline, free) or cloud AI (requires API key):
   ```
   The app auto-detects Ollama models and picks the best one for your Mac.
 
-- **Cloud**: Add API keys in Settings tab (OpenAI GPT-4, Anthropic Claude, etc.)
+- **Cloud**: Add API keys in Settings tab (OpenAI GPT-4, Anthropic Claude, Google Gemini, etc.)
 
 **Step 2: Process Your First Video**
 
@@ -177,9 +180,9 @@ The app can use local AI (offline, free) or cloud AI (requires API key):
 The app will:
 - Download the video (audio only)
 - Transcribe with timestamps
-- Identify speakers (voice fingerprinting)
-- Extract claims, people, concepts
+- Extract claims, people, concepts (claims-first mode)
 - Score claims by importance (A/B/C tiers)
+- Attribute speakers to high-value claims
 
 **Step 3: Review & Upload**
 
@@ -208,10 +211,10 @@ Quick tour and getting started guide
 **Features:**
 - Single videos or entire playlists
 - Local audio/video files (drag & drop)
-- Automatic speaker identification (97% accuracy)
+- Claims-first mode (default): Extract claims, then attribute speakers to important ones
 - Full pipeline mode (one-click transcribe → analyze → upload)
 
-**Best For:** Getting raw transcripts with speaker labels
+**Best For:** Getting transcripts and extracting structured knowledge
 
 ---
 
@@ -329,6 +332,7 @@ Queue Tab Display:
 - Local Models (Ollama): Free, offline, private
 - OpenAI (GPT-4, GPT-3.5): Cloud-based, API key required
 - Anthropic (Claude): Cloud-based, API key required
+- Google (Gemini 2.0, 1.5): Cloud-based, API key required
 
 **Hardware-Aware Model Selection:**
 - App automatically picks best model for your Mac
@@ -586,7 +590,7 @@ Length: Local was 1.27x longer
 
 **Output:**
 - Searchable knowledge base of academic insights
-- Speaker-attributed lecture transcripts
+- Transcripts with claims extraction
 - Connected concepts across different courses
 - Citable claims with timestamps
 
@@ -598,13 +602,14 @@ Length: Local was 1.27x longer
 
 **Workflow:**
 1. Paste YouTube URL of podcast
-2. App transcribes with speaker ID (host vs guest)
-3. Extracts key claims by importance
-4. Upload to GetReceipts for sharing
+2. App transcribes and extracts claims
+3. Scores claims by importance (A/B/C tiers)
+4. Attributes speakers to important claims
+5. Upload to GetReceipts for sharing
 
 **Output:**
 - 5-minute read instead of 3-hour listen
-- Who said what (exact timestamps)
+- Important claims with speaker attribution
 - Controversy and novelty scores
 - Share specific claims via GetReceipts links
 
@@ -617,13 +622,13 @@ Length: Local was 1.27x longer
 **Workflow:**
 1. Record Zoom/Teams meeting (audio file)
 2. Drop into Monitor folder
-3. App transcribes + identifies speakers
+3. App transcribes and extracts claims
 4. Extracts action items and decisions
 5. Upload to GetReceipts for team access
 
 **Output:**
 - Searchable meeting archive
-- Speaker-attributed key points
+- Key claims with importance scores
 - Decision tracking over time
 - Shareable team knowledge base
 
@@ -666,11 +671,10 @@ Length: Local was 1.27x longer
 - Check available disk space (processing creates temporary files)
 - Large files take time: 1-hour video = 10-15 minutes
 
-**"Speaker identification not working"**
-- Enable speaker diarization in Settings
-- Requires 2+ distinct voices in audio
-- Manually assign names in Review tab
-- App learns from your corrections over time
+**"Speaker attribution not appearing"**
+- Ensure Claims-First Mode is enabled in Transcription tab
+- Speaker attribution only applies to A/B-tier (high-importance) claims
+- Low-importance claims (C-tier) intentionally skip speaker attribution
 
 **"Claims extraction failed"**
 - Check AI model is available (local or cloud)
@@ -738,31 +742,23 @@ Length: Local was 1.27x longer
 
 ---
 
-### Voice Fingerprinting (Word-Level Attribution)
+### Speaker Attribution (Claims-First Architecture)
 
-**How It Works:**
-- App creates "voice fingerprint" for each speaker using wav2vec2 + ECAPA-TDNN embeddings
-- Word-level timestamps from Whisper allow per-word speaker verification
-- 97%+ accuracy after learning phase for recurring hosts
-- Stores persistent profiles in `speaker_profiles` table for instant recognition
+**v4.0.0+ Approach:**
+Starting with v4.0.0, the app uses a **claims-first** approach to speaker attribution:
 
-**New in v3.6:**
-- **Word-level speaker attribution** (4-7% DER vs 10-15% segment-level)
-- **Persistent profiles** for podcast hosts across episodes
-- **15-30 seconds** additional processing per hour of audio on M2 Ultra
-- Automatic profile accumulation improves with each processed episode
+1. **Extract claims first** from undiarized transcripts
+2. **Evaluate and score** each claim by importance (A/B/C tiers)
+3. **Attribute speakers** only to high-value (A/B-tier) claims using LLM context analysis
 
-**Training the System:**
-1. First video: Assign speaker names (app builds voice profile)
-2. App creates voice fingerprints with word-level timestamps
-3. Next video: App instantly recognizes returning speakers
-4. Profile confidence improves with each episode processed
-5. After 3-5 episodes: 97%+ accuracy for known hosts
+**Benefits:**
+- **Faster processing**: No diarization overhead for most content
+- **Lower cost**: Speaker attribution only where it matters
+- **Context-aware**: LLM uses dialogue context for better accuracy
 
-**Viewing Profiles:**
-- Database: `~/Library/Application Support/SkipThePodcast/knowledge_system.db`
-- Table: `speaker_profiles` (persistent profiles across episodes)
-- Contains: Voice embeddings, sample counts, confidence scores, source episodes
+**Legacy Voice Fingerprinting:**
+The previous voice fingerprinting system (wav2vec2 + ECAPA-TDNN embeddings) has been deprecated in v4.0.0. 
+If you need the legacy speaker-first pipeline, you can restore it from the `speaker-first-archive` Git branch.
 
 ---
 
