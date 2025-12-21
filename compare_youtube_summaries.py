@@ -11,7 +11,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 from knowledge_system.processors.dual_summary_processor import DualSummaryProcessor
-from knowledge_system.utils.logging_config import get_logger
+from knowledge_system.logger import get_logger
 
 logger = get_logger(__name__)
 
