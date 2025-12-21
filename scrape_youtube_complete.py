@@ -333,16 +333,39 @@ def format_markdown_output(data: dict) -> str:
         
         text = re.sub(r'\((\d{1,2}:\d{2})\)', replace_paren_timestamp, text)
         
-        # Pattern 2: Timestamps at start of line like "00:00 //" or "**00:06**"
-        def replace_line_timestamp(match):
-            timestamp = match.group(1)
-            seconds = parse_timestamp_to_seconds(timestamp)
-            return f"[{timestamp}]({base_url}&t={seconds}s)"
+        # Pattern 2: Bold timestamps like **00:06**
+        text = re.sub(
+            r'\*\*(\d{1,2}:\d{2})\*\*',
+            lambda m: f"**[{m.group(1)}]({base_url}&t={parse_timestamp_to_seconds(m.group(1))}s)**",
+            text
+        )
         
-        text = re.sub(r'(\d{2}:\d{2}) //', replace_line_timestamp, text)
-        text = re.sub(r'\*\*(\d{2}:\d{2})\*\*', lambda m: f"**[{m.group(1)}]({base_url}&t={parse_timestamp_to_seconds(m.group(1))}s)**", text)
+        # Pattern 3: Timestamps with // separator like "00:00 //"
+        text = re.sub(
+            r'(\d{2}:\d{2}) //',
+            lambda m: f"[{m.group(1)}]({base_url}&t={parse_timestamp_to_seconds(m.group(1))}s) //",
+            text
+        )
         
-        return text
+        # Pattern 4: Standalone timestamps at start of line (chapters)
+        # This is tricky - we need to avoid false positives
+        # Only match if it's at the start of a line followed by newline or end
+        # Use word boundaries and context to avoid matching time-like numbers in text
+        lines = text.split('\n')
+        processed_lines = []
+        
+        for line in lines:
+            stripped = line.strip()
+            # Check if line is JUST a timestamp (chapter marker)
+            # Match: "0:00" or "2:24" or "50:08" at start of line
+            if re.match(r'^(\d{1,2}:\d{2})$', stripped):
+                timestamp = stripped
+                seconds = parse_timestamp_to_seconds(timestamp)
+                processed_lines.append(f"[{timestamp}]({base_url}&t={seconds}s)")
+            else:
+                processed_lines.append(line)
+        
+        return '\n'.join(processed_lines)
     
     def parse_timestamp_to_seconds(timestamp: str) -> int:
         """Convert timestamp string like '1:23' or '01:23:45' to seconds."""
