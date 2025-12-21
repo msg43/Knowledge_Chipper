@@ -591,11 +591,39 @@ def main():
     if output_file:
         output_path = Path(output_file)
     else:
-        video_id = data['metadata'].get('video_id', 'unknown')
-        output_path = Path(f"output/{video_id}_complete.md")
+        # Use title for filename (like Steve Bannon format)
+        title = data['metadata'].get('title', 'Unknown Title')
+        # Sanitize title for filename
+        safe_title = sanitize_filename(title)
+        output_path = Path(f"output/{safe_title}.md")
     
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(markdown, encoding='utf-8')
+
+
+def sanitize_filename(title: str) -> str:
+    """Sanitize title for use as filename."""
+    import re
+    
+    # Replace problematic characters
+    safe = title.replace('/', '-')
+    safe = safe.replace('\\', '-')
+    safe = safe.replace(':', ' -')
+    safe = safe.replace('?', '')
+    safe = safe.replace('*', '')
+    safe = safe.replace('"', "'")
+    safe = safe.replace('<', '')
+    safe = safe.replace('>', '')
+    safe = safe.replace('|', '-')
+    
+    # Remove multiple spaces
+    safe = re.sub(r'\s+', ' ', safe)
+    
+    # Trim to reasonable length (255 char limit on most filesystems)
+    if len(safe) > 200:
+        safe = safe[:200].rsplit(' ', 1)[0]  # Cut at word boundary
+    
+    return safe.strip()
     
     # Download thumbnail
     thumbnail_url = data['metadata'].get('thumbnail_url')
