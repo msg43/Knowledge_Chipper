@@ -7,7 +7,7 @@ import logging
 from typing import Dict, Any, Optional, Callable
 from pathlib import Path
 
-from ..core.base_processor import BaseProcessor, ProcessorResult
+from .base import BaseProcessor, ProcessorResult
 from ..services.playwright_youtube_scraper import PlaywrightYouTubeScraper
 from .youtube_download import YouTubeDownloadProcessor
 from .transcription import TranscriptionProcessor
