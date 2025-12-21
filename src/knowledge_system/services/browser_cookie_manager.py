@@ -63,30 +63,36 @@ class BrowserCookieManager:
             # Only include YouTube cookies
             if 'youtube.com' not in cookie.domain and 'google.com' not in cookie.domain:
                 continue
+            
+            try:
+                playwright_cookie = {
+                    'name': cookie.name,
+                    'value': cookie.value,
+                    'domain': cookie.domain,
+                    'path': cookie.path,
+                    'secure': bool(cookie.secure),  # Ensure boolean, not int
+                    'httpOnly': bool(cookie.has_nonstandard_attr('HttpOnly')) if hasattr(cookie, 'has_nonstandard_attr') else False,
+                }
                 
-            playwright_cookie = {
-                'name': cookie.name,
-                'value': cookie.value,
-                'domain': cookie.domain,
-                'path': cookie.path,
-                'secure': bool(cookie.secure),  # Ensure boolean, not int
-                'httpOnly': bool(cookie.has_nonstandard_attr('HttpOnly')) if hasattr(cookie, 'has_nonstandard_attr') else False,
-            }
-            
-            # Add expiry if present and valid
-            if cookie.expires and cookie.expires > 0:
-                playwright_cookie['expires'] = int(cookie.expires)
-            elif cookie.expires == 0:
-                # Session cookie - use -1
-                playwright_cookie['expires'] = -1
-            
-            # Add sameSite if present
-            if hasattr(cookie, 'has_nonstandard_attr') and cookie.has_nonstandard_attr('SameSite'):
-                playwright_cookie['sameSite'] = cookie.get_nonstandard_attr('SameSite')
-            else:
-                playwright_cookie['sameSite'] = 'Lax'  # Default
-            
-            playwright_cookies.append(playwright_cookie)
+                # Add expiry if present and valid
+                # Playwright requires: -1 (session) or positive unix timestamp
+                if cookie.expires:
+                    if cookie.expires > 0:
+                        playwright_cookie['expires'] = int(cookie.expires)
+                    # Skip cookies with invalid expires (None, 0, negative)
+                    # Playwright will treat them as session cookies
+                
+                # Add sameSite if present
+                if hasattr(cookie, 'has_nonstandard_attr') and cookie.has_nonstandard_attr('SameSite'):
+                    playwright_cookie['sameSite'] = cookie.get_nonstandard_attr('SameSite')
+                else:
+                    playwright_cookie['sameSite'] = 'Lax'  # Default
+                
+                playwright_cookies.append(playwright_cookie)
+            except Exception as e:
+                # Skip problematic cookies
+                logger.debug(f"Skipping cookie {cookie.name}: {e}")
+                continue
         
         logger.info(f"Converted {len(playwright_cookies)} cookies for Playwright")
         return playwright_cookies
