@@ -19,6 +19,16 @@ class DualSummaryProcessor(BaseProcessor):
     (via download + transcribe + summarize) for comparison.
     """
     
+    @property
+    def supported_formats(self):
+        """Return supported input formats."""
+        return ["url"]
+    
+    def validate_input(self, input_data: Any) -> bool:
+        """Validate that input is a YouTube URL."""
+        url = str(input_data)
+        return "youtube.com" in url or "youtu.be" in url
+    
     def __init__(self, youtube_scraper_enabled: bool = True):
         super().__init__()
         self.youtube_scraper_enabled = youtube_scraper_enabled
