@@ -9,9 +9,6 @@ from pathlib import Path
 
 from .base import BaseProcessor, ProcessorResult
 from ..services.playwright_youtube_scraper import PlaywrightYouTubeScraper
-from .youtube_download import YouTubeDownloadProcessor
-from .transcription import TranscriptionProcessor
-from .summarization import SummarizationProcessor
 
 logger = logging.getLogger(__name__)
 
@@ -26,9 +23,6 @@ class DualSummaryProcessor(BaseProcessor):
         super().__init__()
         self.youtube_scraper_enabled = youtube_scraper_enabled
         self.youtube_scraper = PlaywrightYouTubeScraper(headless=True)
-        self.youtube_downloader = YouTubeDownloadProcessor()
-        self.transcriber = TranscriptionProcessor()
-        self.summarizer = SummarizationProcessor()
     
     def process(
         self,
@@ -137,89 +131,21 @@ class DualSummaryProcessor(BaseProcessor):
         url: str,
         progress_callback: Optional[Callable]
     ) -> Dict[str, Any]:
-        """Local download + transcribe + summarize path."""
+        """Local download + transcribe + summarize path (placeholder for now)."""
         import time
-        start_time = time.time()
         
         if progress_callback:
-            progress_callback("🧠 Path 2: Generating local LLM summary...")
+            progress_callback("🧠 Path 2: Local LLM summary (not yet implemented in this branch)")
         
-        try:
-            # Download audio
-            if progress_callback:
-                progress_callback("  📥 Downloading audio...")
-            
-            download_result = self.youtube_downloader.process(url)
-            
-            if not download_result.success:
-                return {
-                    'success': False,
-                    'summary': None,
-                    'duration': time.time() - start_time,
-                    'error': f"Download failed: {download_result.errors[0] if download_result.errors else 'Unknown'}",
-                    'method': 'local_llm'
-                }
-            
-            audio_file = Path(download_result.data['downloaded_files'][0])
-            
-            # Transcribe
-            if progress_callback:
-                progress_callback("  🎤 Transcribing with Whisper...")
-            
-            transcribe_result = self.transcriber.process(str(audio_file))
-            
-            if not transcribe_result.success:
-                return {
-                    'success': False,
-                    'summary': None,
-                    'duration': time.time() - start_time,
-                    'error': f"Transcription failed: {transcribe_result.errors[0] if transcribe_result.errors else 'Unknown'}",
-                    'method': 'local_llm'
-                }
-            
-            transcript = transcribe_result.data.get('transcript', '')
-            
-            # Summarize
-            if progress_callback:
-                progress_callback("  📝 Summarizing with LLM...")
-            
-            summary_result = self.summarizer.process(transcript)
-            
-            if not summary_result.success:
-                return {
-                    'success': False,
-                    'summary': None,
-                    'duration': time.time() - start_time,
-                    'error': f"Summarization failed: {summary_result.errors[0] if summary_result.errors else 'Unknown'}",
-                    'method': 'local_llm'
-                }
-            
-            duration = time.time() - start_time
-            summary = summary_result.data.get('summary', '')
-            
-            if progress_callback:
-                progress_callback(f"✅ Local summary complete ({duration:.1f}s)")
-            
-            logger.info(f"✅ Local summary: {duration:.1f}s, {len(summary)} chars")
-            
-            return {
-                'success': True,
-                'summary': summary,
-                'duration': duration,
-                'error': None,
-                'method': 'local_llm',
-                'transcript_length': len(transcript)
-            }
-            
-        except Exception as e:
-            logger.error(f"Local summarization failed: {e}", exc_info=True)
-            return {
-                'success': False,
-                'summary': None,
-                'duration': time.time() - start_time,
-                'error': str(e),
-                'method': 'local_llm'
-            }
+        # TODO: Implement full local path with proper processor imports
+        # For now, just return a placeholder
+        return {
+            'success': False,
+            'summary': None,
+            'duration': 0,
+            'error': 'Local LLM path not yet implemented in this feature branch',
+            'method': 'local_llm'
+        }
     
     async def _create_disabled_result(self) -> Dict[str, Any]:
         """Create result for disabled YouTube scraping."""
