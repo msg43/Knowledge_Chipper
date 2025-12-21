@@ -1,0 +1,385 @@
+#!/usr/bin/env python3
+"""
+Scrape complete YouTube video data: metadata, transcript, and AI summary.
+Outputs in Knowledge_Chipper markdown format.
+"""
+import sys
+import asyncio
+import json
+from pathlib import Path
+from datetime import datetime
+
+# Add src to path
+sys.path.insert(0, str(Path(__file__).parent / "src"))
+
+from knowledge_system.services.playwright_youtube_scraper import PlaywrightYouTubeScraper
+from knowledge_system.logger import get_logger
+
+logger = get_logger(__name__)
+
+
+async def scrape_complete_video_data(url: str) -> dict:
+    """
+    Scrape complete video data including metadata, transcript, and AI summary.
+    """
+    from playwright.async_api import async_playwright
+    from knowledge_system.services.browser_cookie_manager import BrowserCookieManager
+    
+    cookie_manager = BrowserCookieManager()
+    result = {
+        'metadata': {},
+        'transcript': '',
+        'ai_summary': '',
+        'success': False,
+        'errors': []
+    }
+    
+    try:
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=True)
+            context = await browser.new_context()
+            
+            # Load cookies
+            cookies = cookie_manager.get_youtube_cookies_for_playwright()
+            if cookies:
+                await context.add_cookies(cookies)
+                print(f"✅ Loaded {len(cookies)} authentication cookies")
+            
+            page = await context.new_page()
+            
+            try:
+                # Navigate to video
+                print(f"📺 Navigating to video...")
+                await page.goto(url, wait_until='networkidle', timeout=15000)
+                await page.wait_for_timeout(3000)  # Extra wait for dynamic content
+                
+                # Extract metadata from page
+                print(f"📋 Extracting metadata...")
+                metadata = await extract_metadata(page, url)
+                result['metadata'] = metadata
+                
+                # Get transcript
+                print(f"📝 Getting transcript...")
+                transcript = await extract_transcript(page)
+                result['transcript'] = transcript
+                
+                # Get AI summary
+                print(f"🤖 Getting YouTube AI summary...")
+                ai_summary = await extract_ai_summary(page)
+                result['ai_summary'] = ai_summary
+                
+                result['success'] = True
+                
+            finally:
+                await browser.close()
+                
+    except Exception as e:
+        logger.error(f"Failed to scrape video: {e}", exc_info=True)
+        result['errors'].append(str(e))
+    
+    return result
+
+
+async def extract_metadata(page, url: str) -> dict:
+    """Extract video metadata from the page."""
+    metadata = {'url': url}
+    
+    try:
+        # Title
+        title_element = await page.query_selector('h1.ytd-watch-metadata yt-formatted-string')
+        if title_element:
+            metadata['title'] = await title_element.inner_text()
+        
+        # Channel name
+        channel_element = await page.query_selector('ytd-channel-name a')
+        if channel_element:
+            metadata['uploader'] = await channel_element.inner_text()
+        
+        # Video ID
+        video_id = url.split('v=')[1].split('&')[0] if 'v=' in url else 'unknown'
+        metadata['video_id'] = video_id
+        
+        # Description (expand it first)
+        try:
+            more_button = await page.query_selector('tp-yt-paper-button#expand')
+            if more_button:
+                await more_button.click()
+                await page.wait_for_timeout(500)
+        except:
+            pass
+        
+        desc_element = await page.query_selector('ytd-text-inline-expander#description-inline-expander')
+        if desc_element:
+            metadata['description'] = await desc_element.inner_text()
+        
+        # Views, date, etc. from metadata
+        info_element = await page.query_selector('#info-container #info')
+        if info_element:
+            info_text = await info_element.inner_text()
+            metadata['info'] = info_text
+        
+        return metadata
+        
+    except Exception as e:
+        logger.error(f"Error extracting metadata: {e}")
+        return metadata
+
+
+async def extract_transcript(page) -> str:
+    """Extract transcript using YouTube's transcript API."""
+    try:
+        # Get video ID from current URL
+        url = page.url
+        video_id = url.split('v=')[1].split('&')[0] if 'v=' in url else None
+        
+        if video_id:
+            # Use the correct API - create instance and fetch
+            from youtube_transcript_api import YouTubeTranscriptApi
+            
+            api = YouTubeTranscriptApi()
+            transcript_data = api.fetch(video_id)
+            
+            # Format transcript with timestamps
+            formatted_transcript = ""
+            for entry in transcript_data:
+                # Extract data from the transcript snippet object
+                start_time = entry.start if hasattr(entry, 'start') else entry['start']
+                text = entry.text if hasattr(entry, 'text') else entry['text']
+                
+                minutes = int(start_time // 60)
+                seconds = int(start_time % 60)
+                timestamp = f"{minutes:02d}:{seconds:02d}"
+                formatted_transcript += f"**{timestamp}** {text}\n\n"
+            
+            return formatted_transcript
+        
+    except Exception as e:
+        logger.error(f"Error extracting transcript: {e}")
+    
+    return "Transcript not available"
+
+
+async def extract_ai_summary(page) -> str:
+    """Extract YouTube AI summary by clicking Ask button."""
+    try:
+        # Find and click Ask button
+        ask_selectors = [
+            "button[aria-label*='Ask']",
+            "button:has-text('Ask')",
+            "ytd-button-renderer:has-text('Ask')",
+        ]
+        
+        ask_button = None
+        for selector in ask_selectors:
+            try:
+                btn = await page.query_selector(selector)
+                if btn and await btn.is_visible():
+                    ask_button = btn
+                    print(f"  Found Ask button")
+                    break
+            except:
+                continue
+        
+        if not ask_button:
+            return "YouTube AI summary not available (Ask button not found - may require YouTube Premium)"
+        
+        # Click Ask
+        await ask_button.click()
+        await page.wait_for_timeout(2000)
+        
+        # Find and click Summarize
+        summarize_selectors = [
+            "button:has-text('Summarize')",
+            "ytd-menu-item:has-text('Summarize')",
+            "tp-yt-paper-item:has-text('Summarize')",
+        ]
+        
+        summarize_button = None
+        for selector in summarize_selectors:
+            try:
+                btn = await page.query_selector(selector)
+                if btn and await btn.is_visible():
+                    summarize_button = btn
+                    print(f"  Found Summarize button")
+                    break
+            except:
+                continue
+        
+        if not summarize_button:
+            return "YouTube AI summary not available (Summarize option not found)"
+        
+        # Click Summarize
+        await summarize_button.click()
+        print(f"  Waiting for YouTube to generate summary (5-15 seconds)...")
+        
+        # Wait for summary to generate - be patient
+        await page.wait_for_timeout(8000)  # Initial 8 second wait
+        
+        # Poll for summary content with longer timeout
+        max_wait = 45  # Increased from 30 to 45 seconds
+        start = asyncio.get_event_loop().time()
+        last_length = 0
+        stable_count = 0
+        
+        while (asyncio.get_event_loop().time() - start) < max_wait:
+            selectors = [
+                'ytd-engagement-panel-section-list-renderer [id="content"] p',
+                'ytd-engagement-panel-section-list-renderer p',
+                '[role="article"] p',
+                '.response-content p',
+                'div[class*="summary"] p',
+            ]
+            
+            for selector in selectors:
+                try:
+                    elements = await page.query_selector_all(selector)
+                    if elements:
+                        # Get all paragraph text
+                        texts = []
+                        for elem in elements:
+                            text = await elem.inner_text()
+                            # Filter out UI elements and keep only content
+                            if text and len(text) > 20 and not text.startswith('Hello!') and 'Curious about' not in text:
+                                texts.append(text)
+                        
+                        if texts:
+                            full_text = '\n\n'.join(texts)
+                            current_length = len(full_text)
+                            
+                            # Check if summary has stopped growing (stable for 3 checks)
+                            if current_length == last_length:
+                                stable_count += 1
+                                if stable_count >= 3 and current_length > 200:
+                                    # Summary is complete
+                                    print(f"  ✅ Summary complete ({current_length} chars)")
+                                    return full_text
+                            else:
+                                stable_count = 0
+                                last_length = current_length
+                                print(f"  📝 Summary growing... ({current_length} chars)")
+                except:
+                    continue
+            
+            await page.wait_for_timeout(2000)  # Check every 2 seconds
+        
+        # Return what we have even if timeout
+        if last_length > 100:
+            print(f"  ⚠️  Timeout but got partial summary ({last_length} chars)")
+            return full_text
+        
+        return "YouTube AI summary generation timed out"
+        
+    except Exception as e:
+        logger.error(f"Error extracting AI summary: {e}")
+        return f"Error getting AI summary: {str(e)}"
+
+
+def format_markdown_output(data: dict) -> str:
+    """Format scraped data into Knowledge_Chipper markdown format."""
+    metadata = data['metadata']
+    
+    # Format duration if available
+    duration_str = "Unknown"
+    
+    # Format date
+    generated_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    
+    # Build YAML frontmatter
+    frontmatter_lines = [
+        f'title: "{metadata.get("title", "Unknown Title")}"',
+        f'video_id: "{metadata.get("video_id", "unknown")}"',
+        f'uploader: "{metadata.get("uploader", "Unknown")}"',
+        f'url: "{metadata.get("url", "")}"',
+        f'generated: "{generated_date}"',
+    ]
+    
+    frontmatter = '\n'.join(frontmatter_lines)
+    
+    # Build markdown content
+    markdown = f"""---
+{frontmatter}
+---
+
+# {metadata.get('title', 'Unknown Title')}
+
+## Video Metadata
+
+- **Title**: {metadata.get('title', 'Unknown')}
+- **Channel**: {metadata.get('uploader', 'Unknown')}
+- **Video ID**: {metadata.get('video_id', 'unknown')}
+- **URL**: [{metadata.get('url', '')}]({metadata.get('url', '')})
+- **Generated**: {generated_date}
+
+## Description
+
+{metadata.get('description', 'No description available')}
+
+## YouTube AI Summary
+
+{data.get('ai_summary', 'AI summary not available')}
+
+## Full Transcript
+
+> **Note**: This transcript was extracted from YouTube's automatic captions.
+
+{data.get('transcript', 'Transcript not available')}
+
+---
+*Generated by Knowledge_Chipper YouTube Scraper on {generated_date}*
+"""
+    
+    return markdown
+
+
+def main():
+    if len(sys.argv) < 2:
+        print("Usage: python scrape_youtube_complete.py <youtube_url> [output_file]")
+        print("\nExample:")
+        print("  python scrape_youtube_complete.py 'https://www.youtube.com/watch?v=AmIiqY2VJkQ'")
+        sys.exit(1)
+    
+    url = sys.argv[1]
+    output_file = sys.argv[2] if len(sys.argv) > 2 else None
+    
+    print(f"\n{'='*70}")
+    print(f"YouTube Complete Video Scraper")
+    print(f"{'='*70}\n")
+    print(f"URL: {url}\n")
+    
+    # Scrape data
+    data = asyncio.run(scrape_complete_video_data(url))
+    
+    if not data['success']:
+        print(f"\n❌ Failed to scrape video")
+        for error in data['errors']:
+            print(f"   {error}")
+        sys.exit(1)
+    
+    # Format as markdown
+    markdown = format_markdown_output(data)
+    
+    # Save to file
+    if output_file:
+        output_path = Path(output_file)
+    else:
+        video_id = data['metadata'].get('video_id', 'unknown')
+        output_path = Path(f"output/{video_id}_complete.md")
+    
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(markdown, encoding='utf-8')
+    
+    print(f"\n{'='*70}")
+    print(f"✅ Complete video data scraped successfully!")
+    print(f"{'='*70}\n")
+    print(f"📄 Saved to: {output_path}")
+    print(f"📝 Transcript: {len(data['transcript'])} characters")
+    print(f"🤖 AI Summary: {len(data['ai_summary'])} characters")
+    print(f"\n{'='*70}\n")
+    
+    # Also print the markdown to console
+    print(markdown)
+
+
+if __name__ == "__main__":
+    main()
+
