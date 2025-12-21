@@ -285,6 +285,119 @@ class AnthropicProvider(BaseLLMProvider):
             raise
 
 
+class GoogleProvider(BaseLLMProvider):
+    """Google Gemini API provider using the new google.genai package."""
+
+    # Default models for Google provider (don't use settings.llm.model which may be for other providers)
+    DEFAULT_MODELS = {
+        "fast": "gemini-2.0-flash",  # Fast, cheap, good for extraction
+        "pro": "gemini-1.5-pro",  # More capable, better for evaluation
+        "flash": "gemini-2.0-flash-exp",  # Experimental flash
+    }
+
+    def __init__(
+        self,
+        model: str | None = None,
+        temperature: float = 0.3,
+    ) -> None:
+        super().__init__(model, temperature)
+        # Use provided model or default to gemini-2.0-flash
+        # Only use settings.llm.model if it's explicitly a gemini model
+        if model:
+            self.model = model
+        elif (
+            self.settings.llm.model
+            and "gemini" in self.settings.llm.model.lower()
+        ):
+            self.model = self.settings.llm.model
+        else:
+            self.model = self.DEFAULT_MODELS["fast"]
+
+    def call(
+        self,
+        prompt: str,
+        progress_callback: Callable | None = None,
+        schema: dict | None = None,
+    ) -> LLMResponse:
+        """Call Google Gemini API using the new google.genai package."""
+        try:
+            from google import genai
+
+            api_key = self.settings.api_keys.google_api_key
+
+            if not api_key:
+                raise ValueError(
+                    "Google API key not configured. Set GOOGLE_API_KEY or GEMINI_API_KEY "
+                    "environment variable, or add to settings.yaml under api_keys.google"
+                )
+
+            # Create client with API key
+            client = genai.Client(api_key=api_key)
+
+            logger.info(f"🔍 Google Gemini API call - Model: '{self.model}'")
+
+            # Make API call using the new google.genai interface
+            response = client.models.generate_content(
+                model=self.model,
+                contents=prompt,
+                config=genai.types.GenerateContentConfig(
+                    temperature=self.temperature,
+                    max_output_tokens=8192,
+                ),
+            )
+
+            # Extract content
+            content = response.text
+
+            # Try to get actual token counts from response
+            prompt_tokens = 0
+            completion_tokens = 0
+
+            if hasattr(response, "usage_metadata") and response.usage_metadata:
+                usage = response.usage_metadata
+                prompt_tokens = getattr(usage, "prompt_token_count", 0)
+                completion_tokens = getattr(usage, "candidates_token_count", 0)
+            else:
+                # Estimate tokens (rough approximation)
+                prompt_tokens = int(len(prompt.split()) * 1.3)
+                completion_tokens = int(len(content.split()) * 1.3) if content else 0
+
+            logger.info(
+                f"✅ Google Gemini response - Model: '{self.model}', "
+                f"Tokens: {prompt_tokens} in / {completion_tokens} out"
+            )
+
+            return LLMResponse(
+                content=content.strip() if content else "",
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                total_tokens=prompt_tokens + completion_tokens,
+                model=self.model,
+                provider="google",
+            )
+
+        except Exception as e:
+            error_str = str(e)
+            logger.error(f"Google Gemini API error: {e}")
+
+            # Check for specific error types
+            if "quota" in error_str.lower() or "rate" in error_str.lower():
+                logger.error("❌ Rate limit or quota exceeded for Google API")
+                raise ValueError(
+                    f"Google API rate limit/quota exceeded: {error_str}"
+                ) from e
+
+            if "api_key" in error_str.lower() or "authentication" in error_str.lower():
+                logger.error("❌ Google API key authentication failed")
+                raise ValueError(
+                    "Google API key is invalid or expired. "
+                    "Get a new key from: https://aistudio.google.com/apikey"
+                ) from e
+
+            # Re-raise original exception
+            raise
+
+
 class LocalLLMProvider(BaseLLMProvider):
     """Local LLM provider (Ollama/LM Studio)."""
 
@@ -499,15 +612,27 @@ class LLMProviderFactory:
         model: str | None = None,
         temperature: float = 0.3,
     ) -> BaseLLMProvider:
-        """Create an LLM provider instance."""
+        """Create an LLM provider instance.
+
+        Supported providers:
+        - openai: OpenAI GPT models (gpt-4o, gpt-4o-mini, gpt-4-turbo, etc.)
+        - anthropic: Anthropic Claude models (claude-3-5-sonnet, claude-3-opus, etc.)
+        - google: Google Gemini models (gemini-2.0-flash, gemini-1.5-pro, etc.)
+        - local: Local Ollama/LM Studio models (qwen2.5, llama3, etc.)
+        """
         if provider == "openai":
             return OpenAIProvider(model, temperature)
         elif provider == "anthropic":
             return AnthropicProvider(model, temperature)
+        elif provider == "google":
+            return GoogleProvider(model, temperature)
         elif provider == "local":
             return LocalLLMProvider(model, temperature)
         else:
-            raise ValueError(f"Unsupported provider: {provider}")
+            raise ValueError(
+                f"Unsupported provider: {provider}. "
+                f"Supported: openai, anthropic, google, local"
+            )
 
 
 class UnifiedLLMClient:

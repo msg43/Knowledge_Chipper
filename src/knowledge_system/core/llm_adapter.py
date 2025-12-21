@@ -550,12 +550,12 @@ class LLMAdapter:
             ) from e
 
     async def _call_google(self, model: str, payload: dict[str, Any]) -> dict[str, Any]:
-        """Call Google Gemini API."""
+        """Call Google Gemini API using the new google.genai package."""
         try:
-            import google.generativeai as genai
+            from google import genai
         except ImportError:
             raise KnowledgeSystemError(
-                "Google AI package not installed. Run: pip install google-generativeai",
+                "Google AI package not installed. Run: pip install google-genai",
                 ErrorCode.CONFIGURATION_ERROR,
             )
 
@@ -568,41 +568,52 @@ class LLMAdapter:
 
             if not api_key:
                 raise KnowledgeSystemError(
-                    "Google API key not configured in settings.yaml",
+                    "Google API key not configured. Set GOOGLE_API_KEY or GEMINI_API_KEY "
+                    "environment variable, or add to settings.yaml under api_keys.google",
                     ErrorCode.CONFIGURATION_ERROR,
                 )
 
-            # Configure API
-            genai.configure(api_key=api_key)
-
-            # Create model
-            generation_config = {
-                "temperature": payload.get("temperature", 0.7),
-                "max_output_tokens": payload.get("max_tokens"),
-            }
-            model_instance = genai.GenerativeModel(
-                model_name=model, generation_config=generation_config
-            )
+            # Create client with API key
+            client = genai.Client(api_key=api_key)
 
             # Convert messages to Gemini format (concatenate for simplicity)
             prompt = "\n\n".join([msg["content"] for msg in payload["messages"]])
 
-            # Make API call
-            response = await model_instance.generate_content_async(prompt)
+            # Make async API call using asyncio.to_thread for sync client
+            import asyncio
+
+            response = await asyncio.to_thread(
+                client.models.generate_content,
+                model=model,
+                contents=prompt,
+                config=genai.types.GenerateContentConfig(
+                    temperature=payload.get("temperature", 0.7),
+                    max_output_tokens=payload.get("max_tokens", 8192),
+                ),
+            )
 
             # Extract content
             content = response.text
 
-            # Estimate tokens (Gemini doesn't always provide usage)
-            prompt_tokens = len(prompt.split()) * 1.3
-            completion_tokens = len(content.split()) * 1.3
+            # Try to get actual token counts from response
+            prompt_tokens = 0
+            completion_tokens = 0
+
+            if hasattr(response, "usage_metadata") and response.usage_metadata:
+                usage = response.usage_metadata
+                prompt_tokens = getattr(usage, "prompt_token_count", 0)
+                completion_tokens = getattr(usage, "candidates_token_count", 0)
+            else:
+                # Estimate tokens (rough approximation)
+                prompt_tokens = int(len(prompt.split()) * 1.3)
+                completion_tokens = int(len(content.split()) * 1.3) if content else 0
 
             return {
                 "content": content,
                 "usage": {
-                    "prompt_tokens": int(prompt_tokens),
-                    "completion_tokens": int(completion_tokens),
-                    "total_tokens": int(prompt_tokens + completion_tokens),
+                    "prompt_tokens": prompt_tokens,
+                    "completion_tokens": completion_tokens,
+                    "total_tokens": prompt_tokens + completion_tokens,
                 },
                 "model": model,
                 "provider": "google",

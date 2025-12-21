@@ -70,11 +70,11 @@ class System2LLM:
         """Get default model for provider."""
         defaults = {
             "ollama": "qwen2.5:7b-instruct",
-            "openai": "gpt-3.5-turbo",
-            "anthropic": "claude-3-sonnet",
-            "google": "gemini-pro",
+            "openai": "gpt-4o-mini",  # Fast, cheap, good quality
+            "anthropic": "claude-3-5-sonnet-20241022",  # Latest Sonnet
+            "google": "gemini-2.0-flash",  # Fast, cheap, good quality
         }
-        return defaults.get(provider, "gpt-3.5-turbo")
+        return defaults.get(provider, "gpt-4o-mini")
 
     def set_job_run_id(self, job_run_id: str):
         """Set the current job run ID for tracking."""

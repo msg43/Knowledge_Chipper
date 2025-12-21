@@ -285,6 +285,11 @@ class APIKeysConfig(BaseModel):
     # LLM Provider Keys
     openai_api_key: str | None = Field(default=None, alias="openai")
     anthropic_api_key: str | None = Field(default=None, alias="anthropic")
+    google_api_key: str | None = Field(
+        default=None,
+        alias="google",
+        description="Google AI API key for Gemini models. Get from: https://aistudio.google.com/apikey",
+    )
 
     # HuggingFace for local models
     huggingface_token: str | None = Field(default=None, alias="hf_token")
@@ -382,6 +387,11 @@ class APIKeysConfig(BaseModel):
     def anthropic(self) -> str | None:
         """Backward compatibility property for anthropic_api_key."""
         return self.anthropic_api_key
+
+    @property
+    def google(self) -> str | None:
+        """Backward compatibility property for google_api_key."""
+        return self.google_api_key
 
 
 class ProcessingConfig(BaseModel):
@@ -1369,6 +1379,13 @@ class Settings(BaseSettings):
             env_anthropic = os.getenv("ANTHROPIC_API_KEY")
             if env_anthropic:
                 api_keys["anthropic"] = env_anthropic
+
+        # Google API key fallback from environment
+        # Accept common env var names for Gemini/Google AI
+        if not api_keys.get("google_api_key") and not api_keys.get("google"):
+            env_google = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
+            if env_google:
+                api_keys["google"] = env_google
 
         # Bright Data API key fallback from environment
         # Accept common env var names for convenience
