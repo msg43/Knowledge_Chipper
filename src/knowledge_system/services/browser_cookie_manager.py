@@ -58,6 +58,7 @@ class BrowserCookieManager:
     def _convert_cookiejar_to_playwright(self, cookiejar) -> List[Dict[str, Any]]:
         """Convert http.cookiejar to Playwright cookie format."""
         playwright_cookies = []
+        skipped_count = 0
         
         for cookie in cookiejar:
             # Only include YouTube cookies
@@ -74,29 +75,53 @@ class BrowserCookieManager:
                     'httpOnly': bool(cookie.has_nonstandard_attr('HttpOnly')) if hasattr(cookie, 'has_nonstandard_attr') else False,
                 }
                 
-                # Add expiry only if it's a valid positive number
-                # Playwright requires: -1 (session) or positive unix timestamp
-                # If we don't include expires, Playwright treats it as a session cookie
-                if cookie.expires and cookie.expires > 0:
+                # Handle expires field carefully - Playwright is very strict
+                # Valid values: -1 (session cookie) or positive unix timestamp
+                # Invalid: None, 0, negative numbers (except -1), non-numeric
+                if hasattr(cookie, 'expires') and cookie.expires is not None:
                     try:
-                        playwright_cookie['expires'] = int(cookie.expires)
-                    except (ValueError, TypeError):
-                        # Skip invalid expires values
-                        pass
+                        expires_value = int(cookie.expires)
+                        
+                        # Validate the value
+                        if expires_value == -1:
+                            # Session cookie
+                            playwright_cookie['expires'] = -1
+                        elif expires_value > 0:
+                            # Valid timestamp
+                            playwright_cookie['expires'] = expires_value
+                        else:
+                            # Invalid (0 or negative except -1) - skip expires field
+                            # Playwright will treat as session cookie
+                            logger.debug(f"Cookie {cookie.name} has invalid expires={expires_value}, treating as session")
+                    except (ValueError, TypeError) as e:
+                        # Non-numeric expires - skip it
+                        logger.debug(f"Cookie {cookie.name} has non-numeric expires: {cookie.expires}")
+                # If no expires field, Playwright treats it as session cookie (which is fine)
                 
                 # Add sameSite if present
                 if hasattr(cookie, 'has_nonstandard_attr') and cookie.has_nonstandard_attr('SameSite'):
-                    playwright_cookie['sameSite'] = cookie.get_nonstandard_attr('SameSite')
+                    samsite_value = cookie.get_nonstandard_attr('SameSite')
+                    # Validate sameSite value
+                    if samsite_value in ['Strict', 'Lax', 'None']:
+                        playwright_cookie['sameSite'] = samsite_value
+                    else:
+                        playwright_cookie['sameSite'] = 'Lax'  # Safe default
                 else:
                     playwright_cookie['sameSite'] = 'Lax'  # Default
                 
                 playwright_cookies.append(playwright_cookie)
+                
             except Exception as e:
                 # Skip problematic cookies
+                skipped_count += 1
                 logger.debug(f"Skipping cookie {cookie.name}: {e}")
                 continue
         
-        logger.info(f"Converted {len(playwright_cookies)} cookies for Playwright")
+        if skipped_count > 0:
+            logger.info(f"Converted {len(playwright_cookies)} cookies for Playwright (skipped {skipped_count} invalid cookies)")
+        else:
+            logger.info(f"Converted {len(playwright_cookies)} cookies for Playwright")
+        
         return playwright_cookies
     
     def _load_cookie_file_for_playwright(self, cookie_file: str) -> List[Dict[str, Any]]:
