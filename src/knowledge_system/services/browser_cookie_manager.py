@@ -73,9 +73,12 @@ class BrowserCookieManager:
                 'httpOnly': bool(cookie.has_nonstandard_attr('HttpOnly')) if hasattr(cookie, 'has_nonstandard_attr') else False,
             }
             
-            # Add expiry if present
-            if cookie.expires:
-                playwright_cookie['expires'] = cookie.expires
+            # Add expiry if present and valid
+            if cookie.expires and cookie.expires > 0:
+                playwright_cookie['expires'] = int(cookie.expires)
+            elif cookie.expires == 0:
+                # Session cookie - use -1
+                playwright_cookie['expires'] = -1
             
             # Add sameSite if present
             if hasattr(cookie, 'has_nonstandard_attr') and cookie.has_nonstandard_attr('SameSite'):
