@@ -325,13 +325,40 @@ def format_markdown_output(data: dict) -> str:
         """Convert timestamps like (0:55) or 00:00 to clickable YouTube links."""
         import re
         
-        # Pattern 1: Timestamps in parentheses like (0:55) or (27:02)
+        # Pattern 1a: Timestamp RANGES in parentheses like (1:16-1:28) or (32:15-32:37)
+        def replace_paren_range(match):
+            start_ts = match.group(1)
+            end_ts = match.group(2)
+            start_sec = parse_timestamp_to_seconds(start_ts)
+            end_sec = parse_timestamp_to_seconds(end_ts)
+            # Link to start time
+            return f"([{start_ts}]({base_url}&t={start_sec}s)-[{end_ts}]({base_url}&t={end_sec}s))"
+        
+        text = re.sub(r'\((\d{1,2}:\d{2})-(\d{1,2}:\d{2})\)', replace_paren_range, text)
+        
+        # Pattern 1b: Single timestamps in parentheses like (0:55) or (27:02)
         def replace_paren_timestamp(match):
             timestamp = match.group(1)
             seconds = parse_timestamp_to_seconds(timestamp)
             return f"[{timestamp}]({base_url}&t={seconds}s)"
         
         text = re.sub(r'\((\d{1,2}:\d{2})\)', replace_paren_timestamp, text)
+        
+        # Pattern 1c: Timestamps in square brackets like [7:12] or [0:55]
+        # But NOT if they're already hyperlinked (would have "](" after them)
+        def replace_bracket_timestamp(match):
+            # Check if this is already a hyperlink by looking ahead
+            full_match = match.group(0)
+            timestamp = match.group(1)
+            # If followed by ](, it's already a link, skip it
+            return full_match  # Will be handled by negative lookahead in regex
+        
+        # Use negative lookahead to avoid matching already-hyperlinked timestamps
+        text = re.sub(
+            r'\[(\d{1,2}:\d{2})\](?!\()',
+            lambda m: f"[{m.group(1)}]({base_url}&t={parse_timestamp_to_seconds(m.group(1))}s)",
+            text
+        )
         
         # Pattern 2: Bold timestamps like **00:06**
         text = re.sub(
