@@ -74,13 +74,15 @@ class BrowserCookieManager:
                     'httpOnly': bool(cookie.has_nonstandard_attr('HttpOnly')) if hasattr(cookie, 'has_nonstandard_attr') else False,
                 }
                 
-                # Add expiry if present and valid
+                # Add expiry only if it's a valid positive number
                 # Playwright requires: -1 (session) or positive unix timestamp
-                if cookie.expires:
-                    if cookie.expires > 0:
+                # If we don't include expires, Playwright treats it as a session cookie
+                if cookie.expires and cookie.expires > 0:
+                    try:
                         playwright_cookie['expires'] = int(cookie.expires)
-                    # Skip cookies with invalid expires (None, 0, negative)
-                    # Playwright will treat them as session cookies
+                    except (ValueError, TypeError):
+                        # Skip invalid expires values
+                        pass
                 
                 # Add sameSite if present
                 if hasattr(cookie, 'has_nonstandard_attr') and cookie.has_nonstandard_attr('SameSite'):
