@@ -1,0 +1,277 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "FlagshipOutputV2",
+  "description": "Output schema for the Flagship Evaluator system with multi-profile dimension scoring",
+  "type": "object",
+  "required": ["evaluated_claims", "summary_assessment"],
+  "properties": {
+    "evaluated_claims": {
+      "type": "array",
+      "description": "All claims with evaluation decisions and dimension scores",
+      "items": {
+        "type": "object",
+        "required": ["original_claim_text", "decision", "reasoning"],
+        "properties": {
+          "claim_id": {
+            "type": "string",
+            "description": "Identifier from input if provided"
+          },
+          "original_claim_text": {
+            "type": "string",
+            "description": "The original claim text"
+          },
+          "decision": {
+            "type": "string",
+            "enum": ["accept", "reject", "merge", "split"],
+            "description": "Evaluation decision"
+          },
+          "revised_claim_text": {
+            "type": "string",
+            "description": "Revised claim text if modified"
+          },
+          "dimensions": {
+            "type": "object",
+            "description": "Six independent dimension scores from LLM evaluation",
+            "required": [
+              "epistemic_value",
+              "actionability",
+              "novelty",
+              "verifiability",
+              "understandability",
+              "temporal_stability",
+              "scope"
+            ],
+            "properties": {
+              "epistemic_value": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 10,
+                "description": "How much does this reduce uncertainty about how the world works?"
+              },
+              "actionability": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 10,
+                "description": "Can someone make better decisions with this information?"
+              },
+              "novelty": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 10,
+                "description": "Is this surprising or does it challenge common assumptions?"
+              },
+              "verifiability": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 10,
+                "description": "How strong is the evidence and how reliable are the sources?"
+              },
+              "understandability": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 10,
+                "description": "How clear and accessible is this claim?"
+              },
+              "temporal_stability": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 10,
+                "description": "How long will this claim remain true/relevant?"
+              },
+              "scope": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 10,
+                "description": "How broadly applicable is this claim?"
+              }
+            }
+          },
+          "profile_scores": {
+            "type": "object",
+            "description": "Importance scores calculated for each user profile (arithmetic from dimensions)",
+            "properties": {
+              "scientist": {"type": "number", "minimum": 0, "maximum": 10},
+              "philosopher": {"type": "number", "minimum": 0, "maximum": 10},
+              "educator": {"type": "number", "minimum": 0, "maximum": 10},
+              "student": {"type": "number", "minimum": 0, "maximum": 10},
+              "skeptic": {"type": "number", "minimum": 0, "maximum": 10},
+              "investor": {"type": "number", "minimum": 0, "maximum": 10},
+              "policy_maker": {"type": "number", "minimum": 0, "maximum": 10},
+              "tech_professional": {"type": "number", "minimum": 0, "maximum": 10},
+              "health_professional": {"type": "number", "minimum": 0, "maximum": 10},
+              "journalist": {"type": "number", "minimum": 0, "maximum": 10},
+              "generalist": {"type": "number", "minimum": 0, "maximum": 10},
+              "pragmatist": {"type": "number", "minimum": 0, "maximum": 10}
+            }
+          },
+          "importance": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 10,
+            "description": "Composite importance score (max of profile_scores, or computed from dimensions)"
+          },
+          "best_profile": {
+            "type": "string",
+            "description": "User profile that gave the highest importance score",
+            "enum": [
+              "scientist",
+              "philosopher",
+              "educator",
+              "student",
+              "skeptic",
+              "investor",
+              "policy_maker",
+              "tech_professional",
+              "health_professional",
+              "journalist",
+              "generalist",
+              "pragmatist"
+            ]
+          },
+          "novelty": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 10,
+            "description": "Novelty score (kept for backward compatibility, same as dimensions.novelty)"
+          },
+          "confidence_final": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 10,
+            "description": "Confidence score (kept for backward compatibility, same as dimensions.verifiability)"
+          },
+          "reasoning": {
+            "type": "string",
+            "description": "Detailed reasoning for decision and scores"
+          },
+          "rank": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Ranking among accepted claims"
+          },
+          "tier": {
+            "type": "string",
+            "enum": ["A", "B", "C", "D"],
+            "description": "Quality tier based on composite importance score"
+          },
+          "merge_with": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "IDs of claims to merge with (if decision is 'merge')"
+          },
+          "split_into": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["claim_text", "claim_type"],
+              "properties": {
+                "claim_text": {"type": "string"},
+                "claim_type": {
+                  "type": "string",
+                  "enum": ["factual", "causal", "normative", "forecast", "definition"]
+                }
+              }
+            },
+            "description": "New claims if split (if decision is 'split')"
+          }
+        }
+      }
+    },
+    "summary_assessment": {
+      "type": "object",
+      "required": ["total_claims_processed", "claims_accepted", "claims_rejected", "overall_quality"],
+      "properties": {
+        "total_claims_processed": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total number of claims evaluated"
+        },
+        "claims_accepted": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of claims accepted"
+        },
+        "claims_rejected": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of claims rejected"
+        },
+        "claims_merged": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of claims merged"
+        },
+        "claims_split": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of claims split"
+        },
+        "key_themes": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Main themes identified in the claims"
+        },
+        "overall_quality": {
+          "type": "string",
+          "enum": ["high", "medium", "low"],
+          "description": "Overall assessment of extraction quality"
+        },
+        "recommendations": {
+          "type": "string",
+          "description": "Suggestions for improvement"
+        },
+        "average_dimensions": {
+          "type": "object",
+          "description": "Average dimension scores across accepted claims",
+          "properties": {
+            "epistemic_value": {"type": "number"},
+            "actionability": {"type": "number"},
+            "novelty": {"type": "number"},
+            "verifiability": {"type": "number"},
+            "understandability": {"type": "number"},
+            "temporal_stability": {"type": "number"},
+            "scope": {"type": "number"}
+          }
+        },
+        "average_scores": {
+          "type": "object",
+          "description": "Average scores across accepted claims (backward compatibility)",
+          "properties": {
+            "importance": {"type": "number"},
+            "novelty": {"type": "number"},
+            "confidence": {"type": "number"}
+          }
+        }
+      }
+    },
+    "tier_distribution": {
+      "type": "object",
+      "description": "Distribution of claims across quality tiers",
+      "properties": {
+        "A": {"type": "integer", "minimum": 0},
+        "B": {"type": "integer", "minimum": 0},
+        "C": {"type": "integer", "minimum": 0},
+        "D": {"type": "integer", "minimum": 0}
+      }
+    },
+    "profile_distribution": {
+      "type": "object",
+      "description": "Distribution of best_profile across accepted claims",
+      "properties": {
+        "scientist": {"type": "integer", "minimum": 0},
+        "philosopher": {"type": "integer", "minimum": 0},
+        "educator": {"type": "integer", "minimum": 0},
+        "student": {"type": "integer", "minimum": 0},
+        "skeptic": {"type": "integer", "minimum": 0},
+        "investor": {"type": "integer", "minimum": 0},
+        "policy_maker": {"type": "integer", "minimum": 0},
+        "tech_professional": {"type": "integer", "minimum": 0},
+        "health_professional": {"type": "integer", "minimum": 0},
+        "journalist": {"type": "integer", "minimum": 0},
+        "generalist": {"type": "integer", "minimum": 0},
+        "pragmatist": {"type": "integer", "minimum": 0}
+      }
+    }
+  }
+}
+

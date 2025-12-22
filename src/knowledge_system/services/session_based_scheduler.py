@@ -626,3 +626,177 @@ class SessionBasedScheduler:
             logger.debug(f"Saved state to {self.state_file}")
         except Exception as e:
             logger.error(f"Failed to save state: {e}")
+
+    # =========================================================================
+    # AUTHENTICATION FAILURE CHECKPOINT METHODS
+    # =========================================================================
+
+    def save_auth_failure_checkpoint(
+        self,
+        batch_id: str,
+        last_successful_source_id: str | None,
+        episodes_remaining: list[str],
+        reason: str,
+    ) -> dict:
+        """
+        Save checkpoint when YouTube authentication fails.
+        
+        Call this when detecting 401/403 or bot detection errors to save progress
+        and allow resumption after re-authentication.
+        
+        Args:
+            batch_id: Unique ID for this batch run
+            last_successful_source_id: Last successfully processed source_id
+            episodes_remaining: List of URLs still to process
+            reason: Why processing stopped (e.g., "401 Unauthorized", "Bot detection")
+        
+        Returns:
+            Checkpoint dict that was saved
+        """
+        checkpoint = {
+            "batch_id": batch_id,
+            "last_successful_source_id": last_successful_source_id,
+            "episodes_remaining": episodes_remaining,
+            "auth_failure_reason": reason,
+            "auth_failure_time": datetime.now().isoformat(),
+            "status": "paused",
+        }
+        
+        # Save to state
+        self.state["auth_checkpoint"] = checkpoint
+        self._save_state()
+        
+        # Also save to database for cross-device sync
+        try:
+            self.db_service.save_extraction_checkpoint(checkpoint)
+        except Exception as e:
+            logger.warning(f"Could not save checkpoint to database: {e}")
+        
+        logger.warning(
+            f"🛑 Authentication failure checkpoint saved: {reason}\n"
+            f"   Last successful: {last_successful_source_id}\n"
+            f"   Remaining: {len(episodes_remaining)} episodes\n"
+            f"   Resume with: scheduler.resume_from_checkpoint('{batch_id}')"
+        )
+        
+        if self.progress_callback:
+            self.progress_callback(
+                f"🛑 YouTube authentication lost. {len(episodes_remaining)} episodes pending. "
+                f"Re-authenticate to resume."
+            )
+        
+        return checkpoint
+    
+    def get_pending_checkpoint(self, batch_id: str | None = None) -> dict | None:
+        """
+        Get any pending checkpoint for resumption.
+        
+        Args:
+            batch_id: Optional batch_id to look for. If None, returns most recent.
+        
+        Returns:
+            Checkpoint dict if found, None otherwise
+        """
+        # Check state first
+        checkpoint = self.state.get("auth_checkpoint")
+        if checkpoint:
+            if batch_id is None or checkpoint.get("batch_id") == batch_id:
+                if checkpoint.get("status") == "paused":
+                    return checkpoint
+        
+        # Try database
+        try:
+            checkpoint = self.db_service.get_extraction_checkpoint(batch_id)
+            if checkpoint and checkpoint.get("status") == "paused":
+                return checkpoint
+        except Exception as e:
+            logger.debug(f"Could not check database for checkpoint: {e}")
+        
+        return None
+    
+    def resume_from_checkpoint(self, batch_id: str) -> list[str]:
+        """
+        Resume processing from a saved checkpoint.
+        
+        Args:
+            batch_id: Batch ID to resume
+        
+        Returns:
+            List of remaining URLs to process
+        
+        Raises:
+            ValueError: If no checkpoint found for batch_id
+        """
+        checkpoint = self.get_pending_checkpoint(batch_id)
+        
+        if not checkpoint:
+            raise ValueError(f"No pending checkpoint found for batch_id: {batch_id}")
+        
+        remaining_urls = checkpoint.get("episodes_remaining", [])
+        last_success = checkpoint.get("last_successful_source_id")
+        
+        logger.info(
+            f"📥 Resuming from checkpoint: batch_id={batch_id}\n"
+            f"   Last successful: {last_success}\n"
+            f"   Remaining URLs: {len(remaining_urls)}"
+        )
+        
+        # Update checkpoint status
+        checkpoint["status"] = "resuming"
+        checkpoint["resumed_at"] = datetime.now().isoformat()
+        self.state["auth_checkpoint"] = checkpoint
+        self._save_state()
+        
+        if self.progress_callback:
+            self.progress_callback(
+                f"📥 Resuming batch from episode {last_success or 'start'}. "
+                f"{len(remaining_urls)} episodes remaining."
+            )
+        
+        return remaining_urls
+    
+    def clear_checkpoint(self, batch_id: str) -> None:
+        """
+        Clear a checkpoint after successful completion.
+        
+        Args:
+            batch_id: Batch ID to clear
+        """
+        checkpoint = self.state.get("auth_checkpoint")
+        if checkpoint and checkpoint.get("batch_id") == batch_id:
+            checkpoint["status"] = "completed"
+            checkpoint["completed_at"] = datetime.now().isoformat()
+            self._save_state()
+            
+            # Also update database
+            try:
+                self.db_service.update_extraction_checkpoint_status(batch_id, "completed")
+            except Exception as e:
+                logger.debug(f"Could not update checkpoint in database: {e}")
+            
+            logger.info(f"✅ Checkpoint cleared for batch_id: {batch_id}")
+    
+    def is_auth_error(self, error: Exception) -> bool:
+        """
+        Check if an error indicates authentication failure.
+        
+        Args:
+            error: The exception that occurred
+        
+        Returns:
+            True if this is an auth/bot detection error
+        """
+        error_str = str(error).lower()
+        auth_indicators = [
+            "401",
+            "403",
+            "unauthorized",
+            "forbidden",
+            "bot",
+            "captcha",
+            "verify you are human",
+            "sign in",
+            "login required",
+            "age verification",
+        ]
+        return any(indicator in error_str for indicator in auth_indicators)

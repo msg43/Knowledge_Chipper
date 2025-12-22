@@ -32,10 +32,12 @@ STANDARD_PROFILES = {
         name="Scientist/Researcher",
         description="Values deep understanding, theoretical insights, and well-supported claims",
         weights={
-            "epistemic_value": 0.50,
-            "verifiability": 0.30,
-            "novelty": 0.15,
-            "actionability": 0.05,
+            "epistemic_value": 0.45,
+            "verifiability": 0.28,
+            "novelty": 0.13,
+            "temporal_stability": 0.08,  # Scientists value lasting insights
+            "scope": 0.04,  # Generalizability matters
+            "actionability": 0.02,
         }
     ),
 
@@ -43,10 +45,12 @@ STANDARD_PROFILES = {
         name="Philosopher/Critical Thinker",
         description="Values conceptual clarity, novel perspectives, and logical coherence",
         weights={
-            "epistemic_value": 0.40,
-            "novelty": 0.30,
-            "verifiability": 0.20,
-            "actionability": 0.10,
+            "epistemic_value": 0.37,
+            "novelty": 0.27,
+            "verifiability": 0.18,
+            "scope": 0.10,  # Universal principles highly valued
+            "actionability": 0.05,
+            "temporal_stability": 0.03,
         }
     ),
 
@@ -54,10 +58,12 @@ STANDARD_PROFILES = {
         name="Educator/Teacher",
         description="Values clear explanations, foundational knowledge, and broad applicability",
         weights={
-            "understandability": 0.40,
-            "epistemic_value": 0.30,
-            "actionability": 0.20,
-            "novelty": 0.10,
+            "understandability": 0.37,
+            "epistemic_value": 0.27,
+            "scope": 0.12,  # Broad applicability important for teaching
+            "actionability": 0.15,
+            "temporal_stability": 0.06,  # Lasting knowledge for curriculum
+            "novelty": 0.03,
         }
     ),
 
@@ -65,10 +71,12 @@ STANDARD_PROFILES = {
         name="Student/Learner",
         description="Values accessible insights, surprising facts, and learning-oriented content",
         weights={
-            "understandability": 0.35,
-            "novelty": 0.30,
-            "epistemic_value": 0.25,
-            "actionability": 0.10,
+            "understandability": 0.33,
+            "novelty": 0.28,
+            "epistemic_value": 0.23,
+            "actionability": 0.08,
+            "scope": 0.05,
+            "temporal_stability": 0.03,
         }
     ),
 
@@ -76,10 +84,12 @@ STANDARD_PROFILES = {
         name="Skeptic/Fact-Checker",
         description="Values evidence quality, source reliability, and falsifiability",
         weights={
-            "verifiability": 0.60,
-            "epistemic_value": 0.25,
-            "novelty": 0.10,
-            "actionability": 0.05,
+            "verifiability": 0.58,
+            "epistemic_value": 0.23,
+            "novelty": 0.08,
+            "temporal_stability": 0.06,  # Lasting truth matters
+            "actionability": 0.03,
+            "scope": 0.02,
         }
     ),
 
@@ -87,10 +97,12 @@ STANDARD_PROFILES = {
         name="Investor/Financial Professional",
         description="Values practical utility, market insights, and actionable intelligence",
         weights={
-            "actionability": 0.50,
-            "verifiability": 0.25,
-            "epistemic_value": 0.15,
-            "novelty": 0.10,
+            "actionability": 0.48,
+            "verifiability": 0.23,
+            "epistemic_value": 0.13,
+            "novelty": 0.08,
+            "temporal_stability": 0.05,  # Some weight on lasting principles
+            "scope": 0.03,
         }
     ),
 
@@ -98,10 +110,12 @@ STANDARD_PROFILES = {
         name="Policy Maker/Governance",
         description="Values broad impact, evidence-based policy, and systemic thinking",
         weights={
-            "actionability": 0.35,
-            "epistemic_value": 0.30,
-            "verifiability": 0.20,
-            "understandability": 0.15,
+            "actionability": 0.32,
+            "epistemic_value": 0.27,
+            "verifiability": 0.18,
+            "scope": 0.12,  # Broad impact crucial
+            "understandability": 0.08,
+            "temporal_stability": 0.03,
         }
     ),
 
@@ -109,10 +123,12 @@ STANDARD_PROFILES = {
         name="Tech Professional/Engineer",
         description="Values practical implementation, technical depth, and reproducibility",
         weights={
-            "actionability": 0.45,
-            "epistemic_value": 0.25,
-            "verifiability": 0.20,
-            "novelty": 0.10,
+            "actionability": 0.42,
+            "epistemic_value": 0.23,
+            "verifiability": 0.18,
+            "novelty": 0.08,
+            "scope": 0.06,  # Reusable solutions valued
+            "temporal_stability": 0.03,
         }
     ),
 
@@ -120,10 +136,12 @@ STANDARD_PROFILES = {
         name="Health/Medical Professional",
         description="Values clinical evidence, patient safety, and therapeutic utility",
         weights={
-            "verifiability": 0.45,
-            "actionability": 0.30,
-            "epistemic_value": 0.20,
-            "novelty": 0.05,
+            "verifiability": 0.42,
+            "actionability": 0.28,
+            "epistemic_value": 0.18,
+            "temporal_stability": 0.07,  # Lasting medical knowledge
+            "novelty": 0.03,
+            "scope": 0.02,
         }
     ),
 
@@ -131,10 +149,12 @@ STANDARD_PROFILES = {
         name="Journalist/Communicator",
         description="Values newsworthy insights, clear communication, and source credibility",
         weights={
-            "novelty": 0.35,
-            "understandability": 0.30,
-            "verifiability": 0.20,
-            "epistemic_value": 0.15,
+            "novelty": 0.33,
+            "understandability": 0.28,
+            "verifiability": 0.18,
+            "epistemic_value": 0.13,
+            "scope": 0.05,  # Broad relevance for audience
+            "temporal_stability": 0.03,  # Less concerned with longevity
         }
     ),
 
@@ -142,10 +162,12 @@ STANDARD_PROFILES = {
         name="Curious Generalist",
         description="Values interesting facts, accessible knowledge, and broad learning",
         weights={
-            "novelty": 0.40,
-            "understandability": 0.25,
-            "epistemic_value": 0.20,
-            "actionability": 0.15,
+            "novelty": 0.37,
+            "understandability": 0.23,
+            "epistemic_value": 0.18,
+            "actionability": 0.13,
+            "scope": 0.06,  # Broad applicability interesting
+            "temporal_stability": 0.03,
         }
     ),
 
@@ -153,10 +175,12 @@ STANDARD_PROFILES = {
         name="Pragmatist/Decision-Maker",
         description="Values immediate utility, practical application, and reliable information",
         weights={
-            "actionability": 0.50,
-            "verifiability": 0.25,
-            "understandability": 0.15,
-            "epistemic_value": 0.10,
+            "actionability": 0.47,
+            "verifiability": 0.23,
+            "understandability": 0.13,
+            "epistemic_value": 0.08,
+            "scope": 0.06,  # Broadly applicable solutions
+            "temporal_stability": 0.03,
         }
     ),
 }
@@ -207,6 +231,24 @@ DIMENSION_DEFINITIONS = {
             1: "Opaque, laden with jargon, difficult to parse",
             5: "Reasonably clear but requires some background",
             10: "Crystal clear, accessible to non-experts"
+        }
+    },
+    "temporal_stability": {
+        "name": "Temporal Stability",
+        "description": "How long will this claim remain true/relevant?",
+        "examples": {
+            1: "Ephemeral (days/weeks) - current events, short-term predictions",
+            5: "Medium-term (years) - contextual facts, evolving situations",
+            10: "Timeless (permanent) - mathematical proofs, physical laws, fundamental principles"
+        }
+    },
+    "scope": {
+        "name": "Scope",
+        "description": "How broadly applicable is this claim?",
+        "examples": {
+            1: "Highly specific edge case - narrow technical detail",
+            5: "Domain-specific - applies to particular field or context",
+            10: "Universal principle - applies across all contexts"
         }
     }
 }

@@ -3297,3 +3297,176 @@ class DatabaseService:
         # Normalize whitespace
         text = re.sub(r"\s+", " ", text).strip()
         return text
+
+    # =============================================================================
+    # EXTRACTION CHECKPOINT OPERATIONS (for auth failure recovery)
+    # =============================================================================
+
+    def save_extraction_checkpoint(self, checkpoint: dict[str, Any]) -> bool:
+        """
+        Save extraction checkpoint for auth failure recovery.
+        
+        Args:
+            checkpoint: Dict with batch_id, last_successful_source_id, 
+                       episodes_remaining, auth_failure_reason, etc.
+        
+        Returns:
+            True if successful
+        """
+        try:
+            with self.get_session() as session:
+                # Use raw SQL for simplicity - table may not exist in older schemas
+                from sqlalchemy import text
+                
+                # Check if table exists
+                result = session.execute(text(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name='extraction_checkpoints'"
+                )).fetchone()
+                
+                if not result:
+                    # Create table if it doesn't exist
+                    session.execute(text("""
+                        CREATE TABLE IF NOT EXISTS extraction_checkpoints (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            batch_id TEXT UNIQUE NOT NULL,
+                            device_id TEXT,
+                            last_successful_source_id TEXT,
+                            episodes_remaining TEXT,
+                            auth_failure_reason TEXT,
+                            auth_failure_time TEXT,
+                            status TEXT DEFAULT 'paused',
+                            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                        )
+                    """))
+                    session.commit()
+                
+                # Check if checkpoint already exists
+                existing = session.execute(text(
+                    "SELECT id FROM extraction_checkpoints WHERE batch_id = :batch_id"
+                ), {"batch_id": checkpoint.get("batch_id")}).fetchone()
+                
+                import json
+                episodes_json = json.dumps(checkpoint.get("episodes_remaining", []))
+                
+                if existing:
+                    # Update
+                    session.execute(text("""
+                        UPDATE extraction_checkpoints SET
+                            last_successful_source_id = :last_successful_source_id,
+                            episodes_remaining = :episodes_remaining,
+                            auth_failure_reason = :auth_failure_reason,
+                            auth_failure_time = :auth_failure_time,
+                            status = :status,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE batch_id = :batch_id
+                    """), {
+                        "batch_id": checkpoint.get("batch_id"),
+                        "last_successful_source_id": checkpoint.get("last_successful_source_id"),
+                        "episodes_remaining": episodes_json,
+                        "auth_failure_reason": checkpoint.get("auth_failure_reason"),
+                        "auth_failure_time": checkpoint.get("auth_failure_time"),
+                        "status": checkpoint.get("status", "paused"),
+                    })
+                else:
+                    # Insert
+                    session.execute(text("""
+                        INSERT INTO extraction_checkpoints 
+                        (batch_id, last_successful_source_id, episodes_remaining, 
+                         auth_failure_reason, auth_failure_time, status)
+                        VALUES (:batch_id, :last_successful_source_id, :episodes_remaining,
+                                :auth_failure_reason, :auth_failure_time, :status)
+                    """), {
+                        "batch_id": checkpoint.get("batch_id"),
+                        "last_successful_source_id": checkpoint.get("last_successful_source_id"),
+                        "episodes_remaining": episodes_json,
+                        "auth_failure_reason": checkpoint.get("auth_failure_reason"),
+                        "auth_failure_time": checkpoint.get("auth_failure_time"),
+                        "status": checkpoint.get("status", "paused"),
+                    })
+                
+                session.commit()
+                logger.info(f"Saved extraction checkpoint: {checkpoint.get('batch_id')}")
+                return True
+                
+        except Exception as e:
+            logger.error(f"Failed to save extraction checkpoint: {e}")
+            return False
+
+    def get_extraction_checkpoint(self, batch_id: str | None = None) -> dict | None:
+        """
+        Get extraction checkpoint for resumption.
+        
+        Args:
+            batch_id: Optional batch_id. If None, returns most recent paused checkpoint.
+        
+        Returns:
+            Checkpoint dict or None
+        """
+        try:
+            with self.get_session() as session:
+                from sqlalchemy import text
+                
+                # Check if table exists
+                result = session.execute(text(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name='extraction_checkpoints'"
+                )).fetchone()
+                
+                if not result:
+                    return None
+                
+                if batch_id:
+                    row = session.execute(text(
+                        "SELECT * FROM extraction_checkpoints WHERE batch_id = :batch_id"
+                    ), {"batch_id": batch_id}).fetchone()
+                else:
+                    row = session.execute(text(
+                        "SELECT * FROM extraction_checkpoints WHERE status = 'paused' ORDER BY created_at DESC LIMIT 1"
+                    )).fetchone()
+                
+                if not row:
+                    return None
+                
+                import json
+                
+                # Convert row to dict
+                return {
+                    "batch_id": row.batch_id,
+                    "last_successful_source_id": row.last_successful_source_id,
+                    "episodes_remaining": json.loads(row.episodes_remaining) if row.episodes_remaining else [],
+                    "auth_failure_reason": row.auth_failure_reason,
+                    "auth_failure_time": row.auth_failure_time,
+                    "status": row.status,
+                }
+                
+        except Exception as e:
+            logger.error(f"Failed to get extraction checkpoint: {e}")
+            return None
+
+    def update_extraction_checkpoint_status(self, batch_id: str, status: str) -> bool:
+        """
+        Update checkpoint status.
+        
+        Args:
+            batch_id: Batch ID
+            status: New status ('paused', 'resuming', 'completed', 'cancelled')
+        
+        Returns:
+            True if successful
+        """
+        try:
+            with self.get_session() as session:
+                from sqlalchemy import text
+                
+                session.execute(text("""
+                    UPDATE extraction_checkpoints 
+                    SET status = :status, updated_at = CURRENT_TIMESTAMP
+                    WHERE batch_id = :batch_id
+                """), {"batch_id": batch_id, "status": status})
+                
+                session.commit()
+                return True
+                
+        except Exception as e:
+            logger.error(f"Failed to update checkpoint status: {e}")
+            return False

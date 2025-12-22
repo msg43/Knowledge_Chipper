@@ -13,6 +13,11 @@ from .schema_validator import (
     validate_flagship_output,
 )
 from .unified_miner import UnifiedMinerOutput
+from knowledge_system.scoring.multi_profile_scorer import (
+    calculate_composite_importance,
+    get_tier,
+    validate_dimensions,
+)
 
 
 class EvaluatedClaim:
@@ -28,9 +33,20 @@ class EvaluatedClaim:
         )
         self.merge_with = raw_data.get("merge_with", [])
         self.split_into = raw_data.get("split_into", [])
+        
+        # V2 fields: dimensions and profile scores
+        self.dimensions = raw_data.get("dimensions", {})
+        self.profile_scores = raw_data.get("profile_scores", {})
+        self.best_profile = raw_data.get("best_profile", "")
+        self.tier = raw_data.get("tier", "D")
+        
+        # Composite importance (from multi-profile scoring or fallback)
         self.importance = raw_data.get("importance", 1)
+        
+        # Backward compatibility: novelty and confidence
         self.novelty = raw_data.get("novelty", 1)
         self.confidence_final = raw_data.get("confidence_final", 1)
+        
         self.reasoning = raw_data.get("reasoning", "")
         self.rank = raw_data.get("rank", 999)
 
@@ -326,6 +342,9 @@ class FlagshipEvaluator:
                 # Use repaired result anyway - it will have the required structure
 
             result = repaired_result
+            
+            # Process dimensions and calculate profile scores for each claim
+            result = self._process_multi_profile_scoring(result)
 
             # Validate and return
             output = FlagshipEvaluationOutput(result)
@@ -341,6 +360,68 @@ class FlagshipEvaluator:
             logger.warning(f"Flagship evaluation failed: {e}")
 
             return self._create_fallback_output(all_claims)
+
+    def _process_multi_profile_scoring(self, result: dict[str, Any]) -> dict[str, Any]:
+        """
+        Process dimensions and calculate profile scores for each claim.
+        
+        Args:
+            result: Raw flagship evaluator output with dimensions
+            
+        Returns:
+            Updated result with profile_scores, best_profile, and tier fields
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        evaluated_claims = result.get("evaluated_claims", [])
+        
+        for claim in evaluated_claims:
+            # Only process accepted claims with dimensions
+            if claim.get("decision") != "accept":
+                continue
+                
+            dimensions = claim.get("dimensions", {})
+            
+            # Skip if no dimensions provided
+            if not dimensions:
+                # Fallback: use old importance/novelty/confidence if available
+                claim["importance"] = claim.get("importance", 5)
+                claim["tier"] = get_tier(claim["importance"])
+                continue
+            
+            # Validate dimensions
+            is_valid, errors = validate_dimensions(dimensions)
+            if not is_valid:
+                logger.warning(f"Invalid dimensions for claim: {errors}. Using fallback scoring.")
+                # Use fallback importance
+                claim["importance"] = claim.get("importance", 5)
+                claim["tier"] = get_tier(claim["importance"])
+                continue
+            
+            try:
+                # Calculate composite importance using max-scoring
+                importance, best_profile, profile_scores = calculate_composite_importance(
+                    dimensions,
+                    method="max"
+                )
+                
+                # Update claim with calculated values
+                claim["importance"] = importance
+                claim["best_profile"] = best_profile
+                claim["profile_scores"] = profile_scores
+                claim["tier"] = get_tier(importance)
+                
+                # Backward compatibility: set novelty and confidence from dimensions
+                claim["novelty"] = dimensions.get("novelty", 5)
+                claim["confidence_final"] = dimensions.get("verifiability", 5)
+                
+            except Exception as e:
+                logger.warning(f"Failed to calculate profile scores: {e}. Using fallback.")
+                claim["importance"] = claim.get("importance", 5)
+                claim["tier"] = get_tier(claim["importance"])
+        
+        return result
 
     def _create_fallback_output(
         self, all_claims: list[dict[str, Any]]

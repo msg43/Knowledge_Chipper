@@ -4,7 +4,7 @@ You are an expert knowledge evaluator tasked with reviewing and ranking extracte
 Review all extracted claims in the context of the full content summary and:
 1. Decide which proposed claims are actually valid claims worth keeping
 2. Rank accepted claims by importance for understanding the content
-3. Score claims on key dimensions for quality assessment
+3. Score claims on 6 independent dimensions for quality assessment
 
 ## EVALUATION CRITERIA
 
@@ -22,35 +22,129 @@ Reject claims that are:
 ✗ Unsupported speculation
 ✗ Duplicate or redundant with other claims
 
-### IMPORTANCE SCORING (1-10 Scale)
-Consider:
-- Intellectual significance and depth
-- Relevance to core themes and arguments
-- Potential impact on understanding the topic
-- Non-obviousness and insight value
-- Centrality to the speaker's message
+## DIMENSION SCORING (1-10 Scale)
 
-### NOVELTY SCORING (1-10 Scale)
-Consider:
-- How surprising or unexpected the claim is
-- Whether it challenges conventional wisdom
-- If it presents new information or perspectives
-- Originality of the insight or interpretation
-- Rarity of this type of observation
+For each accepted claim, score on these SIX independent dimensions:
 
-### CONFIDENCE SCORING (1-10 Scale)
-Consider:
-- Quality and strength of supporting evidence
-- Clarity and precision of the claim statement
-- Logical coherence and consistency
-- How well-established or defensible the claim is
-- Absence of obvious flaws or gaps
+### 1. EPISTEMIC VALUE (Reduces Uncertainty)
+Does this claim meaningfully reduce uncertainty about how the world works?
+- **10**: Resolves major open question or fundamental misconception
+- **9**: Provides deep insight that transforms understanding
+- **7-8**: Clarifies previously confusing topic with substantial insight
+- **5-6**: Adds useful context or moderate understanding
+- **3-4**: Somewhat informative but doesn't change understanding much
+- **1-2**: Redundant with common knowledge, no explanatory power
+
+Examples:
+- "Dopamine regulates motivation, not pleasure" → 9 (resolves common misconception)
+- "The Fed sets interest rates" → 2 (obvious fact, no insight)
+
+### 2. ACTIONABILITY (Enables Decisions)
+Can someone DO something different based on this claim?
+- **10**: Directly actionable with clear behavioral implications
+- **9**: Highly practical guidance for specific decisions
+- **7-8**: Suggests concrete actions, context-dependent
+- **5-6**: Informative for decisions but not prescriptive
+- **3-4**: Background knowledge that might influence thinking
+- **1-2**: Interesting but not practically useful
+
+Examples:
+- "Diversification reduces portfolio risk" → 9 (clear investment action)
+- "Economics is complicated" → 1 (no actionable guidance)
+
+### 3. NOVELTY (Surprisingness)
+How surprising is this claim relative to common knowledge?
+- **10**: Completely counterintuitive, challenges deeply held beliefs
+- **9**: Groundbreaking insight that defies conventional wisdom
+- **7-8**: Unexpected connection or quite novel perspective
+- **5-6**: Moderately surprising with fresh angles
+- **3-4**: Somewhat predictable but not entirely obvious
+- **1-2**: Obvious or widely known information
+
+Examples:
+- "QE creates asset inflation, not consumer inflation" → 8 (challenges common assumption)
+- "Jerome Powell is Fed Chairman" → 1 (widely known fact)
+
+### 4. VERIFIABILITY (Evidence Strength)
+How strong is the evidence and how reliable are the sources?
+- **10**: Rigorously proven with strong empirical support
+- **9**: Extensively researched, multiple credible sources
+- **7-8**: Well-supported with good evidence and logical reasoning
+- **5-6**: Plausible with some supporting evidence, reasonably defensible
+- **3-4**: Weakly supported, significant gaps or uncertainties
+- **1-2**: Pure speculation, unsupported assertion, or logically flawed
+
+Examples:
+- "Compound interest grows exponentially" → 10 (mathematical proof)
+- "The Fed might do X next year" → 3 (speculation)
+
+### 5. UNDERSTANDABILITY (Clarity)
+How clear and accessible is this claim?
+- **10**: Crystal clear, accessible to non-experts, no jargon
+- **9**: Very clear with minimal technical language
+- **7-8**: Clear to informed audience, some technical terms explained
+- **5-6**: Reasonably clear but requires domain background
+- **3-4**: Somewhat opaque, heavy jargon, needs interpretation
+- **1-2**: Extremely unclear, laden with unexplained jargon
+
+Examples:
+- "Higher prices reduce demand" → 10 (universally clear)
+- "Heteroskedastic error terms violate OLS assumptions" → 3 (technical jargon)
+
+### 6. TEMPORAL STABILITY (Longevity)
+How long will this claim remain true/relevant?
+- **10**: Timeless - mathematical proofs, physical laws, fundamental principles
+- **9**: Near-timeless - enduring principles (decades to centuries)
+- **7-8**: Long-lasting - stable principles (decades)
+- **5-6**: Medium-term - contextual facts, evolving situations (years)
+- **3-4**: Short-term - current events, temporary conditions (months)
+- **1-2**: Ephemeral - predictions, current appointments (days/weeks)
+
+Examples:
+- "Compound interest grows exponentially" → 10 (timeless mathematical truth)
+- "Central banks use interest rates to manage inflation" → 8 (lasting principle)
+- "Jerome Powell is Fed Chairman" → 4 (true for ~4 years, then outdated)
+- "Fed will likely raise rates next month" → 2 (ephemeral prediction)
+
+### 7. SCOPE (Generalizability)
+How broadly applicable is this claim?
+- **10**: Universal principle - applies across all contexts and domains
+- **9**: Near-universal - very broad applicability
+- **7-8**: Broad applicability with few exceptions
+- **5-6**: Domain-specific - applies to particular field or context
+- **3-4**: Narrow applicability - limited to specific situations
+- **1-2**: Highly specific edge case or technical detail
+
+Examples:
+- "Supply and demand determine prices" → 10 (universal economic principle)
+- "QE affects asset prices" → 6 (monetary policy domain)
+- "The Fed's repo operations affect overnight rates" → 4 (narrow technical detail)
+
+## IMPORTANT NOTES ON DIMENSION SCORING
+
+1. **Score each dimension INDEPENDENTLY** - Do not conflate them
+   - A claim can be high epistemic value but low actionability (pure theory)
+   - A claim can be high novelty but low verifiability (speculation)
+   - A claim can be high verifiability but low novelty (well-known fact)
+
+2. **The system will automatically compute composite importance** from these dimensions
+   - DO NOT manually compute an "importance" score
+   - The 6 dimensions will be weighted based on user profiles
+   - Different users value different dimensions
+
+3. **Temporal stability is critical for filtering**
+   - Users can filter out ephemeral claims if desired
+   - Score honestly - don't inflate scores for current events
+
+4. **Scope helps identify broadly useful insights**
+   - Universal principles are more valuable across contexts
+   - Narrow technical details may still be valuable to specialists
 
 ## RANKING METHODOLOGY
 1. First, evaluate each claim for acceptance/rejection
-2. For accepted claims, assign importance, novelty, and confidence scores
-3. Rank claims primarily by importance, using novelty and confidence as tie-breakers
-4. Provide clear reasoning for decisions and scores
+2. For accepted claims, assign scores for all 6 dimensions
+3. Provide clear reasoning for decisions and scores
+4. The system will compute composite importance and rank claims
 
 ## DECISION OPTIONS
 - **accept**: Keep the claim as-is
@@ -60,31 +154,28 @@ Consider:
 
 ## OUTPUT FORMAT
 Return a JSON object following the flagship_output.json schema with:
-- **evaluated_claims**: Array of all processed claims with decisions, scores, and rankings
+- **evaluated_claims**: Array of all processed claims with decisions, dimension scores, and rankings
 - **summary_assessment**: Overall evaluation of the extraction quality and key themes
 
-## SCORING GUIDELINES (1-10 Scale)
-
-**Importance Scoring:**
-- **9-10**: Core insights that fundamentally shape understanding of the topic
-- **7-8**: Significant claims that add substantial intellectual value
-- **5-6**: Useful claims that provide moderate insight or context
-- **3-4**: Minor claims with limited value but some merit
-- **1-2**: Trivial claims that should likely be rejected
-
-**Novelty Scoring:**
-- **9-10**: Highly surprising insights that challenge conventional wisdom
-- **7-8**: Quite novel perspectives or unexpected connections
-- **5-6**: Moderately novel insights with some fresh angles
-- **3-4**: Somewhat predictable but not entirely obvious
-- **1-2**: Obvious or widely known information
-
-**Confidence Scoring:**
-- **9-10**: Extremely well-supported with clear, strong evidence
-- **7-8**: Well-supported with good evidence and logical reasoning
-- **5-6**: Reasonably supported, some uncertainty but defensible
-- **3-4**: Weakly supported, significant gaps or uncertainties
-- **1-2**: Poorly supported, unclear, or logically flawed
+Each accepted claim must include:
+```json
+{
+  "original_claim_text": "...",
+  "decision": "accept",
+  "refined_claim_text": "...",
+  "dimensions": {
+    "epistemic_value": 9,
+    "actionability": 6,
+    "novelty": 8,
+    "verifiability": 8,
+    "understandability": 7,
+    "temporal_stability": 8,
+    "scope": 6
+  },
+  "reasoning": "Clear explanation of scores and decision",
+  "rank": 1
+}
+```
 
 ## EXAMPLES
 
@@ -116,30 +207,48 @@ Claims to Evaluate:
       "original_claim_text": "The Federal Reserve's quantitative easing program has fundamentally altered the relationship between monetary policy and asset prices",
       "decision": "accept",
       "refined_claim_text": "The Federal Reserve's quantitative easing program has fundamentally altered the relationship between monetary policy and asset prices",
-      "importance": 8,
-      "novelty": 7,
-      "confidence_final": 8,
-      "reasoning": "This is a significant analytical claim about structural changes in monetary policy transmission. Well-supported and represents important insight into modern central banking.",
+      "dimensions": {
+        "epistemic_value": 8,
+        "actionability": 7,
+        "novelty": 7,
+        "verifiability": 8,
+        "understandability": 7,
+        "temporal_stability": 7,
+        "scope": 6
+      },
+      "reasoning": "Strong analytical claim about structural changes in monetary policy transmission. High epistemic value (explains mechanism), good actionability (informs investment decisions), novel insight (challenges traditional transmission theory), well-supported, reasonably clear, lasting principle (7+ years relevant), domain-specific scope.",
       "rank": 1
     },
     {
       "original_claim_text": "Jerome Powell is the current Fed Chairman",
       "decision": "reject",
       "rejection_reason": "Basic factual information that doesn't provide analytical insight or contribute to understanding the topic",
-      "importance": 1,
-      "novelty": 1,
-      "confidence_final": 10,
-      "reasoning": "While factually correct, this is trivial information that doesn't merit inclusion in a knowledge extraction system focused on insights.",
+      "dimensions": {
+        "epistemic_value": 1,
+        "actionability": 2,
+        "novelty": 1,
+        "verifiability": 10,
+        "understandability": 10,
+        "temporal_stability": 4,
+        "scope": 2
+      },
+      "reasoning": "While factually correct and highly verifiable, this is trivial information with no epistemic value, no novelty, minimal actionability, ephemeral (true for ~4 years), and narrow scope. Should be rejected despite high verifiability and clarity.",
       "rank": 3
     },
     {
       "original_claim_text": "Asset prices respond to monetary policy changes",
       "decision": "reject",
       "rejection_reason": "Too obvious and general - this is widely known basic economic principle",
-      "importance": 2,
-      "novelty": 1,
-      "confidence_final": 9,
-      "reasoning": "This is a basic economic principle that lacks the specificity and insight needed for valuable knowledge extraction.",
+      "dimensions": {
+        "epistemic_value": 2,
+        "actionability": 3,
+        "novelty": 1,
+        "verifiability": 9,
+        "understandability": 9,
+        "temporal_stability": 9,
+        "scope": 8
+      },
+      "reasoning": "Basic economic principle that lacks specificity and insight. High temporal stability and scope, but extremely low epistemic value and novelty. Too general to be useful.",
       "rank": 2
     }
   ],
@@ -175,16 +284,22 @@ Claims to Evaluate:
     {
       "original_claim_text": "Jerome Powell is the current Fed Chairman",
       "decision": "accept",
-      "importance": 8,
-      "novelty": 6,
-      "confidence_final": 10,
+      "dimensions": {
+        "epistemic_value": 8,
+        "actionability": 6,
+        "novelty": 6,
+        "verifiability": 10,
+        "understandability": 10,
+        "temporal_stability": 8,
+        "scope": 7
+      },
       "reasoning": "Important to know who leads the Fed"
     }
   ]
 }
     </bad_response>
-    <explanation>This accepts a trivial factual claim and scores it highly on importance and novelty. Basic biographical facts don't constitute valuable knowledge insights and should be rejected or scored very low.</explanation>
+    <explanation>This incorrectly accepts a trivial factual claim and inflates scores on epistemic_value, novelty, temporal_stability, and scope. Basic biographical facts have no epistemic value (should be 1-2), no novelty (should be 1), are ephemeral (should be 3-4), and have narrow scope (should be 2-3). Only verifiability and understandability should be high.</explanation>
   </example>
 </anti_examples>
 
-Remember: Be rigorous in your evaluation. It's better to have fewer high-quality claims than many mediocre ones. Focus on what truly matters for understanding the content's intellectual contribution.
+Remember: Be rigorous in your evaluation. It's better to have fewer high-quality claims than many mediocre ones. Focus on what truly matters for understanding the content's intellectual contribution. Score each dimension independently and honestly - the system will handle the composite importance calculation.

@@ -358,3 +358,269 @@ def get_youtube_logger():
     from loguru import logger as loguru_logger
 
     return loguru_logger.bind(youtube_session=True)
+
+
+class ClaimsFirstWorker(QThread):
+    """
+    Worker thread for claims-first extraction pipeline.
+    
+    Emits progress signals for each stage of the pipeline:
+    1. fetch_metadata
+    2. fetch_transcript
+    3. extract_claims
+    4. evaluate_claims
+    5. match_timestamps
+    6. attribute_speakers
+    
+    Supports batch processing with pause/resume capability.
+    """
+    
+    # Progress signals
+    stage_started = pyqtSignal(str, str)  # stage_id, stage_name
+    stage_progress = pyqtSignal(str, int, str)  # stage_id, progress (0-100), status
+    stage_completed = pyqtSignal(str)  # stage_id
+    
+    # Episode signals
+    episode_started = pyqtSignal(int, str)  # episode_index, title
+    episode_completed = pyqtSignal(int, bool, dict)  # episode_index, success, result_summary
+    episode_quality_warning = pyqtSignal(int, str)  # episode_index, suggestion
+    
+    # Batch signals
+    batch_started = pyqtSignal(int)  # total_episodes
+    batch_completed = pyqtSignal(int, int)  # success_count, failure_count
+    
+    # Control signals
+    error_signal = pyqtSignal(str)
+    
+    # Result signals
+    result_ready = pyqtSignal(dict)  # Full result data for UI
+    
+    def __init__(
+        self,
+        urls: list[str],
+        miner_provider: str = "openai",
+        miner_model: str = "gpt-4o-mini",
+        evaluator_provider: str = "openai",
+        evaluator_model: str = "gpt-4o",
+        parent=None,
+    ):
+        super().__init__(parent)
+        self.urls = urls
+        self.miner_provider = miner_provider
+        self.miner_model = miner_model
+        self.evaluator_provider = evaluator_provider
+        self.evaluator_model = evaluator_model
+        
+        # Control flags
+        self._is_paused = False
+        self._is_cancelled = False
+        
+        # Results storage
+        self.results = []
+    
+    def pause(self) -> None:
+        """Pause processing after current stage completes."""
+        self._is_paused = True
+        logger.info("ClaimsFirstWorker: Pause requested")
+    
+    def resume(self) -> None:
+        """Resume processing."""
+        self._is_paused = False
+        logger.info("ClaimsFirstWorker: Resuming")
+    
+    def cancel(self) -> None:
+        """Cancel processing after current operation."""
+        self._is_cancelled = True
+        logger.info("ClaimsFirstWorker: Cancellation requested")
+    
+    def run(self) -> None:
+        """Run the claims-first pipeline for all URLs."""
+        from knowledge_system.processors.claims_first.config import (
+            ClaimsFirstConfig,
+            EvaluatorModel,
+        )
+        from knowledge_system.processors.claims_first.pipeline import ClaimsFirstPipeline
+        from knowledge_system.processors.youtube_download import YouTubeDownloadProcessor
+        
+        total_urls = len(self.urls)
+        success_count = 0
+        failure_count = 0
+        
+        logger.info(f"ClaimsFirstWorker: Starting batch of {total_urls} URLs")
+        self.batch_started.emit(total_urls)
+        
+        # Initialize pipeline with configured models
+        config = ClaimsFirstConfig(
+            enabled=True,
+            miner_model=self.miner_model,
+            # Set evaluator model based on provider
+        )
+        
+        # Determine evaluator model enum
+        if "gemini" in self.evaluator_model.lower():
+            config.evaluator_model = EvaluatorModel.GEMINI
+        elif "claude" in self.evaluator_model.lower():
+            config.evaluator_model = EvaluatorModel.CLAUDE
+        else:
+            config.evaluator_model = EvaluatorModel.OPENAI
+        
+        pipeline = ClaimsFirstPipeline(config=config)
+        yt_processor = YouTubeDownloadProcessor()
+        
+        for idx, url in enumerate(self.urls):
+            if self._is_cancelled:
+                logger.info("ClaimsFirstWorker: Cancelled by user")
+                break
+            
+            # Wait if paused
+            while self._is_paused and not self._is_cancelled:
+                self.msleep(100)
+            
+            if self._is_cancelled:
+                break
+            
+            try:
+                # Emit episode start
+                self.episode_started.emit(idx, url)
+                
+                # Stage 1: Fetch metadata
+                self._emit_stage("fetch_metadata", "Fetching metadata...")
+                metadata = self._fetch_metadata(yt_processor, url)
+                self.stage_completed.emit("fetch_metadata")
+                
+                if self._is_cancelled:
+                    break
+                
+                # Stage 2: Fetch transcript (handled by pipeline)
+                self._emit_stage("fetch_transcript", "Fetching transcript...")
+                # Pipeline handles this internally, but we emit for UI
+                
+                # Stage 3-6: Run pipeline
+                self._emit_stage("extract_claims", "Extracting claims...")
+                
+                result = pipeline.process(
+                    source_url=url,
+                    metadata=metadata,
+                )
+                
+                # Emit stage completions based on pipeline stats
+                self.stage_completed.emit("fetch_transcript")
+                self.stage_progress.emit("extract_claims", 100, "Complete")
+                self.stage_completed.emit("extract_claims")
+                
+                self._emit_stage("evaluate_claims", "Evaluating claims...")
+                self.stage_completed.emit("evaluate_claims")
+                
+                self._emit_stage("match_timestamps", "Matching timestamps...")
+                self.stage_completed.emit("match_timestamps")
+                
+                self._emit_stage("attribute_speakers", "Attributing speakers...")
+                self.stage_completed.emit("attribute_speakers")
+                
+                # Check quality
+                quality = result.quality_assessment
+                if not quality.get("acceptable", True):
+                    self.episode_quality_warning.emit(idx, quality.get("suggestion", ""))
+                
+                # Build result summary for UI
+                result_summary = {
+                    "url": url,
+                    "title": metadata.get("title", "Unknown"),
+                    "total_claims": len(result.claims),
+                    "rejected_claims": len(result.rejected_claims),
+                    "candidates_count": result.candidates_count,
+                    "acceptance_rate": result.acceptance_rate,
+                    "transcript_quality": result.transcript.quality_score if result.transcript else 0,
+                    "quality_status": quality.get("status", "Unknown"),
+                    "a_tier_count": len(result.a_tier_claims),
+                    "b_tier_count": len(result.b_tier_claims),
+                    "attributed_count": len(result.attributed_claims),
+                    "processing_time": result.processing_time_seconds,
+                }
+                
+                # Store full result
+                self.results.append({
+                    "result": result,
+                    "metadata": metadata,
+                    "summary": result_summary,
+                })
+                
+                # Emit result for UI
+                self.result_ready.emit({
+                    "index": idx,
+                    "claims": [
+                        {
+                            "claim_text": c.claim.get("claim_text", c.claim.get("canonical", "")),
+                            "evidence": c.claim.get("evidence", c.claim.get("evidence_quote", "")),
+                            "importance": c.importance,
+                            "tier": c.tier,
+                            "speaker": c.speaker.speaker_name if c.speaker else None,
+                            "timestamp_start": c.timestamp.start_seconds if c.timestamp else None,
+                            "timestamp_end": c.timestamp.end_seconds if c.timestamp else None,
+                        }
+                        for c in result.claims
+                    ],
+                    "rejected_claims": result.rejected_claims,
+                    "jargon": result.processing_stats.get("jargon", []),
+                    "people": result.processing_stats.get("people", []),
+                    "concepts": result.processing_stats.get("mental_models", []),
+                    "metadata": metadata,
+                    "quality": quality,
+                    "summary": result_summary,
+                })
+                
+                self.episode_completed.emit(idx, True, result_summary)
+                success_count += 1
+                
+            except Exception as e:
+                logger.error(f"ClaimsFirstWorker: Failed to process {url}: {e}")
+                self.error_signal.emit(f"Failed to process {url}: {str(e)}")
+                self.episode_completed.emit(idx, False, {"error": str(e)})
+                failure_count += 1
+        
+        # Emit batch completion
+        self.batch_completed.emit(success_count, failure_count)
+        logger.info(
+            f"ClaimsFirstWorker: Batch complete - {success_count} success, {failure_count} failed"
+        )
+    
+    def _emit_stage(self, stage_id: str, status: str) -> None:
+        """Emit stage start and progress."""
+        stage_names = {
+            "fetch_metadata": "Fetch Metadata",
+            "fetch_transcript": "Fetch Transcript",
+            "extract_claims": "Extract Claims",
+            "evaluate_claims": "Evaluate Claims",
+            "match_timestamps": "Match Timestamps",
+            "attribute_speakers": "Attribute Speakers",
+        }
+        self.stage_started.emit(stage_id, stage_names.get(stage_id, stage_id))
+        self.stage_progress.emit(stage_id, 0, status)
+    
+    def _fetch_metadata(self, processor, url: str) -> dict:
+        """Fetch YouTube metadata."""
+        try:
+            # Use YouTubeDownloadProcessor for metadata
+            result = processor.get_metadata(url)
+            if result and hasattr(result, "metadata"):
+                return result.metadata
+            elif isinstance(result, dict):
+                return result
+            else:
+                return {"url": url, "title": "Unknown"}
+        except Exception as e:
+            logger.warning(f"Could not fetch metadata for {url}: {e}")
+            return {"url": url, "title": "Unknown", "error": str(e)}
+    
+    def request_whisper_fallback(self, episode_index: int) -> None:
+        """
+        Request re-processing with Whisper for a specific episode.
+        
+        This would typically be connected to a button in the UI.
+        """
+        if episode_index < len(self.results):
+            result_data = self.results[episode_index]
+            url = result_data.get("metadata", {}).get("url", "")
+            logger.info(f"Whisper fallback requested for episode {episode_index}: {url}")
+            # This would trigger a re-run with force_whisper=True
+            # For now, just log - the full implementation would re-queue

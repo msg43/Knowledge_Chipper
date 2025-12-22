@@ -238,7 +238,9 @@ def validate_dimensions(dimensions: Dict[str, float]) -> Tuple[bool, List[str]]:
         "actionability",
         "novelty",
         "verifiability",
-        "understandability"
+        "understandability",
+        "temporal_stability",
+        "scope"
     ]
 
     errors = []

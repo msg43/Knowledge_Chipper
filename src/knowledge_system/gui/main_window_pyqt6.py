@@ -51,6 +51,7 @@ from .tabs import PromptsTab  # Prompts tab  # noqa: E402
 from .tabs import QueueTab  # Queue tab  # noqa: E402
 from .tabs import SummarizationTab  # Summarize tab  # noqa: E402
 from .tabs import TranscriptionTab  # Transcribe tab  # noqa: E402
+from .tabs.extract_tab import ExtractTab  # Extract tab (claims-first)  # noqa: E402
 
 logger = get_logger(__name__)
 
@@ -340,11 +341,16 @@ class MainWindow(QMainWindow):
         prompts_tab = PromptsTab(self)
         self.tabs.addTab(prompts_tab, "Prompts")
 
-        # 4. Summarize tab
+        # 4. Extract tab (claims-first extraction)
+        self.extract_tab = ExtractTab(self)
+        self.extract_tab.status_update.connect(self._update_status)
+        self.tabs.addTab(self.extract_tab, "Extract")
+
+        # 5. Summarize tab
         summarization_tab = SummarizationTab(self)
         self.tabs.addTab(summarization_tab, "Summarize")
 
-        # 5. Queue tab - shows pipeline status
+        # 6. Queue tab - shows pipeline status
         from .tabs.queue_tab import QueueTab
 
         self.queue_tab = QueueTab(self)
