@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **GitHub Actions Smoke Test** - Fixed failing smoke test workflow by adding missing lightweight dependencies
+  - Added `pydantic-settings>=2.0.0` (required by `config.py`)
+  - Added `rich>=13.0.0` (required by progress display utilities)
+  - Added `sqlalchemy>=2.0.0` (required by database models)
+  - Smoke test now successfully validates Python syntax and basic imports across Python 3.11, 3.12, and 3.13
+  - Provides fast feedback (~2-3 minutes) on code quality without requiring heavy ML dependencies
+
 ### Added (Major Feature: YouTube AI Summary Integration)
 
 - **YouTube AI Summary Scraping** - Automatically scrape YouTube's AI-generated summaries alongside local LLM processing
