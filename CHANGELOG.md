@@ -7,6 +7,75 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Major - Two-Pass Architecture Migration (December 22, 2025)
+
+**BREAKING CHANGE: Complete architectural overhaul from two-step to two-pass system**
+
+#### What Changed
+
+Migrated from the legacy two-step (mining + evaluator) system to a modern two-pass (extraction + synthesis) architecture. This is a fundamental change in how the system processes content.
+
+**Old System (Two-Step):**
+- Transcript → Split into segments → Mine each segment → Evaluate all claims → Store
+- Multiple LLM calls per video
+- Fragmented claims across segment boundaries
+- Lost context
+
+**New System (Two-Pass):**
+- Transcript (complete) → Pass 1: Extract & Score → Pass 2: Synthesize Summary → Store
+- Only 2 LLM calls per video
+- Whole-document processing
+- Preserves complete argument structures
+
+#### Files Removed (18 files, ~6,452 lines)
+
+**Segment-Based Two-Step:**
+- `src/knowledge_system/core/system2_orchestrator_mining.py`
+- `src/knowledge_system/core/batch_pipeline.py`
+- `src/knowledge_system/processors/hce/unified_pipeline.py`
+- `src/knowledge_system/processors/hce/unified_miner.py`
+- `src/knowledge_system/processors/hce/flagship_evaluator.py`
+- `src/knowledge_system/processors/hce/evaluators/jargon_evaluator.py`
+- `src/knowledge_system/processors/hce/evaluators/people_evaluator.py`
+- `src/knowledge_system/processors/hce/evaluators/concepts_evaluator.py`
+
+**Whole-Document Two-Step:**
+- `src/knowledge_system/processors/claims_first/` (entire directory)
+
+#### Files Created (9 files, ~2,325 lines)
+
+**Two-Pass System:**
+- `src/knowledge_system/processors/two_pass/__init__.py`
+- `src/knowledge_system/processors/two_pass/extraction_pass.py` - Pass 1 implementation
+- `src/knowledge_system/processors/two_pass/synthesis_pass.py` - Pass 2 implementation
+- `src/knowledge_system/processors/two_pass/pipeline.py` - Orchestrator
+- `src/knowledge_system/processors/two_pass/prompts/extraction_pass.txt`
+- `src/knowledge_system/processors/two_pass/prompts/synthesis_pass.txt`
+- `src/knowledge_system/core/system2_orchestrator_two_pass.py` - Integration
+
+#### Benefits
+
+1. **Simpler Codebase**: Net -4,127 lines of code
+2. **Faster Processing**: Only 2 API calls vs. many
+3. **Better Quality**: Whole-document context preserved
+4. **Lower Cost**: Fewer API calls, fewer tokens
+5. **Absolute Scoring**: Importance scores (0-10) globally comparable
+6. **Speaker Inference**: Built-in without diarization
+7. **World-Class Summaries**: Thematic narrative synthesis
+
+#### Breaking Changes
+
+- `ClaimsFirstWorker` renamed to `TwoPassWorker` (backward compatibility alias maintained)
+- Configuration changed: `miner_model` + `evaluator_model` → single `llm_model`
+- No more tier-based ranking (A/B/C) - use importance scores instead
+- GUI stages reduced from 6 to 4
+
+#### Migration
+
+See `TWO_PASS_MIGRATION_COMPLETE.md` for full details.
+
+Rollback checkpoint: `checkpoint-before-two-step-removal` (commit 66371a3)
+
 ### Performance - Cloud API Mining Optimization (December 21, 2025)
 
 **MASSIVE SPEEDUP: 7.5x faster claim mining for cloud APIs (Anthropic, OpenAI, Google)**
