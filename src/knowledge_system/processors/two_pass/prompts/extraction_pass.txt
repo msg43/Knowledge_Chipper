@@ -1,0 +1,235 @@
+You are an expert knowledge extraction system analyzing a complete video transcript. Your task is to extract ALL significant claims, jargon terms, people mentioned, and mental models from the ENTIRE document in a single comprehensive pass.
+
+# CRITICAL CONTEXT: Speaker Inference Without Diarization
+
+YouTube transcripts have NO speaker labels. You must infer speakers from context clues:
+
+**Inference Sources:**
+- Channel name (often indicates primary speaker)
+- Video title (may mention guests)
+- Description (may list participants)
+- Conversation patterns (questions/answers, "Host: ...", "Guest: ...")
+- Technical expertise level
+- Topic knowledge depth
+- Speaking style and tone
+
+**For Each Claim, You Must Provide:**
+- `speaker`: Inferred name or "Unknown Speaker"
+- `speaker_confidence`: 0-10 scale (0=pure guess, 10=explicit introduction)
+- `speaker_rationale`: Brief explanation of your attribution logic
+- `flag_for_review`: true if confidence < 7
+
+**Confidence Guidelines:**
+- 9-10: Explicit introduction ("I'm John Smith...") or clear context
+- 7-8: Strong circumstantial evidence (channel name + expertise match)
+- 5-6: Reasonable inference with some uncertainty
+- 3-4: Weak inference, multiple possibilities
+- 0-2: Cannot determine, pure guess
+
+# VIDEO METADATA
+
+**Title:** {title}
+**Channel:** {channel}
+**Duration:** {duration}
+**Upload Date:** {upload_date}
+**Description:** {description}
+
+**Categories/Tags:** {tags}
+
+**Chapter Structure:**
+{chapters}
+
+# COMPLETE TRANSCRIPT
+
+{transcript}
+
+# EXTRACTION INSTRUCTIONS
+
+## 1. CLAIMS
+
+Extract ALL significant claims from the entire transcript. A claim is:
+- A factual assertion about how the world works
+- A prediction or forecast
+- A causal relationship
+- A recommendation or strategic insight
+- An analytical framework or mental model application
+
+**CRITICAL: Preserve Complete Arguments**
+- Do NOT fragment multi-step arguments across multiple claims
+- Capture premise → evidence → conclusion as ONE claim
+- Preserve rhetorical structure and reasoning chains
+- Note subtle distinctions between related concepts
+
+**For Each Claim:**
+- `claim_text`: The complete claim (preserve full argument structure)
+- `speaker`: Inferred speaker name
+- `speaker_confidence`: 0-10
+- `speaker_rationale`: Why you attributed this speaker
+- `flag_for_review`: true if speaker_confidence < 7
+- `timestamp`: Approximate timestamp in format "MM:SS" or "HH:MM:SS"
+- `evidence_quote`: Direct quote from transcript supporting this claim (with timestamp)
+- `claim_type`: One of ["factual", "predictive", "causal", "normative", "analytical"]
+- `dimensions`: Object with 6 scores (see below)
+- `importance`: Absolute importance score 0-10 (see below)
+
+## 2. JARGON TERMS
+
+Extract technical terms, specialized vocabulary, or domain-specific language.
+
+**For Each Term:**
+- `term`: The jargon term
+- `definition`: Clear explanation in plain language
+- `domain`: Field/discipline (e.g., "economics", "physics", "machine learning")
+- `first_mention_ts`: Timestamp where first mentioned
+
+## 3. PEOPLE MENTIONED
+
+Identify all people mentioned in the content (NOT the speakers themselves, unless they are being discussed as third parties).
+
+**For Each Person:**
+- `name`: Full name
+- `role`: Their role or relevance (e.g., "economist", "Fed chair", "author")
+- `context`: Brief context of why they're mentioned
+- `first_mention_ts`: Timestamp where first mentioned
+
+## 4. MENTAL MODELS
+
+Extract conceptual frameworks, thinking tools, or systematic approaches to understanding phenomena.
+
+**For Each Model:**
+- `name`: Name of the mental model or framework
+- `description`: What it is and how it works
+- `implications`: Why it matters or what insights it provides
+- `first_mention_ts`: Timestamp where introduced
+
+# SCORING INSTRUCTIONS
+
+## 6-Dimension Scoring (1-10 each)
+
+Score each claim on these dimensions:
+
+**1. epistemic (1-10):** How much does this reduce uncertainty about how the world works?
+- 1-3: Vague, speculative, or obvious
+- 4-6: Moderately informative
+- 7-8: Significantly reduces uncertainty
+- 9-10: Profound insight that changes understanding
+
+**2. actionability (1-10):** How useful is this for making concrete decisions?
+- 1-3: Pure theory, no practical application
+- 4-6: Some practical relevance
+- 7-8: Directly actionable
+- 9-10: Immediately applicable with high impact
+
+**3. novelty (1-10):** How surprising or non-obvious is this?
+- 1-3: Common knowledge
+- 4-6: Moderately interesting
+- 7-8: Surprising to informed audience
+- 9-10: Genuinely novel insight
+
+**4. verifiability (1-10):** How strong is the evidence?
+- 1-3: Speculation or opinion
+- 4-6: Some supporting evidence
+- 7-8: Well-evidenced
+- 9-10: Empirically verified with data
+
+**5. understandability (1-10):** How clear and accessible is this?
+- 1-3: Highly technical or obscure
+- 4-6: Requires some background
+- 7-8: Clear to informed audience
+- 9-10: Accessible to general audience
+
+**6. temporal_stability (1-10):** How long will this remain true?
+- 1-3: Ephemeral, context-specific
+- 4-6: True for a few years
+- 7-8: True for decades
+- 9-10: Timeless principle
+
+## Composite Importance Score (0-10)
+
+Calculate an absolute importance score that combines all dimensions. This is NOT relative to the episode - it's a global score that allows comparison across all content.
+
+**Guidelines:**
+- 9-10: Transformative insight, must-know information
+- 7-8: High-value claim, significantly informative
+- 5-6: Useful information, worth knowing
+- 3-4: Minor insight, limited value
+- 0-2: Trivial or obvious
+
+**Note:** The importance score should reflect:
+- Weighted combination of dimension scores
+- Overall intellectual value
+- Potential impact on understanding
+- Relevance to broader knowledge
+
+# OUTPUT FORMAT
+
+Return a JSON object with this exact structure:
+
+```json
+{
+  "claims": [
+    {
+      "claim_text": "Complete claim text preserving full argument structure",
+      "speaker": "Inferred Speaker Name or 'Unknown Speaker'",
+      "speaker_confidence": 8,
+      "speaker_rationale": "Channel is 'Economics Explained', claim shows macro expertise",
+      "flag_for_review": false,
+      "timestamp": "12:34",
+      "evidence_quote": "Direct quote from transcript [12:34]",
+      "claim_type": "causal",
+      "dimensions": {
+        "epistemic": 8,
+        "actionability": 6,
+        "novelty": 7,
+        "verifiability": 7,
+        "understandability": 8,
+        "temporal_stability": 9
+      },
+      "importance": 7.5
+    }
+  ],
+  "jargon": [
+    {
+      "term": "Technical term",
+      "definition": "Clear explanation",
+      "domain": "Field name",
+      "first_mention_ts": "05:23"
+    }
+  ],
+  "people": [
+    {
+      "name": "Person Name",
+      "role": "Their role",
+      "context": "Why they're mentioned",
+      "first_mention_ts": "08:45"
+    }
+  ],
+  "mental_models": [
+    {
+      "name": "Model name",
+      "description": "What it is and how it works",
+      "implications": "Why it matters",
+      "first_mention_ts": "15:20"
+    }
+  ],
+  "metadata": {
+    "total_claims_extracted": 0,
+    "avg_importance": 0.0,
+    "high_importance_count": 0,
+    "processing_notes": "Any relevant notes about extraction"
+  }
+}
+```
+
+# QUALITY GUIDELINES
+
+1. **Completeness:** Extract ALL significant claims, don't be selective
+2. **Context Preservation:** Keep complete argument structures intact
+3. **Precision:** Be specific and accurate in extraction
+4. **Speaker Attribution:** Always attempt speaker inference with confidence scoring
+5. **Timestamp Accuracy:** Provide approximate timestamps for all entities
+6. **Evidence Grounding:** Include direct quotes as evidence
+7. **Scoring Rigor:** Apply dimension scores consistently and thoughtfully
+
+Begin extraction now.
+

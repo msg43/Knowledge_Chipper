@@ -360,17 +360,15 @@ def get_youtube_logger():
     return loguru_logger.bind(youtube_session=True)
 
 
-class ClaimsFirstWorker(QThread):
+class TwoPassWorker(QThread):
     """
-    Worker thread for claims-first extraction pipeline.
+    Worker thread for two-pass extraction pipeline.
     
     Emits progress signals for each stage of the pipeline:
     1. fetch_metadata
-    2. fetch_transcript
-    3. extract_claims
-    4. evaluate_claims
-    5. match_timestamps
-    6. attribute_speakers
+    2. fetch_transcript  
+    3. extraction_pass (Pass 1: extract and score all entities)
+    4. synthesis_pass (Pass 2: generate summary)
     
     Supports batch processing with pause/resume capability.
     """
@@ -398,18 +396,16 @@ class ClaimsFirstWorker(QThread):
     def __init__(
         self,
         urls: list[str],
-        miner_provider: str = "openai",
-        miner_model: str = "gpt-4o-mini",
-        evaluator_provider: str = "openai",
-        evaluator_model: str = "gpt-4o",
+        llm_provider: str = "openai",
+        llm_model: str = "gpt-4o",
+        importance_threshold: float = 7.0,
         parent=None,
     ):
         super().__init__(parent)
         self.urls = urls
-        self.miner_provider = miner_provider
-        self.miner_model = miner_model
-        self.evaluator_provider = evaluator_provider
-        self.evaluator_model = evaluator_model
+        self.llm_provider = llm_provider
+        self.llm_model = llm_model
+        self.importance_threshold = importance_threshold
         
         # Control flags
         self._is_paused = False
@@ -417,6 +413,9 @@ class ClaimsFirstWorker(QThread):
         
         # Results storage
         self.results = []
+
+# Backward compatibility alias
+ClaimsFirstWorker = TwoPassWorker
     
     def pause(self) -> None:
         """Pause processing after current stage completes."""
@@ -434,42 +433,35 @@ class ClaimsFirstWorker(QThread):
         logger.info("ClaimsFirstWorker: Cancellation requested")
     
     def run(self) -> None:
-        """Run the claims-first pipeline for all URLs."""
-        from knowledge_system.processors.claims_first.config import (
-            ClaimsFirstConfig,
-            EvaluatorModel,
-        )
-        from knowledge_system.processors.claims_first.pipeline import ClaimsFirstPipeline
+        """Run the two-pass pipeline for all URLs."""
+        from knowledge_system.processors.two_pass import TwoPassPipeline
         from knowledge_system.processors.youtube_download import YouTubeDownloadProcessor
+        from knowledge_system.core.llm_adapter import LLMAdapter
         
         total_urls = len(self.urls)
         success_count = 0
         failure_count = 0
         
-        logger.info(f"ClaimsFirstWorker: Starting batch of {total_urls} URLs")
+        logger.info(f"TwoPassWorker: Starting batch of {total_urls} URLs")
         self.batch_started.emit(total_urls)
         
-        # Initialize pipeline with configured models
-        config = ClaimsFirstConfig(
-            enabled=True,
-            miner_model=self.miner_model,
-            # Set evaluator model based on provider
+        # Initialize LLM adapter
+        llm = LLMAdapter(
+            provider=self.llm_provider,
+            model=self.llm_model,
+            temperature=0.3,
         )
         
-        # Determine evaluator model enum
-        if "gemini" in self.evaluator_model.lower():
-            config.evaluator_model = EvaluatorModel.GEMINI
-        elif "claude" in self.evaluator_model.lower():
-            config.evaluator_model = EvaluatorModel.CLAUDE
-        else:
-            config.evaluator_model = EvaluatorModel.OPENAI
-        
-        pipeline = ClaimsFirstPipeline(config=config)
+        # Initialize two-pass pipeline
+        pipeline = TwoPassPipeline(
+            llm_adapter=llm,
+            importance_threshold=self.importance_threshold,
+        )
         yt_processor = YouTubeDownloadProcessor()
         
         for idx, url in enumerate(self.urls):
             if self._is_cancelled:
-                logger.info("ClaimsFirstWorker: Cancelled by user")
+                logger.info("TwoPassWorker: Cancelled by user")
                 break
             
             # Wait if paused
@@ -491,50 +483,56 @@ class ClaimsFirstWorker(QThread):
                 if self._is_cancelled:
                     break
                 
-                # Stage 2: Fetch transcript (handled by pipeline)
+                # Stage 2: Fetch transcript
                 self._emit_stage("fetch_transcript", "Fetching transcript...")
-                # Pipeline handles this internally, but we emit for UI
+                transcript = self._fetch_transcript(yt_processor, url)
+                self.stage_completed.emit("fetch_transcript")
                 
-                # Stage 3-6: Run pipeline
-                self._emit_stage("extract_claims", "Extracting claims...")
+                if self._is_cancelled:
+                    break
                 
+                # Stage 3: Extraction Pass (Pass 1)
+                self._emit_stage("extraction_pass", "Extracting entities...")
+                
+                # Get YouTube AI summary if available
+                youtube_ai_summary = metadata.get("youtube_ai_summary")
+                
+                # Run two-pass pipeline
                 result = pipeline.process(
-                    source_url=url,
+                    source_id=url,
+                    transcript=transcript,
                     metadata=metadata,
+                    youtube_ai_summary=youtube_ai_summary,
                 )
                 
-                # Emit stage completions based on pipeline stats
-                self.stage_completed.emit("fetch_transcript")
-                self.stage_progress.emit("extract_claims", 100, "Complete")
-                self.stage_completed.emit("extract_claims")
+                self.stage_progress.emit("extraction_pass", 100, "Complete")
+                self.stage_completed.emit("extraction_pass")
                 
-                self._emit_stage("evaluate_claims", "Evaluating claims...")
-                self.stage_completed.emit("evaluate_claims")
+                # Stage 4: Synthesis Pass (Pass 2)
+                self._emit_stage("synthesis_pass", "Generating summary...")
+                self.stage_progress.emit("synthesis_pass", 100, "Complete")
+                self.stage_completed.emit("synthesis_pass")
                 
-                self._emit_stage("match_timestamps", "Matching timestamps...")
-                self.stage_completed.emit("match_timestamps")
-                
-                self._emit_stage("attribute_speakers", "Attributing speakers...")
-                self.stage_completed.emit("attribute_speakers")
-                
-                # Check quality
-                quality = result.quality_assessment
-                if not quality.get("acceptable", True):
-                    self.episode_quality_warning.emit(idx, quality.get("suggestion", ""))
+                # Check for flagged claims
+                if result.flagged_claims:
+                    self.episode_quality_warning.emit(
+                        idx,
+                        f"{len(result.flagged_claims)} claims need speaker review"
+                    )
                 
                 # Build result summary for UI
                 result_summary = {
                     "url": url,
                     "title": metadata.get("title", "Unknown"),
-                    "total_claims": len(result.claims),
-                    "rejected_claims": len(result.rejected_claims),
-                    "candidates_count": result.candidates_count,
-                    "acceptance_rate": result.acceptance_rate,
-                    "transcript_quality": result.transcript.quality_score if result.transcript else 0,
-                    "quality_status": quality.get("status", "Unknown"),
-                    "a_tier_count": len(result.a_tier_claims),
-                    "b_tier_count": len(result.b_tier_claims),
-                    "attributed_count": len(result.attributed_claims),
+                    "total_claims": result.total_claims,
+                    "high_importance_claims": len(result.high_importance_claims),
+                    "flagged_claims": len(result.flagged_claims),
+                    "jargon_terms": len(result.extraction.jargon),
+                    "people_mentioned": len(result.extraction.people),
+                    "mental_models": len(result.extraction.mental_models),
+                    "avg_importance": result.extraction.avg_importance,
+                    "summary_length": len(result.long_summary),
+                    "key_themes": len(result.synthesis.key_themes),
                     "processing_time": result.processing_time_seconds,
                 }
                 
@@ -550,22 +548,51 @@ class ClaimsFirstWorker(QThread):
                     "index": idx,
                     "claims": [
                         {
-                            "claim_text": c.claim.get("claim_text", c.claim.get("canonical", "")),
-                            "evidence": c.claim.get("evidence", c.claim.get("evidence_quote", "")),
-                            "importance": c.importance,
-                            "tier": c.tier,
-                            "speaker": c.speaker.speaker_name if c.speaker else None,
-                            "timestamp_start": c.timestamp.start_seconds if c.timestamp else None,
-                            "timestamp_end": c.timestamp.end_seconds if c.timestamp else None,
+                            "claim_text": c.get("claim_text", ""),
+                            "evidence": c.get("evidence_quote", ""),
+                            "importance": c.get("importance", 0),
+                            "speaker": c.get("speaker", "Unknown"),
+                            "speaker_confidence": c.get("speaker_confidence", 0),
+                            "timestamp": c.get("timestamp", "00:00"),
+                            "dimensions": c.get("dimensions", {}),
                         }
-                        for c in result.claims
+                        for c in result.extraction.claims
                     ],
-                    "rejected_claims": result.rejected_claims,
-                    "jargon": result.processing_stats.get("jargon", []),
-                    "people": result.processing_stats.get("people", []),
-                    "concepts": result.processing_stats.get("mental_models", []),
+                    "high_importance_claims": [
+                        {
+                            "claim_text": c.get("claim_text", ""),
+                            "importance": c.get("importance", 0),
+                            "speaker": c.get("speaker", "Unknown"),
+                        }
+                        for c in result.high_importance_claims
+                    ],
+                    "jargon": [
+                        {
+                            "term": j.get("term", ""),
+                            "definition": j.get("definition", ""),
+                            "domain": j.get("domain", ""),
+                        }
+                        for j in result.extraction.jargon
+                    ],
+                    "people": [
+                        {
+                            "name": p.get("name", ""),
+                            "role": p.get("role", ""),
+                            "context": p.get("context", ""),
+                        }
+                        for p in result.extraction.people
+                    ],
+                    "mental_models": [
+                        {
+                            "name": m.get("name", ""),
+                            "description": m.get("description", ""),
+                            "implications": m.get("implications", ""),
+                        }
+                        for m in result.extraction.mental_models
+                    ],
+                    "long_summary": result.long_summary,
+                    "key_themes": result.synthesis.key_themes,
                     "metadata": metadata,
-                    "quality": quality,
                     "summary": result_summary,
                 })
                 
@@ -573,7 +600,7 @@ class ClaimsFirstWorker(QThread):
                 success_count += 1
                 
             except Exception as e:
-                logger.error(f"ClaimsFirstWorker: Failed to process {url}: {e}")
+                logger.error(f"TwoPassWorker: Failed to process {url}: {e}")
                 self.error_signal.emit(f"Failed to process {url}: {str(e)}")
                 self.episode_completed.emit(idx, False, {"error": str(e)})
                 failure_count += 1
@@ -581,7 +608,7 @@ class ClaimsFirstWorker(QThread):
         # Emit batch completion
         self.batch_completed.emit(success_count, failure_count)
         logger.info(
-            f"ClaimsFirstWorker: Batch complete - {success_count} success, {failure_count} failed"
+            f"TwoPassWorker: Batch complete - {success_count} success, {failure_count} failed"
         )
     
     def _emit_stage(self, stage_id: str, status: str) -> None:
@@ -589,10 +616,8 @@ class ClaimsFirstWorker(QThread):
         stage_names = {
             "fetch_metadata": "Fetch Metadata",
             "fetch_transcript": "Fetch Transcript",
-            "extract_claims": "Extract Claims",
-            "evaluate_claims": "Evaluate Claims",
-            "match_timestamps": "Match Timestamps",
-            "attribute_speakers": "Attribute Speakers",
+            "extraction_pass": "Extraction Pass (Pass 1)",
+            "synthesis_pass": "Synthesis Pass (Pass 2)",
         }
         self.stage_started.emit(stage_id, stage_names.get(stage_id, stage_id))
         self.stage_progress.emit(stage_id, 0, status)
@@ -611,6 +636,38 @@ class ClaimsFirstWorker(QThread):
         except Exception as e:
             logger.warning(f"Could not fetch metadata for {url}: {e}")
             return {"url": url, "title": "Unknown", "error": str(e)}
+    
+    def _fetch_transcript(self, processor, url: str) -> str:
+        """Fetch transcript for URL."""
+        try:
+            # Try YouTube transcript first
+            from youtube_transcript_api import YouTubeTranscriptApi
+            import re
+            
+            # Extract video ID
+            video_id_match = re.search(r'(?:v=|/)([0-9A-Za-z_-]{11}).*', url)
+            if video_id_match:
+                video_id = video_id_match.group(1)
+                transcript_list = YouTubeTranscriptApi.get_transcript(video_id)
+                
+                # Format transcript with timestamps
+                transcript = ""
+                for entry in transcript_list:
+                    start = entry['start']
+                    minutes = int(start // 60)
+                    seconds = int(start % 60)
+                    text = entry['text']
+                    transcript += f"[{minutes:02d}:{seconds:02d}] {text}\n"
+                
+                return transcript
+            else:
+                raise ValueError("Could not extract video ID from URL")
+        
+        except Exception as e:
+            logger.warning(f"Could not fetch YouTube transcript for {url}: {e}")
+            # Fall back to downloading and transcribing with Whisper
+            # This would require more implementation
+            raise ValueError(f"Transcript unavailable: {str(e)}")
     
     def request_whisper_fallback(self, episode_index: int) -> None:
         """

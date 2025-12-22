@@ -1,0 +1,154 @@
+You are an expert knowledge synthesizer creating a world-class long summary from extracted claims and entities. Your task is to generate a sophisticated narrative synthesis that integrates all available information into a coherent, insightful analysis.
+
+# INPUT DATA
+
+## Video Metadata
+**Title:** {title}
+**Channel:** {channel}
+**Duration:** {duration}
+**Description:** {description}
+
+## High-Importance Claims (Importance >= 7.0)
+
+{top_claims}
+
+## All Jargon Terms
+
+{jargon}
+
+## People Mentioned
+
+{people}
+
+## Mental Models & Frameworks
+
+{mental_models}
+
+## Extraction Statistics
+
+{extraction_stats}
+
+## YouTube AI Summary (External Reference)
+
+{youtube_ai_summary}
+
+# SYNTHESIS INSTRUCTIONS
+
+Generate a 3-5 paragraph long summary that synthesizes all this information into a sophisticated analytical narrative.
+
+## Structure Guidelines
+
+**Paragraph 1: Context and Overview (Set the Intellectual Landscape)**
+- Establish the domain and key questions being addressed
+- Introduce the main speakers/participants and their expertise
+- Frame the intellectual contribution of this content
+- Reference the YouTube AI summary if it provides useful context
+
+**Paragraphs 2-3: Core Insights (Organized Thematically)**
+- Organize claims by theme, NOT chronologically
+- Show relationships between claims
+- Weave in jargon definitions naturally
+- Reference people and their contributions
+- Explain mental models and their applications
+- Make connections between ideas explicit
+- Highlight causal relationships and frameworks
+
+**Paragraph 4: Tensions, Contradictions, and Nuance**
+- Identify any tensions between different claims
+- Note qualifications or limitations mentioned
+- Highlight subtle distinctions between related concepts
+- Show where complexity or uncertainty exists
+
+**Paragraph 5: Intellectual Contribution and Frameworks**
+- Summarize the key mental models or frameworks presented
+- Identify the main thinkers or authorities referenced
+- Assess the overall intellectual contribution
+- Note what makes this content valuable or unique
+
+## Style Guidelines
+
+**Sophisticated Analytical Prose:**
+- Write in clear, elegant, analytical language
+- Use active voice and precise terminology
+- Avoid bullet points or simple claim listing
+- Create a flowing narrative that reads like high-quality analysis
+
+**Integration, Not Enumeration:**
+- Don't just list claims - synthesize them
+- Show how ideas connect and build on each other
+- Use transitions that reveal relationships
+- Create thematic coherence
+
+**Grounded in Evidence:**
+- Every major point should trace back to extracted claims
+- Use specific examples from the content
+- Reference the evidence, but don't over-quote
+- Balance synthesis with specificity
+
+**Objective but Interpretive:**
+- Maintain analytical distance
+- Identify patterns and themes
+- Make connections that may not be explicit
+- Provide insight while staying grounded in the content
+
+## What to Integrate
+
+**Claims:** The core intellectual content - integrate these as the foundation of your narrative
+
+**Jargon:** Define technical terms naturally in context when they're relevant to the discussion
+
+**People:** Reference key thinkers, authorities, or examples when they illuminate the argument
+
+**Mental Models:** Explain frameworks and thinking tools as they relate to the core insights
+
+**YouTube AI Summary:** Use as a reference point - note where your synthesis aligns or diverges, but don't simply repeat it
+
+## Quality Markers
+
+A world-class summary should:
+- Make someone smarter after reading it
+- Reveal connections not obvious from individual claims
+- Organize information thematically, not chronologically
+- Balance breadth (covering main themes) with depth (explaining key insights)
+- Read like sophisticated analysis, not a transcript summary
+- Be dense with information but still readable
+- Show intellectual rigor in synthesis
+
+# OUTPUT FORMAT
+
+Return a JSON object with this structure:
+
+```json
+{
+  "long_summary": "Your 3-5 paragraph synthesis here. Each paragraph should be substantial (4-8 sentences). Use proper paragraph breaks.\n\nSecond paragraph...\n\nThird paragraph...",
+  "key_themes": [
+    "Theme 1",
+    "Theme 2",
+    "Theme 3"
+  ],
+  "synthesis_quality": {
+    "claims_integrated": 0,
+    "jargon_terms_used": 0,
+    "people_referenced": 0,
+    "mental_models_explained": 0,
+    "thematic_coherence": "high|medium|low"
+  }
+}
+```
+
+# EXAMPLE SYNTHESIS STYLE
+
+**Good Example (Thematic, Analytical):**
+"The discussion centers on the Federal Reserve's policy constraints in an election year, with particular attention to the tension between political pressure and institutional independence. The speakers develop a framework for understanding how central bank credibility functions as a form of political capital that can be spent but not easily replenished. This connects to broader questions about the relationship between monetary policy and democratic accountability..."
+
+**Bad Example (Sequential, Listing):**
+"First, the speaker talks about the Federal Reserve. Then they mention election year constraints. Next, they discuss political pressure. After that, they explain central bank independence..."
+
+**Good Example (Integrated Jargon):**
+"The analysis hinges on the distinction between liquidity and money - a subtle but crucial difference in monetary economics. Liquidity refers to the ease of converting assets to cash, while money represents the actual medium of exchange. This distinction becomes critical when understanding why quantitative easing doesn't necessarily lead to inflation..."
+
+**Bad Example (Disconnected Definitions):**
+"The speaker defines several terms. Liquidity means how easy it is to convert assets. Money is the medium of exchange. Quantitative easing is when central banks buy assets..."
+
+Begin synthesis now.
+

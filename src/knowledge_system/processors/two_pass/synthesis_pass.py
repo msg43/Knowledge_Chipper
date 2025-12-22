@@ -1,0 +1,311 @@
+"""
+Synthesis Pass - Two-Pass System
+
+Pass 2 of the two-pass architecture: Generate world-class long summary from extracted entities.
+Synthesizes high-importance claims, jargon, people, and mental models into sophisticated narrative.
+"""
+
+import json
+import logging
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Optional
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class SynthesisResult:
+    """Result from synthesis pass."""
+    long_summary: str
+    key_themes: list[str]
+    synthesis_quality: dict[str, Any]
+    raw_response: str = ""
+
+
+class SynthesisPass:
+    """
+    Synthesis Pass implementation for two-pass system.
+    
+    Generates world-class long summary by integrating:
+    - High-importance claims (importance >= 7.0)
+    - All jargon terms with definitions
+    - All people mentioned with context
+    - All mental models with implications
+    - YouTube AI summary (if available)
+    """
+    
+    def __init__(self, llm_adapter):
+        """
+        Initialize synthesis pass.
+        
+        Args:
+            llm_adapter: LLM adapter instance (supports complete() method)
+        """
+        self.llm = llm_adapter
+        self.prompt_template = self._load_prompt_template()
+    
+    def _load_prompt_template(self) -> str:
+        """Load synthesis pass prompt template."""
+        prompt_path = Path(__file__).parent / "prompts" / "synthesis_pass.txt"
+        try:
+            return prompt_path.read_text()
+        except FileNotFoundError:
+            logger.error(f"Synthesis prompt not found at {prompt_path}")
+            raise
+    
+    def synthesize(
+        self,
+        extraction_result,  # ExtractionResult from extraction pass
+        metadata: dict[str, Any],
+        youtube_ai_summary: Optional[str] = None,
+        importance_threshold: float = 7.0,
+    ) -> SynthesisResult:
+        """
+        Run synthesis pass to generate long summary.
+        
+        Args:
+            extraction_result: Result from extraction pass
+            metadata: Video metadata
+            youtube_ai_summary: YouTube AI-generated summary (optional)
+            importance_threshold: Minimum importance for claims to include
+        
+        Returns:
+            SynthesisResult with long summary and metadata
+        """
+        # Filter high-importance claims
+        top_claims = [
+            c for c in extraction_result.claims
+            if c.get('importance', 0) >= importance_threshold
+        ]
+        
+        if not top_claims:
+            logger.warning(
+                f"No claims above importance threshold {importance_threshold}. "
+                f"Using all claims."
+            )
+            top_claims = extraction_result.claims
+        
+        logger.info(
+            f"Synthesizing summary from {len(top_claims)} high-importance claims "
+            f"(threshold: {importance_threshold})"
+        )
+        
+        # Build prompt
+        prompt = self._build_prompt(
+            top_claims=top_claims,
+            jargon=extraction_result.jargon,
+            people=extraction_result.people,
+            mental_models=extraction_result.mental_models,
+            extraction_metadata=extraction_result.metadata,
+            video_metadata=metadata,
+            youtube_ai_summary=youtube_ai_summary,
+        )
+        
+        # Call LLM
+        logger.info("Starting synthesis pass...")
+        try:
+            response = self.llm.complete(prompt)
+            logger.info("Synthesis pass complete")
+        except Exception as e:
+            logger.error(f"Synthesis pass failed: {e}")
+            raise
+        
+        # Parse response
+        result = self._parse_response(response)
+        result.raw_response = response
+        
+        logger.info(
+            f"Generated summary with {len(result.key_themes)} key themes"
+        )
+        
+        return result
+    
+    def _build_prompt(
+        self,
+        top_claims: list[dict],
+        jargon: list[dict],
+        people: list[dict],
+        mental_models: list[dict],
+        extraction_metadata: dict,
+        video_metadata: dict,
+        youtube_ai_summary: Optional[str],
+    ) -> str:
+        """Build synthesis prompt from template."""
+        # Format top claims
+        claims_text = self._format_claims(top_claims)
+        
+        # Format jargon
+        jargon_text = self._format_jargon(jargon)
+        
+        # Format people
+        people_text = self._format_people(people)
+        
+        # Format mental models
+        models_text = self._format_mental_models(mental_models)
+        
+        # Format extraction stats
+        stats_text = self._format_extraction_stats(extraction_metadata, top_claims)
+        
+        # Format YouTube AI summary
+        yt_summary = youtube_ai_summary or "Not available"
+        
+        # Build prompt
+        prompt = self.prompt_template.format(
+            title=video_metadata.get('title', 'Unknown Title'),
+            channel=video_metadata.get('channel', video_metadata.get('uploader', 'Unknown Channel')),
+            duration=video_metadata.get('duration', 'Unknown'),
+            description=video_metadata.get('description', 'No description')[:500],
+            top_claims=claims_text,
+            jargon=jargon_text,
+            people=people_text,
+            mental_models=models_text,
+            extraction_stats=stats_text,
+            youtube_ai_summary=yt_summary,
+        )
+        
+        return prompt
+    
+    def _format_claims(self, claims: list[dict]) -> str:
+        """Format claims for prompt."""
+        if not claims:
+            return "No high-importance claims extracted."
+        
+        lines = []
+        for i, claim in enumerate(claims, 1):
+            importance = claim.get('importance', 0)
+            text = claim.get('claim_text', claim.get('canonical', 'Unknown claim'))
+            evidence = claim.get('evidence_quote', '')[:200]
+            speaker = claim.get('speaker', 'Unknown')
+            timestamp = claim.get('timestamp', '00:00')
+            
+            lines.append(
+                f"{i}. [Importance: {importance:.1f}] {text}\n"
+                f"   Speaker: {speaker} [{timestamp}]\n"
+                f"   Evidence: {evidence}"
+            )
+        
+        return "\n\n".join(lines)
+    
+    def _format_jargon(self, jargon: list[dict]) -> str:
+        """Format jargon terms for prompt."""
+        if not jargon:
+            return "No jargon terms identified."
+        
+        lines = []
+        for term in jargon[:20]:  # Limit to 20 terms
+            name = term.get('term', 'Unknown term')
+            definition = term.get('definition', 'No definition')
+            domain = term.get('domain', 'Unknown')
+            
+            lines.append(f"- **{name}** ({domain}): {definition}")
+        
+        return "\n".join(lines)
+    
+    def _format_people(self, people: list[dict]) -> str:
+        """Format people for prompt."""
+        if not people:
+            return "No people mentioned."
+        
+        lines = []
+        for person in people[:20]:  # Limit to 20 people
+            name = person.get('name', 'Unknown person')
+            role = person.get('role', 'Unknown role')
+            context = person.get('context', 'No context')
+            
+            lines.append(f"- **{name}** ({role}): {context}")
+        
+        return "\n".join(lines)
+    
+    def _format_mental_models(self, models: list[dict]) -> str:
+        """Format mental models for prompt."""
+        if not models:
+            return "No mental models identified."
+        
+        lines = []
+        for model in models[:15]:  # Limit to 15 models
+            name = model.get('name', 'Unknown model')
+            description = model.get('description', 'No description')
+            implications = model.get('implications', 'No implications')
+            
+            lines.append(
+                f"- **{name}**: {description}\n"
+                f"  Implications: {implications}"
+            )
+        
+        return "\n\n".join(lines)
+    
+    def _format_extraction_stats(
+        self,
+        extraction_metadata: dict,
+        top_claims: list[dict],
+    ) -> str:
+        """Format extraction statistics for prompt."""
+        total_claims = extraction_metadata.get('total_claims_extracted', 0)
+        avg_importance = extraction_metadata.get('avg_importance', 0.0)
+        high_count = len(top_claims)
+        
+        # Calculate score distribution
+        if top_claims:
+            scores = [c.get('importance', 0) for c in top_claims]
+            score_9_10 = sum(1 for s in scores if s >= 9)
+            score_8_9 = sum(1 for s in scores if 8 <= s < 9)
+            score_7_8 = sum(1 for s in scores if 7 <= s < 8)
+        else:
+            score_9_10 = score_8_9 = score_7_8 = 0
+        
+        return f"""
+- Total claims extracted: {total_claims}
+- High-importance claims (≥7.0): {high_count}
+- Average importance score: {avg_importance:.2f}
+- Score distribution:
+  * 9.0-10.0: {score_9_10} claims
+  * 8.0-8.9: {score_8_9} claims
+  * 7.0-7.9: {score_7_8} claims
+"""
+    
+    def _parse_response(self, response: str) -> SynthesisResult:
+        """Parse LLM response into SynthesisResult."""
+        # Try to extract JSON from response
+        try:
+            # Look for JSON block
+            if "```json" in response:
+                json_start = response.index("```json") + 7
+                json_end = response.index("```", json_start)
+                json_str = response[json_start:json_end].strip()
+            elif "```" in response:
+                json_start = response.index("```") + 3
+                json_end = response.index("```", json_start)
+                json_str = response[json_start:json_end].strip()
+            else:
+                # Assume entire response is JSON
+                json_str = response.strip()
+            
+            data = json.loads(json_str)
+            
+            return SynthesisResult(
+                long_summary=data.get('long_summary', ''),
+                key_themes=data.get('key_themes', []),
+                synthesis_quality=data.get('synthesis_quality', {}),
+            )
+        
+        except (json.JSONDecodeError, ValueError) as e:
+            logger.error(f"Failed to parse synthesis response: {e}")
+            logger.debug(f"Response: {response[:500]}...")
+            
+            # If JSON parsing fails, try to extract summary as plain text
+            # Look for paragraph breaks
+            if '\n\n' in response:
+                # Assume response is the summary itself
+                return SynthesisResult(
+                    long_summary=response.strip(),
+                    key_themes=[],
+                    synthesis_quality={"error": f"Parse error: {str(e)}"},
+                )
+            else:
+                return SynthesisResult(
+                    long_summary=f"Synthesis failed: {str(e)}",
+                    key_themes=[],
+                    synthesis_quality={"error": f"Parse error: {str(e)}"},
+                )
+

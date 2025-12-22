@@ -277,19 +277,16 @@ flowchart TD
 ```mermaid
 flowchart LR
     subgraph Assembly [Pass 1 Input Assembly]
-        Seg1[Segment 1] --> Concat[Concatenate All]
-        Seg2[Segment 2] --> Concat
-        Seg3[Segment ...] --> Concat
-        Seg80[Segment 80] --> Concat
-        
-        Concat --> AddTS[Add Timestamps]
-        AddTS --> FullTranscript[Full Transcript with Timestamps]
+        Transcript[Complete Transcript] --> Format[Format with Timestamps]
+        Format --> FullTranscript[Full Transcript with Timestamps]
         
         Meta1[Title] --> MetaBundle[Metadata Bundle]
         Meta2[Channel] --> MetaBundle
         Meta3[Description] --> MetaBundle
         Meta4[Chapters] --> MetaBundle
         Meta5[Tags] --> MetaBundle
+        Meta6[Duration] --> MetaBundle
+        Meta7[Upload Date] --> MetaBundle
         
         FullTranscript --> Combined[Combined Input]
         MetaBundle --> Combined
@@ -301,6 +298,8 @@ flowchart LR
     style MetaBundle fill:#E0FFE0
     style Prompt1 fill:#FFE4B5
 ```
+
+**Note:** Transcript is processed as a complete document. No segmentation. Timestamps in claims link directly to positions in the full transcript.
 
 ### Pass 1 Output Structure (All Entity Types)
 

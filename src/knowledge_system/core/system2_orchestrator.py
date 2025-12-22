@@ -544,14 +544,21 @@ class System2Orchestrator:
         run_id: str,
     ) -> dict[str, Any]:
         """
-        Process mining job using UnifiedHCEPipeline.
+        Process mining job using TwoPassPipeline.
 
-        This replaces the old sequential mining with parallel processing
-        and rich data capture (evidence, relations, categories).
+        This uses the modern two-pass architecture:
+        - Pass 1: Extract and score all entities from complete document
+        - Pass 2: Generate world-class summary from extracted entities
+        
+        Benefits:
+        - Whole-document processing (no segmentation)
+        - Only 2 API calls per source
+        - Preserves complete argument structures
+        - Absolute importance scoring (globally comparable)
         """
-        from .system2_orchestrator_mining import process_mine_with_unified_pipeline
+        from .system2_orchestrator_two_pass import process_with_two_pass_pipeline
 
-        return await process_mine_with_unified_pipeline(
+        return await process_with_two_pass_pipeline(
             self, source_id, config, checkpoint, run_id
         )
 
