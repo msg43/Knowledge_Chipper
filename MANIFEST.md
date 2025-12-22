@@ -2,7 +2,7 @@
 
 Complete inventory of all files in the Knowledge Chipper codebase with descriptions of actual functionality.
 
-**Last Updated:** December 21, 2025
+**Last Updated:** December 22, 2025
 
 ---
 
@@ -208,8 +208,10 @@ Complete inventory of all files in the Knowledge Chipper codebase with descripti
 - `analyze_code.py` - Code analysis utility script
 - `check_cookie_persistence.py` - Script to check cookie persistence functionality
 - `check_schema.py` - Script to check which tables exist in GetReceipts Supabase database, diagnoses missing schema migrations
+- `compare_youtube_summaries.py` - **NEW (Dec 2025):** Compare YouTube AI summary vs Knowledge_Chipper local LLM summary side-by-side; shows timing, length, and quality comparison for testing
 - `find_syntax_error.py` - Utility script to locate Python syntax errors in codebase
 - `monitor_gui_tests.sh` - Shell script to monitor and report on GUI test execution
+- `scrape_youtube_complete.py` - **NEW (Dec 2025):** Standalone YouTube scraper that extracts complete video data (metadata from yt-dlp, transcript from YouTube API, AI summary from Playwright scraping); outputs in Knowledge_Chipper markdown format with hyperlinked timestamps and thumbnail download
 - `test_cookie_functionality.py` - Test script for cookie-based YouTube authentication
 - `test_expanded_vocab.py` - Test script for expanded WikiData vocabulary
 - `test_full_download_flow.py` - Integration test for complete download flow
@@ -217,6 +219,7 @@ Complete inventory of all files in the Knowledge Chipper codebase with descripti
 - `test_summarize_tab_refresh.py` - Test script for Summarize tab refresh functionality
 - `test_summarize_tab_selection.py` - Test script for Summarize tab selection functionality
 - `test_web_canonical_upload.py` - Automated test script for web-canonical upload workflow (device auth + upload)
+- `test_youtube_ai_integration.py` - **NEW (Dec 2025):** Integration test for YouTube AI summary pipeline (download → scrape AI → save to DB → generate markdown)
 - `debug_flagship_model.py` - Utility script for debugging the flagship model
 
 ### Claims-First Pipeline Scripts (December 2025)
@@ -271,6 +274,7 @@ Application configuration files and settings.
 - `obsidian_linking.yaml` - Obsidian note linking configuration
 - `speaker_attribution.yaml` - Speaker attribution rules and mappings (main copy)
 - `channel_hosts.csv` - CSV file mapping YouTube channels to host names
+- `youtube_scraper.yaml` - **NEW (Dec 2025):** YouTube AI summary scraper configuration (timeouts, CSS selectors, fallback behavior)
 
 ### OAuth and Authentication
 
@@ -453,6 +457,11 @@ JSON schemas for data validation.
 
 - `claim_schema.json` - JSON schema for claim objects
 - `episode_schema.json` - JSON schema for episode metadata
+- `flagship_input.v1.json` - JSON schema for flagship evaluator input
+- `flagship_output.v1.json` - JSON schema for flagship evaluator output (legacy 3-dimension system)
+- `flagship_output.v2.json` - JSON schema for flagship evaluator output with 6-dimension multi-profile scoring (Dec 2025)
+- `miner_input.v1.json` - JSON schema for unified miner input
+- `miner_output.v1.json` - JSON schema for unified miner output
 - `segment_schema.json` - JSON schema for transcript segments
 - `source_schema.json` - JSON schema for media source metadata
 - `summary_schema.json` - JSON schema for summary objects
@@ -526,7 +535,7 @@ Database models, migrations, and service layer.
 
 - `__init__.py` - Database module initialization
 - `models.py` - SQLAlchemy models for all database tables, defining the comprehensive schema including Question* models
-- `service.py` - Database service layer with high-level operations including question management methods
+- `service.py` - Database service layer with high-level operations including question management methods; includes extraction checkpoint methods (Dec 2025) for auth failure recovery persistence
 - `claim_store.py` - Claim-centric storage operations for the HCE system
 - `speaker_models.py` - Speaker and voice fingerprint models, re-exported from the unified models.py for backward compatibility
 - `system2_models.py` - System 2 processing job and checkpoint models for orchestration and LLM tracking
@@ -568,6 +577,8 @@ SQL migration files for database schema changes.
 - `system2_migration.py` - System 2 processing tables migration
 - `2025_12_07_persistent_speaker_profiles.sql` - Persistent speaker profiles for cross-episode voice recognition
 - `2025_12_20_claims_first_support.sql` - Claims-first pipeline database schema: new columns for transcript source/quality, candidate_claims table for re-evaluation, claims_first_processing_log for metrics
+- `2025_12_21_add_youtube_ai_summary.sql` - **NEW (Dec 2025):** YouTube AI summary integration: adds youtube_ai_summary, youtube_ai_summary_fetched_at, youtube_ai_summary_method columns to media_sources for storing YouTube's AI-generated summaries alongside Knowledge_Chipper summaries
+- `2025_12_22_multi_profile_scoring.sql` - Multi-profile scoring system: dimensions JSON, profile_scores JSON, best_profile TEXT, temporal_stability REAL, scope REAL columns with indexes
 
 ### EXAMPLES/
 
@@ -584,7 +595,7 @@ Claims-first pipeline module for extracting claims before speaker attribution.
 - `transcript_fetcher.py` - TranscriptFetcher class for YouTube/Whisper transcript abstraction with quality assessment
 - `timestamp_matcher.py` - TimestampMatcher class for fuzzy matching evidence quotes to transcript timestamps
 - `lazy_speaker_attribution.py` - LazySpeakerAttributor class for targeted LLM-based speaker attribution
-- `pipeline.py` - ClaimsFirstPipeline orchestrator coordinating transcript → extraction → evaluation → attribution
+- `pipeline.py` - ClaimsFirstPipeline orchestrator coordinating transcript → extraction → evaluation → attribution; includes ClaimsFirstResult with rejected_claims tracking, quality_assessment, promote_claim(), generate_summaries() (Dec 2025)
 
 ### GUI/
 
@@ -620,7 +631,7 @@ Reusable GUI components.
 - `base_tab.py` - Base class for all tab implementations
 - `completion_summary.py` - Completion summary display widget
 - `enhanced_error_dialog.py` - Enhanced error dialog with detailed information
-- `enhanced_progress_display.py` - Enhanced progress display with rich formatting
+- `enhanced_progress_display.py` - Enhanced progress display with rich formatting; includes PipelineProgressDisplay class (Dec 2025) for 6-stage claims-first pipeline with batch mode, pause/resume, quality warnings
 - `file_operations.py` - File operation utilities for GUI
 - `model_preloader.py` - Model preloading widget for Whisper models
 - `progress_tracking.py` - Progress tracking components
@@ -661,13 +672,14 @@ GUI mixins for shared functionality.
 
 #### GUI/TABS/
 
-Main application tabs (17 total).
+Main application tabs (18 total).
 
 - `__init__.py` - Tabs module initialization
 - `api_keys_tab.py` - API key management tab
 - `batch_processing_tab.py` - Batch processing configuration and execution tab
 - `claim_search_tab.py` - Claim search and filtering tab
 - `cloud_uploads_tab.py` - Cloud upload status and management tab
+- `extract_tab.py` - **NEW (Dec 2025):** Claims-first extraction tab with two-pane editor, LLM selection per stage, 6-stage progress display, quality assessment panel, rejected claims with promote button
 - `introduction_tab.py` - Introduction and welcome tab with feature overview
 - `monitor_tab.py` - System monitoring and diagnostics tab
 - `process_tab.py` - Processing pipeline control tab
@@ -707,7 +719,7 @@ Background worker threads for GUI operations.
 - `__init__.py` - Workers module initialization
 - `dmg_update_worker.py` - DMG update checker worker
 - `ffmpeg_installer.py` - FFmpeg installation worker
-- `processing_workers.py` - Processing operation workers
+- `processing_workers.py` - Processing operation workers; includes ClaimsFirstWorker class (Dec 2025) with stage signals, pause/resume/cancel, quality warning signals
 - `update_worker.py` - Application update checker worker
 
 ### INTEGRATIONS/
@@ -722,8 +734,9 @@ Media processing and transformation.
 
 - `__init__.py` - Processors module initialization
 - `base.py` - Base processor class with common functionality
-- `audio_processor.py` - Audio file processing with transcription support; diarization features deprecated in v4.0.0 (see claims-first pipeline)
+- `audio_processor.py` - Audio file processing with transcription support; diarization features deprecated in v4.0.0 (see claims-first pipeline); enhanced (Dec 2025) with YouTube AI summary section in markdown output and comprehensive timestamp hyperlinking (6 regex patterns for all formats)
 - `document_processor.py` - Document processing (PDF, eBook)
+- `dual_summary_processor.py` - **NEW (Dec 2025):** Dual summary processor for comparing YouTube AI vs local LLM summaries; runs both paths in parallel for quality comparison and testing
 - `html.py` - HTML document processing
 - `pdf.py` - PDF document processing
 - `registry.py` - Processor registry for dynamic processor selection
@@ -731,6 +744,7 @@ Media processing and transformation.
 - `unified_batch_processor.py` - Unified batch processor for multiple files
 - `whisper_cpp_transcribe.py` - Transcription using pywhispercpp Python binding with DTW word-level timestamps
 - `youtube_download.py` - YouTube video/audio download
+- `youtube_download_with_ai_summary.py` - **NEW (Dec 2025):** Enhanced YouTube downloader that wraps existing YouTubeDownloadProcessor and adds YouTube AI summary scraping; saves AI summary to database automatically; no breaking changes to existing pipeline
 
 **DELETED in v4.0.0 (Claims-First Migration):**
 - ~~`diarization.py`~~ - Replaced by claims-first pipeline (restore from `speaker-first-archive` branch if needed)
@@ -826,6 +840,7 @@ Question mapper LLM prompts (3 prompts).
 High-level service layer.
 
 - `__init__.py` - Services module initialization
+- `browser_cookie_manager.py` - **NEW (Dec 2025):** Loads YouTube authentication cookies from system browsers (Chrome/Safari/Firefox) and converts to Playwright format; reuses yt-dlp cookie infrastructure for seamless integration
 - `claims_upload_service.py` - Upload claims to cloud storage
 - `device_auth.py` - Device authentication for GetReceipts.org integration (Happy-style auto-auth)
 - `download_base.py` - Base download service class
@@ -833,11 +848,12 @@ High-level service layer.
 - `file_generation.py` - Generate output files from database
 - `multi_account_downloader.py` - Multi-account YouTube downloader
 - `oauth_callback_server.py` - OAuth callback server for authentication
+- `playwright_youtube_scraper.py` - **NEW (Dec 2025):** Playwright-based YouTube AI summary scraper; automates clicking "Ask" → "Summarize", waits 12-60 seconds for generation, scrapes complete multi-paragraph summaries with fuzzy timestamp matching
 - `podcast_episode_searcher.py` - Search for podcast episodes
 - `podcast_rss_downloader.py` - Download podcast episodes from RSS feeds
 - `prompt_sync.py` - **NEW:** Syncs approved prompt refinements from GetReceipts.org to local files; refinements are bad_example entries that prevent previously-identified extraction mistakes
 - `queue_snapshot_service.py` - Queue snapshot service for pipeline status
-- `session_based_scheduler.py` - Session-based download scheduler for anti-bot
+- `session_based_scheduler.py` - Session-based download scheduler for anti-bot; includes authentication failure checkpoint methods (Dec 2025) for save/resume on 401/403/bot detection
 - `speaker_learning_service.py` - Speaker learning and adaptation service
 - `supabase_auth.py` - Supabase authentication
 - `supabase_storage.py` - Supabase cloud storage operations
@@ -930,6 +946,8 @@ Comprehensive test suite with 70+ test files including:
 - Question mapper tests (14 tests)
 
 Key test files:
+- `test_multi_profile_scorer.py` - Multi-profile scoring system unit tests (6-dimension validation, profile weights, max-scoring)
+- `test_flagship_evaluator_v2.py` - Flagship evaluator V2 integration tests (dimension processing, backward compatibility)
 - `test_question_mapper.py` - Question mapper system tests (14 tests, all passing)
 - `test_database_imports.py` - Database export validation
 - `test_basic.py` - Basic functionality tests

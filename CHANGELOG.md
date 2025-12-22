@@ -5,6 +5,137 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added (Major Feature: YouTube AI Summary Integration)
+
+- **YouTube AI Summary Scraping** - Automatically scrape YouTube's AI-generated summaries alongside local LLM processing
+  - `PlaywrightYouTubeScraper` service for browser automation with cookie-based authentication
+  - `BrowserCookieManager` loads YouTube cookies from Chrome/Safari/Firefox (reuses yt-dlp infrastructure)
+  - `YouTubeDownloadWithAISummary` processor wraps existing download pipeline
+  - Waits 12-60 seconds for complete summary generation (handles long videos)
+  - Supports fuzzy timestamp matching with 6 regex patterns
+  
+- **Database Schema** (`database/migrations/add_youtube_ai_summary.sql`)
+  - Added `youtube_ai_summary` TEXT column to `media_sources` table
+  - Added `youtube_ai_summary_fetched_at` DATETIME column
+  - Added `youtube_ai_summary_method` TEXT column ('playwright_scraper' or 'api')
+  - Clear separation: `description` (source-provided), `youtube_ai_summary` (YouTube AI), `short_summary`/`long_summary` (Knowledge_Chipper LLM)
+  
+- **Markdown Output Enhancements** (`processors/audio_processor.py`)
+  - Added "YouTube AI Summary" section to generated markdown files
+  - Hyperlinked ALL timestamps throughout document (description, AI summary, transcript)
+  - Supports timestamp formats: `(1:16-1:28)`, `[7:12]`, `**00:06**`, `00:00 //`, standalone chapters
+  - Added note: "Click any timestamp to jump to that point in the video"
+  
+- **Standalone Scraper Tool** (`scrape_youtube_complete.py`)
+  - Complete video data extraction: metadata + transcript + AI summary
+  - Uses yt-dlp for rich metadata (23 tags, view count, duration, etc.)
+  - Downloads thumbnail to Thumbnails/ directory
+  - Title-based filenames (e.g., "China's Economic Prospects on the Cusp - George Magnus.md")
+  - Outputs in Knowledge_Chipper standard format
+  
+- **Comparison Tools**
+  - `compare_youtube_summaries.py` - Compare YouTube AI vs local LLM summaries
+  - `test_youtube_ai_integration.py` - End-to-end pipeline integration test
+  
+- **Dependencies**
+  - Added `playwright>=1.40.0` to requirements.txt and pyproject.toml
+  - Installation script: `scripts/install_playwright.py`
+  - Auto-installs Chromium browser (~50 MB) on first use
+
+### Changed
+
+- **AudioProcessor Markdown Generation**
+  - Changed "YouTube Description" to "Description" (clearer for all source types)
+  - Added YouTube AI Summary section (conditional on availability)
+  - Hyperlinked timestamps in description and AI summary
+  - Hyperlinked transcript timestamps for YouTube videos
+  
+- **Database Architecture Documentation**
+  - Clarified purpose of each summary field:
+    - `description`: Source-provided (YouTube desc, RSS notes, PDF abstract)
+    - `youtube_ai_summary`: YouTube AI-generated (scraped)
+    - `short_summary`: Knowledge_Chipper short (local LLM)
+    - `long_summary`: Knowledge_Chipper long (local LLM)
+  - Allows comparison testing between YouTube AI and Knowledge_Chipper summaries
+
+### Technical Details
+
+- **Browser Cookie Loading**: Reuses existing yt-dlp cookie infrastructure
+- **Chrome Timestamp Bug Fix**: Converts Chrome's microsecond timestamps to seconds for Playwright
+- **Fuzzy Timestamp Matching**: Context-aware regex patterns avoid false positives
+- **Performance**: YouTube AI summary: ~15-20 seconds vs local LLM: ~2-5 minutes (10-20x faster)
+- **Fallback**: Graceful degradation if YouTube AI unavailable (Premium required, region-locked)
+
+### Added (Major Feature: 6-Dimension Multi-Profile Scoring)
+
+- **Multi-Profile Scoring System** - Expanded from 5 to 6 dimensions with user archetype-based importance calculation
+  - Added **Temporal Stability** dimension (1=ephemeral to 10=timeless)
+  - Added **Scope** dimension (1=narrow to 10=universal)
+  - Updated all 12 user profiles with 6-dimension weights
+  - Profiles: Scientist, Philosopher, Educator, Student, Skeptic, Investor, Policy Maker, Tech Professional, Health Professional, Journalist, Generalist, Pragmatist
+  
+- **Flagship Evaluator V2** (`src/knowledge_system/processors/hce/flagship_evaluator.py`)
+  - Integrated multi-profile scorer into evaluation pipeline
+  - LLM evaluates 6 dimensions once, then arithmetic calculates 12 profile scores (zero marginal cost)
+  - Max-scoring aggregation: final importance = max(all profile scores)
+  - Rescues niche-but-valuable claims (high for at least one profile)
+  - New `_process_multi_profile_scoring()` method
+  
+- **Updated Prompt** (`prompts/flagship_evaluator.txt`)
+  - Requests 6 independent dimension scores instead of single importance
+  - Detailed rubrics and examples for each dimension
+  - Emphasizes scoring independence (don't conflate dimensions)
+  
+- **Schema V2** (`schemas/flagship_output.v2.json`)
+  - Added `dimensions` object with 6 required fields
+  - Added `profile_scores` object with 12 profile scores
+  - Added `best_profile` field (which profile gave highest score)
+  - Added `tier` field (A/B/C/D classification)
+  - Backward compatible with V1 output
+  
+- **Database Migration** (`database/migrations/2025_12_22_multi_profile_scoring.sql`)
+  - Added `dimensions` JSON column
+  - Added `profile_scores` JSON column
+  - Added `best_profile` TEXT column
+  - Added `temporal_stability` REAL column (extracted for filtering)
+  - Added `scope` REAL column (extracted for filtering)
+  - Created indexes on `best_profile`, `temporal_stability`, `scope`, `tier`
+  
+- **Unit Tests** (`tests/test_multi_profile_scorer.py`)
+  - Dimension validation (6 dimensions required)
+  - Profile weight validation (all sum to 1.0)
+  - Profile scoring arithmetic
+  - Max-scoring rescues niche claims
+  - Trivial claims still rejected
+  - Temporal stability effects
+  - Tier assignment
+  
+- **Integration Tests** (`tests/test_flagship_evaluator_v2.py`)
+  - V2 output with dimensions and profile scores
+  - Backward compatibility with V1 output
+  - Tier distribution tracking
+  - Profile distribution tracking
+
+### Changed
+
+- **Profile Weights** (`src/knowledge_system/scoring/profiles.py`)
+  - Redistributed weights across 6 dimensions for all 12 profiles
+  - All weights still sum to 1.0
+  - Scientist now: 45% epistemic, 28% verifiability, 13% novelty, 8% temporal, 4% scope, 2% actionability
+  - Investor now: 48% actionability, 23% verifiability, 13% epistemic, 8% novelty, 5% temporal, 3% scope
+  
+- **EvaluatedClaim Class** (`flagship_evaluator.py`)
+  - Added `dimensions`, `profile_scores`, `best_profile`, `tier` properties
+  - Maintains backward compatibility with V1 fields
+
+### Technical Details
+
+- **Cost Impact**: +50% LLM cost per claim (longer output), but zero marginal cost for adding profiles
+- **Performance**: Profile scoring is pure arithmetic (<1ms for 12 profiles)
+- **Scalability**: Adding 100 profiles costs the same as 1 profile (same LLM call)
+
 ## [4.0.0] - 2025-12-21
 
 ### Added (Major Architecture: Claims-First Pipeline)
@@ -24,6 +155,21 @@ This release introduces the **Claims-First Architecture**, a fundamental shift i
   - New columns: `timestamp_precision`, `transcript_source`, `speaker_attribution_confidence`
   - New table: `candidate_claims` for re-evaluation support
   - New table: `claims_first_processing_log` for tracking
+  - New table: `extraction_checkpoints` for auth failure recovery
+
+- **ClaimsFirstResult Enhancements** (`pipeline.py`)
+  - `rejected_claims`: List of claims rejected by evaluator (visible for review)
+  - `candidates_count`: Total candidates before evaluation
+  - `acceptance_rate`: Ratio of accepted to total candidates
+  - `quality_assessment`: Passive quality opinion with status, suggestion, thresholds
+  - `promote_claim()`: Move rejected claims back through post-processing
+  - `generate_summaries()`: Generate KC short/long summaries from all inputs
+
+- **Authentication Failure Recovery** (`session_based_scheduler.py`)
+  - `save_auth_failure_checkpoint()`: Save progress on 401/403/bot detection
+  - `get_pending_checkpoint()`: Check for pending checkpoints
+  - `resume_from_checkpoint()`: Resume from saved state
+  - `is_auth_error()`: Detect auth-related errors
 
 - **Configuration** 
   - New `claims_first` section in `config/settings.yaml`
@@ -90,12 +236,42 @@ The speaker-first code can be restored from Git if needed:
 - `queue_tab.py` - Stage names updated for claims-first pipeline
 
 #### GUI Changes
-- **Transcription Tab**: New "Claims-First Mode" checkbox (default enabled)
+- **NEW Extract Tab**: Dedicated tab for claims-first extraction with:
+  - Two-pane editor layout (results list on left, detail editor on right)
+  - LLM selection per stage (Miner provider/model, Evaluator provider/model)
+  - 6-stage progress display with visual indicators
+  - Quality assessment panel with acceptance rate and transcript quality
+  - Rejected claims tab with "Promote" button
+  - Re-run with Whisper fallback button
 - **Queue Tab**: Updated stage names (Extract Claims, Evaluate Claims, Attribution)
 - Removed deprecated diarization and speaker assignment UI elements
 
+#### New GUI Components
+- **PipelineProgressDisplay**: 6-stage progress widget for claims-first pipeline
+- **ClaimsFirstWorker**: Background worker with pause/resume/cancel support
+- **ClaimItem/EntityItem**: Custom list items for results display
+
 #### Documentation
 - New `CLAIMS_FIRST_MIGRATION_GUIDE.md` with step-by-step migration instructions
+
+### Added (Web Episode Page Enhancements - GetReceipts.org)
+
+The Episode page on GetReceipts.org now displays comprehensive claims-first data:
+
+- **KC Short Summary**: Prominent 1-2 paragraph summary above the fold
+- **KC Long Summary**: Expandable executive-level comprehensive analysis
+- **YouTube AI Summary**: Collapsible section labeled as AI-generated
+- **Chapter Timestamps**: Clickable navigation to video positions
+- **Tags**: Badge display of episode categorization
+- **Full Transcript**: Expandable with quality indicator and source type
+- **Transcript Quality Score**: Visual indicator of transcript reliability
+
+#### Supabase Migration (`026_claims_first_support.sql`)
+- `short_summary`, `long_summary`, `yt_ai_summary` columns on media_sources
+- `transcript_source`, `transcript_quality_score` columns
+- `tags` JSONB array for categorization
+- `episode_chapters` table for video navigation
+- `extraction_checkpoints` table for auth failure recovery
 
 ### Added (Google Gemini LLM Support)
 

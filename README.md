@@ -4,7 +4,7 @@
 
 Turn YouTube videos, podcasts, audio files, and documents into searchable claims, structured transcripts, and organized knowledge — all processed locally on your Mac with AI.
 
-**Version 4.0.0** | **macOS Application** | **Offline-First + Cloud Sync**
+**Version 4.1.0** | **macOS Application** | **Offline-First + Cloud Sync**
 
 ---
 
@@ -14,7 +14,7 @@ Skip the Podcast is a macOS desktop application that extracts structured knowled
 
 ✅ **Transcribes** audio/video using Whisper AI (offline)
 ✅ **Extracts** key claims, people, concepts, and terminology
-✅ **Scores** each claim by importance, novelty, and credibility
+✅ **Scores** each claim on 6 dimensions across 12 user archetypes
 ✅ **Attributes** speakers only to high-value claims (claims-first approach)
 ✅ **Organizes** everything in a searchable knowledge database
 ✅ **Syncs** to GetReceipts.org for web access and sharing
@@ -31,16 +31,24 @@ Skip the Podcast is a macOS desktop application that extracts structured knowled
 - Import documents (PDF, Word, Markdown, TXT)
 
 **2. Automatic Processing**
-The app processes your content through a claims-first pipeline:
+Use the **Extract Tab** to process content through the claims-first pipeline:
 
 ```
-Download/Load → Transcribe → Extract Claims → Evaluate & Score → Upload to Web
-     ↓              ↓              ↓                ↓              ↓
-  YouTube      Whisper AI    LLM Mining      Flagship Model   GetReceipts.org
-   yt-dlp      (offline)    (local/cloud)   (A/B/C tiers)    (web canonical)
+URL Input → Fetch Metadata → Fetch Transcript → Mine Claims → Evaluate → Timestamps → Speakers
+    ↓            ↓                 ↓               ↓            ↓           ↓           ↓
+ YouTube    YT Metadata      YouTube API     UnifiedMiner   Flagship    Evidence   A/B Claims
+ Playlist    + AI Summary    (or Whisper)   (configurable)  Evaluator    Matching     Only
 ```
 
 *Speaker attribution is applied only to high-value (A/B-tier) claims, using LLM context analysis.*
+
+**Features of the Extract Tab:**
+- 📊 **6-stage progress display** with visual indicators
+- 🔧 **LLM selection per stage** - choose provider/model for Miner and Evaluator
+- ✏️ **Two-pane editor** - edit claims, jargon, people, concepts in-place
+- ❌ **Rejected claims visible** - promote good claims back to accepted
+- 📈 **Quality assessment** - acceptance rate, transcript quality, suggestions
+- 🔄 **Whisper fallback** - re-run with local transcription if quality is low
 
 **3. Review & Upload**
 - Claims appear in the **Review Tab** with importance scores (A/B/C tiers)
@@ -103,6 +111,48 @@ On your Mac, synced refinements are stored in:
 ```
 
 These files are automatically injected into the extraction prompts when you process new content.
+
+---
+
+## How Claims Are Scored
+
+### Multi-Profile Scoring System
+
+The app uses a sophisticated **6-dimension, 12-archetype** scoring system to determine claim importance:
+
+**Step 1: LLM Evaluates 6 Dimensions (once per claim)**
+```
+Claim: "Dopamine regulates motivation, not pleasure"
+    ↓
+LLM scores 6 dimensions:
+- Epistemic Value: 9 (resolves major misconception)
+- Actionability: 6 (some practical implications)
+- Novelty: 8 (challenges popular belief)
+- Verifiability: 8 (well-supported by research)
+- Understandability: 7 (clear but some jargon)
+- Temporal Stability: 9 (lasting neuroscience principle)
+- Scope: 7 (applies broadly to human behavior)
+```
+
+**Step 2: Calculate Importance for 12 User Archetypes (pure arithmetic, FREE)**
+```
+Scientist:     (9×0.45) + (8×0.28) + (8×0.13) + ... = 8.4
+Investor:      (6×0.48) + (8×0.23) + (9×0.13) + ... = 7.1
+Philosopher:   (9×0.37) + (8×0.27) + (8×0.18) + ... = 8.2
+Educator:      (7×0.37) + (9×0.27) + (6×0.15) + ... = 7.8
+... (8 more profiles)
+```
+
+**Step 3: Max-Scoring Aggregation**
+```
+Final Importance = max(8.4, 7.1, 8.2, 7.8, ...) = 8.4
+Best Profile = "Scientist"
+Tier = A (because 8.4 ≥ 8.0)
+```
+
+**Key Benefit:** This rescues niche-but-valuable insights! A technical neuroscience claim might score low for investors (7.1) but high for scientists (8.4), so it gets promoted to A-tier.
+
+**Cost Efficiency:** Adding 100 user profiles costs the same as 1 profile — just one LLM call. Profile scoring is pure arithmetic (<1ms).
 
 ---
 
@@ -293,15 +343,46 @@ Queue Tab Display:
 **Purpose:** Browse and edit extracted claims
 
 **Features:**
-- Claims organized by importance (A-tier, B-tier, C-tier)
-- Importance, novelty, confidence, controversy scores
+- Claims organized by importance (A-tier, B-tier, C-tier, D-tier)
+- Multi-dimensional scoring across 12 user archetypes
 - Edit claim text, fix speaker attribution
 - Upload to GetReceipts with one click
 
-**Tier System:**
-- **A-tier**: Highly important, novel, well-supported claims
-- **B-tier**: Moderately important, some novelty
-- **C-tier**: Less critical, common knowledge, or low confidence
+**6-Dimension Scoring System:**
+
+Each claim is evaluated on 6 independent dimensions:
+1. **Epistemic Value** - Reduces uncertainty about how the world works
+2. **Actionability** - Enables better decisions
+3. **Novelty** - Surprisingness, challenges assumptions
+4. **Verifiability** - Evidence strength and source reliability
+5. **Understandability** - Clarity and accessibility
+6. **Temporal Stability** - How long will this remain true? (ephemeral → timeless)
+7. **Scope** - How broadly applicable? (narrow → universal)
+
+**12 User Archetypes:**
+
+The system calculates importance for each user type:
+- **Scientist** - Values deep understanding and evidence
+- **Investor** - Values actionable market intelligence
+- **Philosopher** - Values conceptual clarity and novelty
+- **Educator** - Values clear explanations and broad applicability
+- **Student** - Values accessible insights and surprising facts
+- **Skeptic** - Values evidence quality above all
+- **Policy Maker** - Values broad impact and systemic thinking
+- **Tech Professional** - Values practical implementation
+- **Health Professional** - Values clinical evidence and safety
+- **Journalist** - Values newsworthy insights and clarity
+- **Generalist** - Values interesting, accessible knowledge
+- **Pragmatist** - Values immediate utility
+
+**Tier Assignment:**
+
+Final importance = max(all profile scores) — rescues niche-but-valuable insights!
+
+- **A-tier** (≥8.0): Core insights, highly valuable to at least one archetype
+- **B-tier** (6.5-7.9): Significant claims with substantial value
+- **C-tier** (5.0-6.4): Useful context and background
+- **D-tier** (<5.0): Rejected or trivial
 
 **After Upload:**
 - Claims marked as "uploaded" in local database
@@ -534,44 +615,53 @@ SELECT * FROM claims WHERE hidden = 0;
 
 ---
 
-### YouTube AI Summary Comparison (Experimental)
+### YouTube AI Summary Integration
 
-**New Feature:** Compare YouTube's AI-generated summaries with local LLM summaries.
+**New Feature:** Automatically scrape and save YouTube's AI-generated summaries alongside Knowledge_Chipper's local LLM summaries.
+
+**What It Does:**
+- Scrapes YouTube's AI summary during video download
+- Saves to database for comparison with local LLM summaries
+- Includes in markdown output with hyperlinked timestamps
+- Works seamlessly with existing pipeline
 
 **Requirements:**
-- Playwright (auto-installed)
+- Playwright (auto-installed on first use)
 - YouTube account (logged in to Chrome, Safari, or Firefox)
-- Optional: YouTube Premium (for best results)
+- YouTube Premium recommended (AI summaries may be limited without it)
 
-**Quick Start:**
+**Database Storage:**
+Each YouTube video can have **four distinct fields**:
+- `description` - YouTube's video description (show notes, chapters)
+- `youtube_ai_summary` - YouTube's AI-generated summary (scraped)
+- `short_summary` - Knowledge_Chipper short summary (local LLM)
+- `long_summary` - Knowledge_Chipper long summary (local LLM)
+
+This allows quality comparison and testing between YouTube AI and Knowledge_Chipper summaries.
+
+**Markdown Output:**
+Generated markdown files include:
+- ✅ Complete metadata (title, uploader, duration, tags, view count)
+- ✅ Thumbnail image (auto-downloaded)
+- ✅ Description with hyperlinked chapter timestamps
+- ✅ YouTube AI Summary section (if available)
+- ✅ Full transcript with every timestamp hyperlinked
+
+**Standalone Tools:**
 ```bash
-python compare_youtube_summaries.py <youtube_url>
+# Scrape complete video data (metadata + transcript + AI summary)
+python scrape_youtube_complete.py "https://www.youtube.com/watch?v=VIDEO_ID"
+
+# Compare YouTube AI vs Knowledge_Chipper summaries
+python compare_youtube_summaries.py "https://www.youtube.com/watch?v=VIDEO_ID"
 ```
 
-**How It Works:**
-1. Loads your YouTube cookies from your browser
-2. Uses Playwright to automate clicking "Ask" → "Summarize"
-3. Waits 5-10 seconds for YouTube to generate summary
-4. Scrapes the result
-5. Simultaneously generates local LLM summary for comparison
+**Performance:**
+- YouTube AI summary: ~15-20 seconds
+- Knowledge_Chipper summary: ~2-5 minutes (download + transcribe + analyze)
+- **10-20x faster** when YouTube AI is available
 
-**Example Output:**
-```
-🤖 YOUTUBE AI SUMMARY (8 seconds)
-───────────────────────────────────────
-[YouTube's AI-generated summary...]
-
-🧠 LOCAL LLM SUMMARY (127 seconds)
-───────────────────────────────────────
-[Local LLM summary...]
-
-📊 COMPARISON
-───────────────────────────────────────
-Speed: YouTube was 15.9x faster
-Length: Local was 1.27x longer
-```
-
-**Note:** YouTube AI summaries may require YouTube Premium and are not available in all regions. The system automatically falls back to local LLM summarization if YouTube scraping fails.
+**Note:** YouTube AI summaries require YouTube Premium in most regions. The system gracefully falls back to local LLM processing if scraping fails.
 
 ---
 
