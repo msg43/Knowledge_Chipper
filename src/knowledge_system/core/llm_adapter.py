@@ -108,13 +108,10 @@ class LLMAdapter:
     - Cost estimation
     """
 
-    # Hardware tier concurrency limits for CLOUD APIs (OpenAI, Anthropic, etc)
-    CLOUD_CONCURRENCY_LIMITS = {
-        "consumer": 2,  # M1/M2 base models
-        "prosumer": 4,  # M1/M2 Pro/Max
-        "enterprise": 8,  # M1/M2 Ultra, high-end x86
-    }
-
+    # Cloud API concurrency (hardware-independent - limited by provider rate limits)
+    # Set high to allow batching and parallel processing - actual limit is rate limiter
+    CLOUD_MAX_CONCURRENT = 100  # High enough for any reasonable batch
+    
     # Hardware tier concurrency limits for LOCAL APIs (Ollama)
     # Each Ollama request spawns ~5 threads for Metal backend
     # To avoid thread oversubscription: limit based on physical_cores / threads_per_request
@@ -146,9 +143,10 @@ class LLMAdapter:
 
         self.hardware_tier = self._determine_hardware_tier(hardware_specs)
 
-        # Choose concurrency limit based on primary provider (default to cloud for safety)
-        # This can be overridden per-request using provider-specific semaphores
-        self.max_concurrent = self.CLOUD_CONCURRENCY_LIMITS.get(self.hardware_tier, 2)
+        # Cloud concurrency is hardware-independent (limited by rate limiter)
+        self.max_concurrent_cloud = self.CLOUD_MAX_CONCURRENT
+        
+        # Local concurrency is hardware-dependent (limited by GPU/CPU)
         self.max_concurrent_local = self.LOCAL_CONCURRENCY_LIMITS.get(
             self.hardware_tier, 4
         )
@@ -171,22 +169,23 @@ class LLMAdapter:
 
         logger.info(
             f"LLM Adapter initialized for {self.hardware_tier} tier "
-            f"(max {self.max_concurrent} concurrent cloud / {effective_local} local requests, "
+            f"(max {self.max_concurrent_cloud} concurrent cloud / {effective_local} local requests, "
             f"local timeout: {self.local_timeout}s)"
         )
 
         # Concurrency control - separate semaphores for cloud and local
-        self.cloud_semaphore = threading.Semaphore(self.max_concurrent)
+        self.cloud_semaphore = threading.Semaphore(self.max_concurrent_cloud)
         self.local_semaphore = threading.Semaphore(effective_local)
         self._active_lock = threading.Lock()
         self.active_requests = 0
 
-        # Rate limiters per provider
+        # Rate limiters per provider (based on actual API limits)
+        # These are conservative defaults - actual limits are much higher for paid tiers
         self.rate_limiters = {
-            "openai": RateLimiter(60),  # 60 RPM default
-            "anthropic": RateLimiter(50),  # 50 RPM default
-            "google": RateLimiter(60),  # 60 RPM default
-            "ollama": RateLimiter(1000),  # Local, no real limit
+            "openai": RateLimiter(500),  # 500 RPM (conservative, actual is 3500+ for tier 2)
+            "anthropic": RateLimiter(1000),  # 1000 RPM (conservative, actual is 4000 for paid)
+            "google": RateLimiter(1000),  # 1000 RPM (conservative, actual is 1500+ for paid)
+            "ollama": RateLimiter(10000),  # Local, no real limit
         }
 
         # Memory throttler
@@ -198,6 +197,7 @@ class LLMAdapter:
             "gpt-3.5-turbo": {"input": 0.001, "output": 0.002},
             "claude-3-opus": {"input": 0.015, "output": 0.075},
             "claude-3-sonnet": {"input": 0.003, "output": 0.015},
+            "claude-sonnet-4-20250514": {"input": 0.003, "output": 0.015},  # Claude Sonnet 4.5
             "gemini-pro": {"input": 0.001, "output": 0.002},
         }
 
@@ -711,7 +711,11 @@ class LLMAdapter:
         if not model_key or model_key not in self.cost_per_1k_tokens:
             return 0.0
 
-        rates = self.cost_per_1k_tokens[model_key]
+        rates = self.cost_per_1k_tokens.get(model_key)
+        if not rates or rates.get("input") is None or rates.get("output") is None:
+            # Skip cost calculation if rates not available
+            return 0.0
+        
         input_cost = (input_tokens / 1000) * rates["input"]
         output_cost = (output_tokens / 1000) * rates["output"]
 

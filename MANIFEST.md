@@ -48,6 +48,7 @@ Complete inventory of all files in the Knowledge Chipper codebase with descripti
 - `CODE_DUPLICATION_ELIMINATION.md` - Refactoring to eliminate 70+ lines of duplicated code in summarization tab by extracting helper methods for settings building and worker creation
 - `COLOR_CODED_AND_THUMBNAIL_FIX.md` - Fix for color coding and thumbnail display issues
 - `CONTRIBUTING.md` - Guidelines for contributing to the project (code style, PR process, testing)
+- `CURRENT_ACTIVE_PROMPTS.md` - Full text of Pass 1 (mining) and Pass 2 (evaluation) prompts currently used in the active HCE pipeline
 - `DEPLOYMENT_READY.txt` - Deployment readiness checklist and status
 - `FINAL_INTEGRATION_STATUS.md` - Status of final system integration across all components
 - `FLAGSHIP_EVALUATOR_MODEL_DEFAULT_FIX.md` - Fix for Flagship Evaluator Model dropdown appearing empty on launch due to mismatch between stored model names and displayed names with "(Installed)" suffix
@@ -127,6 +128,7 @@ Complete inventory of all files in the Knowledge Chipper codebase with descripti
 
 - `docs/FILE_ORGANIZATION.md` - Comprehensive guide to output file organization: explains directory structure (transcripts/, summaries/, moc/, exports/), file naming conventions, relationship between transcript and summary files, database as source of truth, and how to find/regenerate files. Addresses common confusion about where files are saved and why they don't overwrite each other.
 - `ARCHITECTURE_WEB_CANONICAL.md` - Complete architecture documentation for web-canonical implementation where GetReceipts Supabase is single source of truth and Knowledge_Chipper acts as ephemeral processor. Documents philosophy, workflows, database schemas, user experience, API endpoints, and rollback instructions.
+- `PROMPT_INVENTORY.md` - Complete catalog of all prompts in the system: mining prompts (unified_miner variants for different content types and selectivity levels), evaluation prompts (flagship_evaluator, entity-specific evaluators), summary generation prompts, speaker attribution prompts, question mapper prompts, and legacy/deprecated prompts. Includes prompt selection logic and versioning conventions.
 - `VESTIGIAL_CODE_ANALYSIS.md` - Comprehensive analysis of unused/vestigial code from pre-unified-pipeline architecture, including old extraction modules (people.py, glossary.py, concepts.py, skim.py), unused prompt files (judge_high/low variants), and unimplemented features (relations, contradictions). Documents architecture evolution and provides removal recommendations.
 - `VESTIGIAL_CODE_REMOVAL_COMPLETE.md` - Completion documentation for vestigial code cleanup: moved 4 old extraction modules and 12 unused prompt files to _deprecated/, updated __init__.py, verified all imports still work. Includes before/after architecture comparison, verification tests, and rollback plan.
 - `VESTIGIAL_PROMPT_PICKER_REMOVED.md` - Documentation of removal of non-functional prompt file picker from Summarization tab

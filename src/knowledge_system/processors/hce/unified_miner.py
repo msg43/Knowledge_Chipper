@@ -124,10 +124,25 @@ class UnifiedMiner:
         prompt_path: Path | None = None,
         selectivity: str = "moderate",
         content_type: str | None = None,
+        batch_size: int | None = None,  # NEW: segments per API call (None = auto-detect)
     ):
         self.llm = llm
         self.selectivity = selectivity
         self.content_type = content_type
+        
+        # Auto-detect batching based on provider
+        if batch_size is None:
+            # Cloud providers benefit from batching (reduces API call overhead)
+            if self.llm.provider in ["anthropic", "openai", "google"]:
+                self.batch_size = 20  # 20 segments per API call for cloud
+            else:
+                self.batch_size = 1  # 1 segment per call for local (Ollama)
+        else:
+            self.batch_size = batch_size
+        
+        logger.info(
+            f"UnifiedMiner batch_size={self.batch_size} for provider={self.llm.provider}"
+        )
 
         # Load prompt based on selectivity if path not explicitly provided
         if prompt_path is None:
@@ -331,6 +346,90 @@ class UnifiedMiner:
                 {"claims": [], "jargon": [], "people": [], "mental_models": []}
             )
 
+    def mine_batch(self, segments: list[Segment]) -> list[UnifiedMinerOutput]:
+        """Extract entities from a batch of segments in a single API call.
+        
+        This is much more efficient for cloud APIs where network latency dominates.
+        For local APIs (Ollama), use mine_segment() instead for better parallelization.
+        
+        Args:
+            segments: List of segments to process in one call
+            
+        Returns:
+            List of UnifiedMinerOutput, one per segment
+        """
+        if not segments:
+            return []
+        
+        if len(segments) == 1:
+            # Single segment - use regular mining
+            return [self.mine_segment(segments[0])]
+        
+        logger.debug(
+            f"🔍 Starting batch mining for {len(segments)} segments "
+            f"({segments[0].segment_id} to {segments[-1].segment_id})"
+        )
+        
+        # Prepare batch data for the prompt
+        segments_data = []
+        for seg in segments:
+            segments_data.append({
+                "segment_id": seg.segment_id,
+                "speaker": seg.speaker,
+                "timestamp_start": seg.t0,
+                "timestamp_end": seg.t1,
+                "text": seg.text,
+            })
+        
+        # Create the full prompt for batch processing
+        full_prompt = (
+            f"{self.template}\n\n"
+            f"SEGMENTS TO ANALYZE (process each independently):\n"
+            f"{json.dumps(segments_data, indent=2)}\n\n"
+            f"Return a JSON array with one result object per segment, in the same order."
+        )
+        
+        try:
+            logger.info(f"⏳ Requesting LLM batch analysis for {len(segments)} segments...")
+            
+            # Use JSON generation for batch processing
+            raw_result = self.llm.generate_json(full_prompt)
+            
+            # Parse results - expect an array
+            if isinstance(raw_result, list):
+                results = raw_result
+            elif isinstance(raw_result, dict) and "results" in raw_result:
+                results = raw_result["results"]
+            else:
+                logger.error(f"Unexpected batch result format: {type(raw_result)}")
+                # Fallback: process individually
+                return [self.mine_segment(seg) for seg in segments]
+            
+            # Convert to UnifiedMinerOutput objects
+            outputs = []
+            for i, result in enumerate(results):
+                if i < len(segments):
+                    outputs.append(UnifiedMinerOutput(result))
+                else:
+                    logger.warning(f"Extra result {i} in batch response, ignoring")
+            
+            # If we got fewer results than segments, fill with empty outputs
+            while len(outputs) < len(segments):
+                logger.warning(f"Missing result for segment {len(outputs)}, using empty")
+                outputs.append(UnifiedMinerOutput({
+                    "claims": [], "jargon": [], "people": [], "mental_models": []
+                }))
+            
+            logger.debug(
+                f"✅ Batch mining complete: {len(outputs)} results for {len(segments)} segments"
+            )
+            return outputs
+            
+        except Exception as e:
+            logger.error(f"Batch mining failed: {e}, falling back to individual processing")
+            # Fallback: process segments individually
+            return [self.mine_segment(seg) for seg in segments]
+
     def mine_episode(
         self,
         episode: EpisodeBundle,
@@ -339,31 +438,85 @@ class UnifiedMiner:
     ) -> list[UnifiedMinerOutput]:
         """Extract all entity types from all segments in an episode."""
 
-        # If max_workers is 1, use sequential processing
-        # If max_workers is None, auto-calculate optimal workers
-        if max_workers == 1:
-            outputs = []
-            total_segments = len(episode.segments)
-            for i, segment in enumerate(episode.segments, 1):
-                output = self.mine_segment(segment)
-                outputs.append(output)
-                if progress_callback:
-                    progress_callback(f"Processed segment {i} of {total_segments}")
-            return outputs
+        # Determine if we should use batching
+        use_batching = self.batch_size > 1
+        
+        if use_batching:
+            logger.info(
+                f"🚀 Using batch mining: {len(episode.segments)} segments "
+                f"in batches of {self.batch_size}"
+            )
+            
+            # Create batches
+            batches = []
+            for i in range(0, len(episode.segments), self.batch_size):
+                batch = episode.segments[i:i + self.batch_size]
+                batches.append(batch)
+            
+            logger.info(f"📦 Created {len(batches)} batches for processing")
+            
+            # Process batches in parallel
+            if max_workers == 1:
+                # Sequential batch processing
+                all_outputs = []
+                for i, batch in enumerate(batches, 1):
+                    batch_outputs = self.mine_batch(batch)
+                    all_outputs.extend(batch_outputs)
+                    if progress_callback:
+                        progress_callback(
+                            f"Processed batch {i} of {len(batches)} "
+                            f"({len(all_outputs)}/{len(episode.segments)} segments)"
+                        )
+                return all_outputs
+            else:
+                # Parallel batch processing
+                from .parallel_processor import create_parallel_processor
+                
+                processor = create_parallel_processor(max_workers=max_workers)
+                
+                def process_batch(batch):
+                    return self.mine_batch(batch)
+                
+                batch_results = processor.process_parallel(
+                    items=batches,
+                    processor_func=process_batch,
+                    progress_callback=progress_callback,
+                )
+                
+                # Flatten batch results
+                all_outputs = []
+                for batch_result in batch_results:
+                    if isinstance(batch_result, list):
+                        all_outputs.extend(batch_result)
+                    else:
+                        all_outputs.append(batch_result)
+                
+                return all_outputs
+        else:
+            # Original per-segment processing (for local/Ollama)
+            if max_workers == 1:
+                outputs = []
+                total_segments = len(episode.segments)
+                for i, segment in enumerate(episode.segments, 1):
+                    output = self.mine_segment(segment)
+                    outputs.append(output)
+                    if progress_callback:
+                        progress_callback(f"Processed segment {i} of {total_segments}")
+                return outputs
 
-        # Use parallel processing (max_workers=None means auto-calculate)
-        from .parallel_processor import create_parallel_processor
+            # Use parallel processing (max_workers=None means auto-calculate)
+            from .parallel_processor import create_parallel_processor
 
-        processor = create_parallel_processor(max_workers=max_workers)
+            processor = create_parallel_processor(max_workers=max_workers)
 
-        def process_segment(segment):
-            return self.mine_segment(segment)
+            def process_segment(segment):
+                return self.mine_segment(segment)
 
-        return processor.process_parallel(
-            items=episode.segments,
-            processor_func=process_segment,
-            progress_callback=progress_callback,
-        )
+            return processor.process_parallel(
+                items=episode.segments,
+                processor_func=process_segment,
+                progress_callback=progress_callback,
+            )
 
     def mine(
         self,
