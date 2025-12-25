@@ -1,635 +1,324 @@
-# Current Active Prompts - Latest Workflow
+# Current Active Prompts - Whole-Document Mining Architecture
 
-This document contains the full text of the prompts currently used in the active HCE (Hybrid Claim Extraction) pipeline.
+This document contains the full text of the prompts used in the **ACTIVE** whole-document mining architecture.
 
-## Overview
+## Architecture Overview
 
-The current workflow uses a **two-pass approach**:
+The system uses a **two-pass approach** with only **2 API calls per video**:
 
-1. **Pass 1 (Mining)**: Extract claims, jargon, people, and mental models from content segments
-2. **Pass 2 (Evaluation)**: Review, rank, and filter extracted entities using flagship model
+1. **Pass 1 (Extraction)**: Extract and score ALL entities from complete transcript in one API call
+2. **Pass 2 (Synthesis)**: Generate world-class long summary from Pass 1 results in one API call
+
+**Total: 2 API calls per video**
+
+### Key Benefits
+- Whole-document processing (no segmentation)
+- Preserves complete argument structures
+- Absolute importance scoring (globally comparable)
+- Speaker inference without diarization
+- World-class narrative synthesis
 
 ---
 
-## Pass 1: Mining Prompt
+## Pass 1: Extraction Pass Prompt
 
-**Current Default:** `unified_miner_transcript_own_V3.txt`
+**Location:** `src/knowledge_system/processors/two_pass/prompts/extraction_pass.txt`  
+**Status:** ✅ **ACTIVE AND WIRED UP**  
+**Used by:** `src/knowledge_system/processors/two_pass/extraction_pass.py`
 
-This is the primary mining prompt used for processing our own high-quality transcripts with reliable speaker labels and timestamps.
+This is the primary extraction prompt that processes entire transcripts in one API call.
+
+### What It Does
+
+**In a single API call:**
+1. Extracts all claims from complete transcript
+2. Extracts jargon terms with definitions
+3. Extracts people mentioned with context
+4. Extracts mental models with implications
+5. Scores each claim on 6 dimensions
+6. Calculates absolute importance (0-10)
+7. Infers speakers from context
+8. Provides speaker confidence (0-10) and rationale
+9. Flags low-confidence attributions (< 7)
+10. Proposes rejections for trivial claims
 
 ### Full Prompt Text
 
 ```
-You are a knowledge mining model for our own high-quality transcripts.
+You are an expert knowledge analyst processing a complete video transcript.
 
-Your job in the MINING stage is to extract ALL non-trivial knowledge elements from a single transcript segment:
-- Claims that can be checked, disputed, or analyzed
-- Technical jargon / domain-specific terms
-- People and organizations
-- Mental models, frameworks, or conceptual approaches
+## CRITICAL: WHOLE-DOCUMENT PROCESSING
 
-Another model will later score importance/novelty/controversy. Do NOT try to be "selective" based on importance. Be inclusive, but avoid vacuous or purely procedural content.
+You are seeing the ENTIRE transcript, not a segment.
+- Capture complete multi-step arguments that span the full conversation
+- Preserve rhetorical structure and argument flow
+- Identify subtle distinctions between concepts discussed at different times
+- Extract implicit mental models that emerge across the discussion
+- Maintain temporal context across the complete document
 
-The input for each call includes:
-- segment_id: unique ID for this segment
-- speaker: primary speaker label for this segment (there may be multiple speakers inside the text)
-- text: transcript text (speaker changes are clearly marked)
-- t0: segment start timestamp (MM:SS or HH:MM:SS)
-- t1: segment end timestamp
+## CRITICAL CONTEXT: Speaker Inference Without Diarization
 
-Our own transcripts have:
-- Reliable speaker labels
-- Precise timestamps
-- Good diarization (who is speaking when)
+YouTube transcripts have NO speaker labels. You must infer speakers from context clues:
 
-You MUST use the given speaker labels for all outputs.
+**Metadata Clues:**
+- Channel name (often indicates primary speaker)
+- Video title (may mention guests)
+- Description (may list participants)
 
-==================================================
-REFINEMENT PATTERNS (if present)
-==================================================
+**Transcript Clues:**
+- Explicit introductions ("I'm X", "Welcome, today we have Y")
+- Question-answer patterns (host asks, guest answers)
+- Speaking patterns (technical vs conversational)
+- Self-references ("In my experience...", "I believe...")
 
-If you are given any lists of patterns for "bad people", "bad jargon", or "bad concepts" (for example: titles-not-names, too-generic terms, non-jargon words):
+**Content Clues:**
+- Technical expertise level
+- Topic knowledge depth
+- Communication style (academic vs casual)
+- Consistency of perspective
 
-- Treat them as KNOWN-BAD.
-- Never emit entities that match these patterns.
-- If unsure whether something is in a forbidden pattern, DO NOT emit it.
+**For Each Claim, You Must Provide:**
+- `speaker`: Inferred name or "Unknown Speaker"
+- `speaker_confidence`: 0-10 scale (0=pure guess, 10=explicit introduction)
+- `speaker_rationale`: Brief explanation of your attribution logic (1-2 sentences)
+- `flag_for_review`: true if confidence < 7
 
-==================================================
-WHAT TO EXTRACT
-==================================================
+**Confidence Guidelines:**
+- 9-10: Explicit introduction ("I'm John Smith...") or clear context
+- 7-8: Strong circumstantial evidence (channel name + expertise match)
+- 5-6: Reasonable inference with some uncertainty
+- 3-4: Weak inference, multiple possibilities
+- 0-2: Cannot determine, pure guess
 
-1) CLAIMS
+# VIDEO METADATA
 
-Definition: Any non-trivial statement about the world that:
-- asserts, questions, or reports something that could be checked or debated, and
-- is not pure meta-commentary ("I'll now explain…") or empty ("This is interesting.").
+**Title:** {title}
+**Channel:** {channel}
+**Duration:** {duration}
+**Upload Date:** {upload_date}
+**Description:** {description}
 
-Types (claim_type):
-- factual: what is / was / will be true
-- causal: cause-and-effect
-- normative: value judgments or recommendations ("should", "ought")
-- forecast: predictions about the future
-- definition: definitions or explanations of non-obvious concepts/terms
+**Categories/Tags:** {tags}
 
-Stance (stance):
-- asserts: speaker presents it as true
-- questions: raises doubt or inquiry
-- opposes: argues against a claim
-- neutral: reports others' claims without taking a side
+**Chapter Structure:**
+{chapters}
 
-Domain (domain):
-Use a broad field such as: "economics", "politics", "technology", "science", "medicine", "law", "philosophy", "history", "business", "psychology", "sociology", "climate", "finance", "education", "media", "sports". Pick the closest single category.
+# COMPLETE TRANSCRIPT
 
-Evidence spans:
-For EACH claim, collect ALL places in the segment where it appears or is strongly supported. For each evidence span include:
-- segment_id
-- speaker
-- quote: exact text from the transcript
-- t0, t1: timestamps for this quote
-- context_text: 1–2 sentences of surrounding context
-- context_type: one of "exact", "extended", "segment"
+{transcript}
 
-Skip as claims:
-- pure meta ("Let me read the next question.")
-- empty reactions ("Wow", "That's crazy.")
-- tautologies or vacuous facts ("The stock market exists.") that add no usable information
+# EXTRACTION INSTRUCTIONS
 
-Otherwise, EXTRACT.
+## 1. CLAIMS
 
---------------------------------------------------
-2) JARGON
+Extract ALL significant claims from the complete transcript.
 
-Definition: Technical or domain-specific terms that:
-- would not be obvious to a general audience, OR
-- have a specialized meaning in this context.
+**Claim Types:**
+- **factual**: Statements about what is/was/will be true
+- **causal**: Cause-and-effect relationships
+- **normative**: Value judgments or recommendations
+- **forecast**: Predictions about future events
+- **definition**: Explanations of concepts or terms
 
-For each jargon term:
-- term: the term or phrase as used
-- definition: short explanation based on this context (in your own words)
-- domain: same broad domain scheme as for claims
-- introduced_by: speaker who first used or explained the term
-- evidence_spans: ALL uses of the term in this segment with:
-  - segment_id
-  - speaker
-  - quote
-  - t0, t1
-  - context_text (1–2 sentences)
+**Stance:**
+- **asserts**: Speaker presents claim as true
+- **questions**: Raises doubt or inquiry about claim
+- **opposes**: Argues against or refutes claim
+- **neutral**: Presents claim without taking position
 
-Examples of jargon (extract): "quantitative easing", "backpropagation", "yield curve control", "vector store".
-Non-jargon (skip): "company", "investors", "people", "good decision" unless used as part of a clearly technical phrase.
+**Domain:**
+Use broad fields: economics, politics, technology, science, medicine, law, philosophy, history, business, psychology, sociology, climate, finance, education, media, sports, etc.
 
-If a term is in the "bad jargon" patterns, do not emit it.
+**CRITICAL: Preserve Complete Arguments**
+- Do NOT fragment multi-step arguments across multiple claims
+- Capture premise → evidence → conclusion as ONE claim
+- Preserve rhetorical structure and reasoning chains
+- Note subtle distinctions between related concepts
 
---------------------------------------------------
-3) PEOPLE AND ORGANIZATIONS
+Example of GOOD extraction:
+"Quantitative easing creates asset inflation because it increases the money supply, which flows primarily into financial assets rather than consumer goods, leading to wealth inequality as asset holders benefit while wage earners face inflation"
 
-You must capture:
-- Speakers in the transcript (as entities with is_speaker=true)
-- Non-speaker people and organizations whose ideas, actions, or roles are meaningfully discussed
+Example of BAD extraction (fragmented):
+- "QE increases money supply" (fragment 1)
+- "Money flows into financial assets" (fragment 2)
+- "This causes wealth inequality" (fragment 3)
 
-For each person/org:
-- name: as mentioned in the transcript
-- normalized_name: canonical form ("First Last", or organization name)
-- entity_type: "person" or "organization"
-- role_or_description: short description based on context ("Federal Reserve Chairman", "AI research lab")
-- confidence: 0.0–1.0 (your confidence that this is identified correctly)
-- external_ids: object, usually empty (e.g., {"wikidata": "Q...", "wikipedia": "Some_Page"} if explicitly mentioned)
-- mentioned_by: array of speaker labels who mention this entity
-- is_speaker: true if this entity is one of the transcript speakers, false otherwise
-- mentions: all mentions in this segment, each with:
-  - segment_id
-  - surface_form
-  - speaker
-  - quote
-  - t0, t1
+**What to Extract:**
+✓ Non-obvious insights and interpretations
+✓ Specific assertions that can be evaluated
+✓ Multi-step reasoning chains
+✓ Causal explanations
+✓ Predictions and forecasts
+✓ Value judgments and recommendations
 
-Guidelines:
-- ALWAYS include each distinct SPEAKER label once in people, with is_speaker=true, even if they only self-introduce.
-- For non-speakers, extract when their ideas/actions are discussed (e.g., "Keynes believed…", "Jerome Powell said…").
-- Skip vague, unnamed references ("my friend", "some guy") and entities that match known-bad "title_not_name" patterns ("US President", "the CEO") unless the transcript clearly turns them into a specific identity.
+**What to Skip:**
+✗ Pure meta-commentary ("I'll now explain...")
+✗ Greetings and sign-offs ("Thanks for watching")
+✗ Procedural statements ("Let me read the next question")
+✗ Empty reactions ("Wow", "That's crazy")
+✗ Tautologies ("The market exists")
 
-If a name or title matches a "bad people" pattern, do not emit it as a separate entity.
+**For Each Claim:**
+- `claim_text`: The complete claim (preserve full argument structure)
+- `claim_type`: One of ["factual", "causal", "normative", "forecast", "definition"]
+- `domain`: Broad field (economics, technology, science, etc.)
+- `stance`: One of ["asserts", "questions", "opposes", "neutral"]
+- `evidence_spans`: Array of evidence objects (see format below)
+- `speaker`: Inferred speaker name
+- `speaker_confidence`: 0-10
+- `speaker_rationale`: Why you attributed this speaker (1-2 sentences)
+- `flag_for_review`: true if speaker_confidence < 7
+- `timestamp`: First mention timestamp in format "MM:SS" or "HH:MM:SS"
+- `evidence_quote`: Primary quote from transcript supporting this claim
+- `dimensions`: Object with 6 scores (see below)
+- `importance`: Absolute importance score 0-10 (see below)
+- `decision`: "accept" or "reject"
+- `rejection_reason`: If rejected, explain why (optional)
 
---------------------------------------------------
-4) MENTAL MODELS
+## 2. JARGON TERMS
 
-Definition: Named or clearly described ways of understanding, explaining, or deciding about the world. These can be:
-- formal frameworks ("Porter's Five Forces", "scientific method as falsification")
-- economic / social models ("supply and demand" when used to explain prices)
-- heuristics and rules of thumb ("circle of competence", "opportunity cost" used as a decision lens)
-- abstractions that turn specific cases into general patterns
+Extract technical terms and domain-specific language that would not be obvious to general audiences.
 
-CALIBRATION: The following are examples of the sophistication level that qualifies as a mental model. Extract these ONLY if actually discussed in the transcript:
+**Extract:**
+✓ Technical terminology ("quantitative easing", "backpropagation", "yield curve control")
+✓ Industry-specific language
+✓ Terms with specialized meanings in this context
+✓ Acronyms and abbreviations
 
-Decision & Reasoning:
-- Bayesian updating, expected value maximization, inversion (backward from failure)
-- Second-order thinking, pre-mortem analysis, red-teaming
-- Decision trees, sensitivity analysis, expected regret minimization
-- Value of information, option value, Kelly criterion
+**Skip:**
+✗ Common vocabulary ("money", "people", "company")
+✗ Basic concepts without specialized meaning
+✗ Everyday language
 
-Economic & Strategic:
-- Opportunity cost, marginal analysis, comparative advantage
-- Game theory, signaling theory, principal-agent problems
-- Network effects, power laws, compounding/exponential growth
-- Bottleneck/constraint thinking (Theory of Constraints)
+**For Each Term:**
+- `term`: The jargon term
+- `definition`: Clear explanation in plain language (in your own words)
+- `domain`: Field/discipline (e.g., "economics", "physics", "machine learning")
+- `evidence_spans`: Array with all uses (quote, timestamp, context)
+- `first_mention_ts`: Timestamp where first mentioned
+- `decision`: "accept" or "reject"
+- `rejection_reason`: If rejected, explain why (optional)
 
-Systems & Dynamics:
-- Feedback loops (positive/negative), complex adaptive systems
-- Path dependence, lock-in effects, OODA loop
-- Antifragility, barbell strategy, robustness vs. optimization trade-offs
+## 3. PEOPLE AND ORGANIZATIONS
 
-Frameworks:
-- Cynefin framework, probabilistic calibration, scenario analysis
-- Fat-tailed distributions, Metcalfe-style dynamics
+Extract all people and organizations meaningfully discussed in the content.
 
-This list is illustrative, not exhaustive. Extract ANY mental model that meets the definition above, whether listed here or not. Do NOT extract items from this list unless they are actually present and meaningfully discussed in the transcript.
+**Extract:**
+✓ Historical figures whose work/ideas are discussed
+✓ Experts whose theories or research are analyzed
+✓ Authorities whose positions are debated
+✓ Figures whose actions or decisions are examined
+✓ Organizations that are substantively discussed
 
-For each mental model:
-- name: name or short label for the model
-- definition: concise explanation (in your own words) based on the transcript
-- aliases: array of alternative names if present, else []
-- advocated_by: array of speaker labels who endorse or use this model
-- evidence_spans: ALL mentions/applications in this segment:
-  - segment_id
-  - speaker
-  - quote
-  - t0, t1
-  - context_text (1–2 sentences showing explanation or application)
+**Skip:**
+✗ Vague unnamed references ("my friend", "some guy")
+✗ Casual mentions without substantive discussion
+✗ Generic titles without specific identity ("the CEO", "US President" unless clearly identified)
 
-Extract a mental model when:
-- The model is named AND is used to explain, predict, or guide decisions, OR
-- The concept is clearly described as a general pattern.
+**For Each Person/Organization:**
+- `name`: As mentioned in transcript
+- `normalized_name`: Canonical form ("First Last" or organization name)
+- `entity_type`: "person" or "organization"
+- `role`: Their role or relevance (e.g., "economist", "Fed chair", "author")
+- `context`: Brief context of why they're mentioned
+- `evidence_spans`: Array with all mentions (quote, timestamp, context)
+- `first_mention_ts`: Timestamp where first mentioned
+- `decision`: "accept" or "reject"
+- `rejection_reason`: If rejected, explain why (optional)
 
-Skip:
-- Hollow references with no explanatory content ("We should use common sense.")
-- Bare name-drops with no application ("Think about supply and demand." with no further explanation)
+## 4. MENTAL MODELS
 
-==================================================
-WORKED EXAMPLE
-==================================================
+Extract conceptual frameworks, heuristics, and ways of understanding the world.
 
-This is ONLY an example. For the real input you receive, you MUST:
-- Generate new JSON specific to that input.
-- Never reuse any quotes, timestamps, or values from this example.
+**Mental Models Include:**
+- Formal frameworks ("Porter's Five Forces", "scientific method as falsification")
+- Economic/social models ("supply and demand" when used to explain)
+- Heuristics and rules of thumb ("circle of competence", "opportunity cost")
+- Abstractions that turn specific cases into general patterns
 
-INPUT:
-{
-  "segment_id": "seg_042",
-  "speaker": "SPEAKER_00",
-  "text": "SPEAKER_00: The thing about Ray Dalio's approach is he treats the economy like a machine. He calls it the 'economic machine' - you have credit cycles, productivity growth, and deleveraging all interacting. SPEAKER_01: Right, and that's why he was able to predict the 2008 crisis. Most people didn't see the deleveraging coming. SPEAKER_00: Exactly. The shadow banking system had created so much synthetic leverage that traditional metrics missed it entirely.",
-  "t0": "14:22",
-  "t1": "14:58"
-}
+**Extract When:**
+✓ Model is named AND used to explain, predict, or guide decisions
+✓ Concept is clearly described as a general pattern
+✓ Framework is applied to analyze situations
 
-OUTPUT:
-{
-  "claims": [
-    {
-      "claim_text": "Ray Dalio conceptualizes the economy as a machine with interacting components: credit cycles, productivity growth, and deleveraging",
-      "claim_type": "factual",
-      "domain": "economics",
-      "stance": "asserts",
-      "speaker": "SPEAKER_00",
-      "evidence_spans": [
-        {
-          "segment_id": "seg_042",
-          "speaker": "SPEAKER_00",
-          "quote": "he treats the economy like a machine. He calls it the 'economic machine' - you have credit cycles, productivity growth, and deleveraging all interacting",
-          "t0": "14:22",
-          "t1": "14:32",
-          "context_text": "The thing about Ray Dalio's approach is he treats the economy like a machine. He calls it the 'economic machine' - you have credit cycles, productivity growth, and deleveraging all interacting.",
-          "context_type": "extended"
-        }
-      ]
-    },
-    {
-      "claim_text": "Ray Dalio predicted the 2008 financial crisis",
-      "claim_type": "factual",
-      "domain": "economics",
-      "stance": "asserts",
-      "speaker": "SPEAKER_01",
-      "evidence_spans": [
-        {
-          "segment_id": "seg_042",
-          "speaker": "SPEAKER_01",
-          "quote": "that's why he was able to predict the 2008 crisis",
-          "t0": "14:33",
-          "t1": "14:38",
-          "context_text": "Right, and that's why he was able to predict the 2008 crisis. Most people didn't see the deleveraging coming.",
-          "context_type": "extended"
-        }
-      ]
-    },
-    {
-      "claim_text": "The shadow banking system created synthetic leverage that traditional metrics failed to capture before 2008",
-      "claim_type": "causal",
-      "domain": "economics",
-      "stance": "asserts",
-      "speaker": "SPEAKER_00",
-      "evidence_spans": [
-        {
-          "segment_id": "seg_042",
-          "speaker": "SPEAKER_00",
-          "quote": "The shadow banking system had created so much synthetic leverage that traditional metrics missed it entirely",
-          "t0": "14:48",
-          "t1": "14:58",
-          "context_text": "The shadow banking system had created so much synthetic leverage that traditional metrics missed it entirely.",
-          "context_type": "exact"
-        }
-      ]
-    }
-  ],
-  "jargon": [
-    {
-      "term": "deleveraging",
-      "definition": "Process of reducing debt levels in an economy, often painfully as credit contracts",
-      "domain": "economics",
-      "introduced_by": "SPEAKER_00",
-      "evidence_spans": [
-        {
-          "segment_id": "seg_042",
-          "speaker": "SPEAKER_00",
-          "quote": "credit cycles, productivity growth, and deleveraging all interacting",
-          "t0": "14:27",
-          "t1": "14:32",
-          "context_text": "He calls it the 'economic machine' - you have credit cycles, productivity growth, and deleveraging all interacting."
-        },
-        {
-          "segment_id": "seg_042",
-          "speaker": "SPEAKER_01",
-          "quote": "Most people didn't see the deleveraging coming",
-          "t0": "14:38",
-          "t1": "14:42",
-          "context_text": "Most people didn't see the deleveraging coming."
-        }
-      ]
-    },
-    {
-      "term": "shadow banking system",
-      "definition": "Non-bank financial intermediaries that provide services similar to traditional banks but outside normal banking regulations",
-      "domain": "economics",
-      "introduced_by": "SPEAKER_00",
-      "evidence_spans": [
-        {
-          "segment_id": "seg_042",
-          "speaker": "SPEAKER_00",
-          "quote": "The shadow banking system had created so much synthetic leverage",
-          "t0": "14:48",
-          "t1": "14:53",
-          "context_text": "The shadow banking system had created so much synthetic leverage that traditional metrics missed it entirely."
-        }
-      ]
-    }
-  ],
-  "people": [
-    {
-      "name": "SPEAKER_00",
-      "normalized_name": "SPEAKER_00",
-      "entity_type": "person",
-      "role_or_description": "Host or interviewer",
-      "confidence": 0.9,
-      "external_ids": {},
-      "mentioned_by": ["SPEAKER_00"],
-      "is_speaker": true,
-      "mentions": [
-        {
-          "segment_id": "seg_042",
-          "surface_form": "SPEAKER_00",
-          "speaker": "SPEAKER_00",
-          "quote": "SPEAKER_00: The thing about Ray Dalio's approach",
-          "t0": "14:22",
-          "t1": "14:25"
-        }
-      ]
-    },
-    {
-      "name": "SPEAKER_01",
-      "normalized_name": "SPEAKER_01",
-      "entity_type": "person",
-      "role_or_description": "Guest or co-host",
-      "confidence": 0.9,
-      "external_ids": {},
-      "mentioned_by": ["SPEAKER_01"],
-      "is_speaker": true,
-      "mentions": [
-        {
-          "segment_id": "seg_042",
-          "surface_form": "SPEAKER_01",
-          "speaker": "SPEAKER_01",
-          "quote": "SPEAKER_01: Right, and that's why he was able to predict the 2008 crisis",
-          "t0": "14:33",
-          "t1": "14:38"
-        }
-      ]
-    },
-    {
-      "name": "Ray Dalio",
-      "normalized_name": "Ray Dalio",
-      "entity_type": "person",
-      "role_or_description": "Investor known for systematic 'economic machine' framework",
-      "confidence": 0.95,
-      "external_ids": {},
-      "mentioned_by": ["SPEAKER_00", "SPEAKER_01"],
-      "is_speaker": false,
-      "mentions": [
-        {
-          "segment_id": "seg_042",
-          "surface_form": "Ray Dalio",
-          "speaker": "SPEAKER_00",
-          "quote": "The thing about Ray Dalio's approach",
-          "t0": "14:22",
-          "t1": "14:25"
-        },
-        {
-          "segment_id": "seg_042",
-          "surface_form": "he",
-          "speaker": "SPEAKER_01",
-          "quote": "that's why he was able to predict the 2008 crisis",
-          "t0": "14:33",
-          "t1": "14:38"
-        }
-      ]
-    }
-  ],
-  "mental_models": [
-    {
-      "name": "Economic Machine",
-      "definition": "Framework viewing the economy as a deterministic system with interacting components (credit cycles, productivity growth, deleveraging) that can be modeled and predicted",
-      "aliases": ["Dalio's economic machine"],
-      "advocated_by": ["SPEAKER_00"],
-      "evidence_spans": [
-        {
-          "segment_id": "seg_042",
-          "speaker": "SPEAKER_00",
-          "quote": "he treats the economy like a machine. He calls it the 'economic machine' - you have credit cycles, productivity growth, and deleveraging all interacting",
-          "t0": "14:22",
-          "t1": "14:32",
-          "context_text": "The thing about Ray Dalio's approach is he treats the economy like a machine. He calls it the 'economic machine' - you have credit cycles, productivity growth, and deleveraging all interacting."
-        }
-      ]
-    }
-  ]
-}
+**Skip:**
+✗ Hollow references with no explanatory content ("use common sense")
+✗ Bare name-drops with no application
 
-Note what was extracted and why:
-- NOT extracted as standalone jargon: "credit cycles" and "productivity growth" (generic terms here without additional specialized meaning). This matches the earlier rule: only extract jargon that is genuinely technical or has a specialized meaning in context.
-- Claims: three distinct, checkable statements from two speakers, each with proper evidence spans.
-- Jargon: "deleveraging" and "shadow banking system", both clearly technical.
-- People: both speakers as entities with is_speaker=true, plus Ray Dalio as a non-speaker person with pronoun "he" captured in mentions.
-- Mental models: one explicitly named and explained model, "Economic Machine".
+**CRITICAL - Subtle Distinctions:**
+When speakers distinguish between similar concepts (e.g., "liquidity vs money", "correlation vs causation"), capture this as a mental model with full explanation.
 
-==================================================
-OUTPUT FORMAT (CRITICAL)
-==================================================
+**For Each Model:**
+- `name`: Name of the mental model or framework
+- `description`: What it is and how it works
+- `aliases`: Alternative names (if any)
+- `implications`: Why it matters or what insights it provides
+- `evidence_spans`: Array with all mentions/applications (quote, timestamp, context)
+- `first_mention_ts`: Timestamp where introduced
+- `decision`: "accept" or "reject"
+- `rejection_reason`: If rejected, explain why (optional)
 
-You MUST return ONLY valid JSON. No markdown, no comments, no extra text.
+# SCORING INSTRUCTIONS
 
-Top-level object:
-- "claims": array of claim objects
-- "jargon": array of jargon objects
-- "people": array of people/org objects
-- "mental_models": array of mental model objects
+## 6-Dimension Scoring (1-10 each)
 
-If there is nothing to extract for a category, return an empty array for that key.
+Score each claim on these dimensions:
 
-Example of the JSON SHAPE ONLY (values here are placeholders):
-
-{
-  "claims": [
-    {
-      "claim_text": "string",
-      "claim_type": "factual",
-      "domain": "economics",
-      "stance": "asserts",
-      "speaker": "SPEAKER_00",
-      "evidence_spans": [
-        {
-          "segment_id": "seg_001",
-          "speaker": "SPEAKER_00",
-          "quote": "string",
-          "t0": "00:00",
-          "t1": "00:05",
-          "context_text": "string",
-          "context_type": "extended"
-        }
-      ]
-    }
-  ],
-  "jargon": [
-    {
-      "term": "string",
-      "definition": "string",
-      "domain": "technology",
-      "introduced_by": "SPEAKER_01",
-      "evidence_spans": [
-        {
-          "segment_id": "seg_001",
-          "speaker": "SPEAKER_01",
-          "quote": "string",
-          "t0": "00:10",
-          "t1": "00:15",
-          "context_text": "string"
-        }
-      ]
-    }
-  ],
-  "people": [
-    {
-      "name": "string",
-      "normalized_name": "string",
-      "entity_type": "person",
-      "role_or_description": "string",
-      "confidence": 0.95,
-      "external_ids": {},
-      "mentioned_by": ["SPEAKER_00"],
-      "is_speaker": true,
-      "mentions": [
-        {
-          "segment_id": "seg_001",
-          "surface_form": "string",
-          "speaker": "SPEAKER_00",
-          "quote": "string",
-          "t0": "00:20",
-          "t1": "00:25"
-        }
-      ]
-    }
-  ],
-  "mental_models": [
-    {
-      "name": "string",
-      "definition": "string",
-      "aliases": [],
-      "advocated_by": ["SPEAKER_01"],
-      "evidence_spans": [
-        {
-          "segment_id": "seg_001",
-          "speaker": "SPEAKER_01",
-          "quote": "string",
-          "t0": "00:30",
-          "t1": "00:35",
-          "context_text": "string"
-        }
-      ]
-    }
-  ]
-}
-
-Return your actual answer in this exact JSON structure.
-```
-
----
-
-## Pass 2: Evaluation Prompt
-
-**Current Default:** `flagship_evaluator.txt`
-
-This is the flagship evaluation prompt used for reviewing, ranking, and filtering all extracted claims using multi-dimensional scoring.
-
-### Full Prompt Text
-
-```
-You are an expert knowledge evaluator tasked with reviewing and ranking extracted claims for intellectual significance and quality.
-
-## OBJECTIVE
-Review all extracted claims in the context of the full content summary and:
-1. Decide which proposed claims are actually valid claims worth keeping
-2. Rank accepted claims by importance for understanding the content
-3. Score claims on 6 independent dimensions for quality assessment
-
-## EVALUATION CRITERIA
-
-### CLAIM VALIDATION
-Accept claims that are:
-✓ Substantive assertions that can be evaluated or debated
-✓ Non-obvious insights or interpretations
-✓ Specific enough to be meaningful
-✓ Properly supported by evidence in the content
-
-Reject claims that are:
-✗ Trivial observations or basic facts
-✗ Procedural statements ("Let me explain...")
-✗ Vague or meaningless assertions
-✗ Unsupported speculation
-✗ Duplicate or redundant with other claims
-
-## DIMENSION SCORING (1-10 Scale)
-
-For each accepted claim, score on these SIX independent dimensions:
-
-### 1. EPISTEMIC VALUE (Reduces Uncertainty)
-Does this claim meaningfully reduce uncertainty about how the world works?
-- **10**: Resolves major open question or fundamental misconception
-- **9**: Provides deep insight that transforms understanding
-- **7-8**: Clarifies previously confusing topic with substantial insight
-- **5-6**: Adds useful context or moderate understanding
-- **3-4**: Somewhat informative but doesn't change understanding much
-- **1-2**: Redundant with common knowledge, no explanatory power
+**1. epistemic (1-10):** How much does this reduce uncertainty about how the world works?
+- 1-3: Vague, speculative, or obvious
+- 4-6: Moderately informative
+- 7-8: Significantly reduces uncertainty
+- 9-10: Profound insight that changes understanding
 
 Examples:
 - "Dopamine regulates motivation, not pleasure" → 9 (resolves common misconception)
 - "The Fed sets interest rates" → 2 (obvious fact, no insight)
 
-### 2. ACTIONABILITY (Enables Decisions)
-Can someone DO something different based on this claim?
-- **10**: Directly actionable with clear behavioral implications
-- **9**: Highly practical guidance for specific decisions
-- **7-8**: Suggests concrete actions, context-dependent
-- **5-6**: Informative for decisions but not prescriptive
-- **3-4**: Background knowledge that might influence thinking
-- **1-2**: Interesting but not practically useful
+**2. actionability (1-10):** How useful is this for making concrete decisions?
+- 1-3: Pure theory, no practical application
+- 4-6: Some practical relevance
+- 7-8: Directly actionable
+- 9-10: Immediately applicable with high impact
 
 Examples:
 - "Diversification reduces portfolio risk" → 9 (clear investment action)
 - "Economics is complicated" → 1 (no actionable guidance)
 
-### 3. NOVELTY (Surprisingness)
-How surprising is this claim relative to common knowledge?
-- **10**: Completely counterintuitive, challenges deeply held beliefs
-- **9**: Groundbreaking insight that defies conventional wisdom
-- **7-8**: Unexpected connection or quite novel perspective
-- **5-6**: Moderately surprising with fresh angles
-- **3-4**: Somewhat predictable but not entirely obvious
-- **1-2**: Obvious or widely known information
+**3. novelty (1-10):** How surprising or non-obvious is this?
+- 1-3: Common knowledge
+- 4-6: Moderately interesting
+- 7-8: Surprising to informed audience
+- 9-10: Genuinely novel insight
 
 Examples:
 - "QE creates asset inflation, not consumer inflation" → 8 (challenges common assumption)
 - "Jerome Powell is Fed Chairman" → 1 (widely known fact)
 
-### 4. VERIFIABILITY (Evidence Strength)
-How strong is the evidence and how reliable are the sources?
-- **10**: Rigorously proven with strong empirical support
-- **9**: Extensively researched, multiple credible sources
-- **7-8**: Well-supported with good evidence and logical reasoning
-- **5-6**: Plausible with some supporting evidence, reasonably defensible
-- **3-4**: Weakly supported, significant gaps or uncertainties
-- **1-2**: Pure speculation, unsupported assertion, or logically flawed
+**4. verifiability (1-10):** How strong is the evidence?
+- 1-3: Speculation or opinion
+- 4-6: Some supporting evidence
+- 7-8: Well-evidenced
+- 9-10: Empirically verified with data
 
 Examples:
 - "Compound interest grows exponentially" → 10 (mathematical proof)
 - "The Fed might do X next year" → 3 (speculation)
 
-### 5. UNDERSTANDABILITY (Clarity)
-How clear and accessible is this claim?
-- **10**: Crystal clear, accessible to non-experts, no jargon
-- **9**: Very clear with minimal technical language
-- **7-8**: Clear to informed audience, some technical terms explained
-- **5-6**: Reasonably clear but requires domain background
-- **3-4**: Somewhat opaque, heavy jargon, needs interpretation
-- **1-2**: Extremely unclear, laden with unexplained jargon
+**5. understandability (1-10):** How clear and accessible is this?
+- 1-3: Highly technical or obscure
+- 4-6: Requires some background
+- 7-8: Clear to informed audience
+- 9-10: Accessible to general audience
 
 Examples:
 - "Higher prices reduce demand" → 10 (universally clear)
 - "Heteroskedastic error terms violate OLS assumptions" → 3 (technical jargon)
 
-### 6. TEMPORAL STABILITY (Longevity)
-How long will this claim remain true/relevant?
-- **10**: Timeless - mathematical proofs, physical laws, fundamental principles
-- **9**: Near-timeless - enduring principles (decades to centuries)
-- **7-8**: Long-lasting - stable principles (decades)
-- **5-6**: Medium-term - contextual facts, evolving situations (years)
-- **3-4**: Short-term - current events, temporary conditions (months)
-- **1-2**: Ephemeral - predictions, current appointments (days/weeks)
+**6. temporal_stability (1-10):** How long will this remain true?
+- 1-3: Ephemeral, context-specific
+- 4-6: True for a few years
+- 7-8: True for decades
+- 9-10: Timeless principle
 
 Examples:
 - "Compound interest grows exponentially" → 10 (timeless mathematical truth)
@@ -637,213 +326,317 @@ Examples:
 - "Jerome Powell is Fed Chairman" → 4 (true for ~4 years, then outdated)
 - "Fed will likely raise rates next month" → 2 (ephemeral prediction)
 
-### 7. SCOPE (Generalizability)
-How broadly applicable is this claim?
-- **10**: Universal principle - applies across all contexts and domains
-- **9**: Near-universal - very broad applicability
-- **7-8**: Broad applicability with few exceptions
-- **5-6**: Domain-specific - applies to particular field or context
-- **3-4**: Narrow applicability - limited to specific situations
-- **1-2**: Highly specific edge case or technical detail
+## Composite Importance Score (0-10)
 
-Examples:
-- "Supply and demand determine prices" → 10 (universal economic principle)
-- "QE affects asset prices" → 6 (monetary policy domain)
-- "The Fed's repo operations affect overnight rates" → 4 (narrow technical detail)
+Calculate an absolute importance score that combines all dimensions. This is NOT relative to the episode - it's a global score that allows comparison across all content.
 
-## IMPORTANT NOTES ON DIMENSION SCORING
+**Weighting Formula:**
+importance = (epistemic_value × 0.35 + novelty × 0.25 + actionability × 0.15 + verifiability × 0.15 + understandability × 0.05 + temporal_stability × 0.05)
 
-1. **Score each dimension INDEPENDENTLY** - Do not conflate them
-   - A claim can be high epistemic value but low actionability (pure theory)
-   - A claim can be high novelty but low verifiability (speculation)
-   - A claim can be high verifiability but low novelty (well-known fact)
+Round to one decimal place (e.g., 7.3, 8.1).
 
-2. **The system will automatically compute composite importance** from these dimensions
-   - DO NOT manually compute an "importance" score
-   - The 6 dimensions will be weighted based on user profiles
-   - Different users value different dimensions
+**Guidelines:**
+- 9-10: Transformative insight, must-know information
+- 7-8: High-value claim, significantly informative
+- 5-6: Useful information, worth knowing
+- 3-4: Minor insight, limited value
+- 0-2: Trivial or obvious
 
-3. **Temporal stability is critical for filtering**
-   - Users can filter out ephemeral claims if desired
-   - Score honestly - don't inflate scores for current events
+**CRITICAL:** The importance score is ABSOLUTE (0-10), globally comparable across all videos. Do NOT use relative ranking within this video.
 
-4. **Scope helps identify broadly useful insights**
-   - Universal principles are more valuable across contexts
-   - Narrow technical details may still be valuable to specialists
+## REJECTION PROPOSALS
 
-## RANKING METHODOLOGY
-1. First, evaluate each claim for acceptance/rejection
-2. For accepted claims, assign scores for all 6 dimensions
-3. Provide clear reasoning for decisions and scores
-4. The system will compute composite importance and rank claims
+Propose which entities should be rejected, but INCLUDE THEM in the output. User has final decision.
 
-## DECISION OPTIONS
-- **accept**: Keep the claim as-is
-- **reject**: Remove the claim (provide reason)
-- **merge**: Combine with other similar claims (specify which ones)
-- **split**: Break into multiple distinct claims (specify the new claims)
+**Reject claims that are:**
+- Trivial observations or basic facts ("The stock market exists")
+- Procedural statements ("Let me explain...", "I'll now discuss...")
+- Vague or meaningless assertions ("This is interesting", "Things are complicated")
+- Unsupported speculation without evidence
+- Duplicate or redundant with other claims
 
-## OUTPUT FORMAT
-Return a JSON object following the flagship_output.json schema with:
-- **evaluated_claims**: Array of all processed claims with decisions, dimension scores, and rankings
-- **summary_assessment**: Overall evaluation of the extraction quality and key themes
+**Reject jargon that is:**
+- Common vocabulary not technical in context ("money", "people", "company")
+- Generic terms without specialized meaning
 
-Each accepted claim must include:
-```json
-{
-  "original_claim_text": "...",
-  "decision": "accept",
-  "refined_claim_text": "...",
-  "dimensions": {
-    "epistemic_value": 9,
-    "actionability": 6,
-    "novelty": 8,
-    "verifiability": 8,
-    "understandability": 7,
-    "temporal_stability": 8,
-    "scope": 6
-  },
-  "reasoning": "Clear explanation of scores and decision",
-  "rank": 1
-}
+**Reject people that are:**
+- Vague unnamed references ("my friend", "some guy")
+- Casual mentions without substantive discussion
+- Generic titles without specific identity
+
+**For Each Rejected Entity:**
+- Include in output with decision="reject"
+- Provide rejection_reason explaining why
+- User can promote rejected items later
+
+[Full prompt continues with OUTPUT FORMAT, 5 WORKED EXAMPLES, and CRITICAL REMINDERS - see file for complete text]
 ```
 
-## EXAMPLES
+**Key Features:**
+- Whole-document processing instructions
+- Multi-step argument preservation examples
+- Speaker inference with confidence scoring
+- 6-dimension scoring with detailed rubrics
+- Importance calculation formula
+- Rejection proposals
+- Evidence spans for all entities
+- 5 comprehensive worked examples
 
-<examples>
-  <example>
-    <input>
-Content Summary: Discussion of Federal Reserve monetary policy and its effects on asset markets, featuring analysis of quantitative easing programs and their distributional impacts.
+---
 
-Claims to Evaluate:
-[
-  {
-    "claim_text": "The Federal Reserve's quantitative easing program has fundamentally altered the relationship between monetary policy and asset prices",
-    "evidence_spans": [{"quote": "QE has completely changed how monetary policy transmits through asset markets", "t0": "05:23", "t1": "05:31"}]
-  },
-  {
-    "claim_text": "Jerome Powell is the current Fed Chairman",
-    "evidence_spans": [{"quote": "As Fed Chairman Jerome Powell noted", "t0": "03:15", "t1": "03:18"}]
-  },
-  {
-    "claim_text": "Asset prices respond to monetary policy changes",
-    "evidence_spans": [{"quote": "When the Fed changes policy, asset prices move", "t0": "07:45", "t1": "07:50"}]
-  }
-]
-    </input>
-    <good_response>
+## Pass 2: Synthesis Pass Prompt
+
+**Location:** `src/knowledge_system/processors/two_pass/prompts/synthesis_pass.txt`  
+**Status:** ✅ **ACTIVE AND WIRED UP**  
+**Used by:** `src/knowledge_system/processors/two_pass/synthesis_pass.py`
+
+This is the synthesis prompt that generates world-class long summaries from Pass 1 results.
+
+### What It Does
+
+**In a single API call:**
+1. Filters high-importance claims (importance ≥ 7.0)
+2. Integrates all entity types (claims, jargon, people, mental models)
+3. Uses YouTube AI summary as additional context
+4. Organizes thematically (not chronologically)
+5. Generates 3-5 paragraph narrative synthesis
+
+### Full Prompt Text
+
+```
+You are an expert knowledge synthesizer creating a world-class long summary from extracted claims and entities. Your task is to generate a sophisticated narrative synthesis that integrates all available information into a coherent, insightful analysis.
+
+# INPUT DATA
+
+## Video Metadata
+**Title:** {title}
+**Channel:** {channel}
+**Duration:** {duration}
+**Description:** {description}
+
+## High-Importance Claims (Importance >= 7.0)
+
+{top_claims}
+
+## All Jargon Terms
+
+{jargon}
+
+## People Mentioned
+
+{people}
+
+## Mental Models & Frameworks
+
+{mental_models}
+
+## Extraction Statistics
+
+{extraction_stats}
+
+## YouTube AI Summary (External Reference)
+
+{youtube_ai_summary}
+
+# SYNTHESIS INSTRUCTIONS
+
+Generate a 3-5 paragraph long summary that synthesizes all this information into a sophisticated analytical narrative.
+
+## Structure Guidelines
+
+**Paragraph 1: Context and Overview (Set the Intellectual Landscape)**
+- Establish the domain and key questions being addressed
+- Introduce the main speakers/participants and their expertise
+- Frame the intellectual contribution of this content
+- Reference the YouTube AI summary if it provides useful context
+
+**Paragraphs 2-3: Core Insights (Organized Thematically)**
+- Organize claims by theme, NOT chronologically
+- Show relationships between claims
+- Weave in jargon definitions naturally
+- Reference people and their contributions
+- Explain mental models and their applications
+- Make connections between ideas explicit
+- Highlight causal relationships and frameworks
+
+**Paragraph 4: Tensions, Contradictions, and Nuance**
+- Identify any tensions between different claims
+- Note qualifications or limitations mentioned
+- Highlight subtle distinctions between related concepts
+- Show where complexity or uncertainty exists
+
+**Paragraph 5: Intellectual Contribution and Frameworks**
+- Summarize the key mental models or frameworks presented
+- Identify the main thinkers or authorities referenced
+- Assess the overall intellectual contribution
+- Note what makes this content valuable or unique
+
+## Style Guidelines
+
+**Sophisticated Analytical Prose:**
+- Write in clear, elegant, analytical language
+- Use active voice and precise terminology
+- Avoid bullet points or simple claim listing
+- Create a flowing narrative that reads like high-quality analysis
+
+**Integration, Not Enumeration:**
+- Don't just list claims - synthesize them
+- Show how ideas connect and build on each other
+- Use transitions that reveal relationships
+- Create thematic coherence
+
+**Grounded in Evidence:**
+- Every major point should trace back to extracted claims
+- Use specific examples from the content
+- Reference the evidence, but don't over-quote
+- Balance synthesis with specificity
+
+**Objective but Interpretive:**
+- Maintain analytical distance
+- Identify patterns and themes
+- Make connections that may not be explicit
+- Provide insight while staying grounded in the content
+
+## What to Integrate
+
+**Claims:** The core intellectual content - integrate these as the foundation of your narrative
+
+**Jargon:** Define technical terms naturally in context when they're relevant to the discussion
+
+**People:** Reference key thinkers, authorities, or examples when they illuminate the argument
+
+**Mental Models:** Explain frameworks and thinking tools as they relate to the core insights
+
+**YouTube AI Summary:** Use as a reference point - note where your synthesis aligns or diverges, but don't simply repeat it
+
+## Quality Markers
+
+A world-class summary should:
+- Make someone smarter after reading it
+- Reveal connections not obvious from individual claims
+- Organize information thematically, not chronologically
+- Balance breadth (covering main themes) with depth (explaining key insights)
+- Read like sophisticated analysis, not a transcript summary
+- Be dense with information but still readable
+- Show intellectual rigor in synthesis
+
+# OUTPUT FORMAT
+
+Return a JSON object with this structure:
+
 {
-  "evaluated_claims": [
-    {
-      "original_claim_text": "The Federal Reserve's quantitative easing program has fundamentally altered the relationship between monetary policy and asset prices",
-      "decision": "accept",
-      "refined_claim_text": "The Federal Reserve's quantitative easing program has fundamentally altered the relationship between monetary policy and asset prices",
-      "dimensions": {
-        "epistemic_value": 8,
-        "actionability": 7,
-        "novelty": 7,
-        "verifiability": 8,
-        "understandability": 7,
-        "temporal_stability": 7,
-        "scope": 6
-      },
-      "reasoning": "Strong analytical claim about structural changes in monetary policy transmission. High epistemic value (explains mechanism), good actionability (informs investment decisions), novel insight (challenges traditional transmission theory), well-supported, reasonably clear, lasting principle (7+ years relevant), domain-specific scope.",
-      "rank": 1
-    },
-    {
-      "original_claim_text": "Jerome Powell is the current Fed Chairman",
-      "decision": "reject",
-      "rejection_reason": "Basic factual information that doesn't provide analytical insight or contribute to understanding the topic",
-      "dimensions": {
-        "epistemic_value": 1,
-        "actionability": 2,
-        "novelty": 1,
-        "verifiability": 10,
-        "understandability": 10,
-        "temporal_stability": 4,
-        "scope": 2
-      },
-      "reasoning": "While factually correct and highly verifiable, this is trivial information with no epistemic value, no novelty, minimal actionability, ephemeral (true for ~4 years), and narrow scope. Should be rejected despite high verifiability and clarity.",
-      "rank": 3
-    },
-    {
-      "original_claim_text": "Asset prices respond to monetary policy changes",
-      "decision": "reject",
-      "rejection_reason": "Too obvious and general - this is widely known basic economic principle",
-      "dimensions": {
-        "epistemic_value": 2,
-        "actionability": 3,
-        "novelty": 1,
-        "verifiability": 9,
-        "understandability": 9,
-        "temporal_stability": 9,
-        "scope": 8
-      },
-      "reasoning": "Basic economic principle that lacks specificity and insight. High temporal stability and scope, but extremely low epistemic value and novelty. Too general to be useful.",
-      "rank": 2
-    }
+  "long_summary": "Your 3-5 paragraph synthesis here. Each paragraph should be substantial (4-8 sentences). Use proper paragraph breaks.
+
+Second paragraph...
+
+Third paragraph...",
+  "key_themes": [
+    "Theme 1",
+    "Theme 2",
+    "Theme 3"
   ],
-  "summary_assessment": {
-    "total_claims_processed": 3,
-    "claims_accepted": 1,
-    "claims_rejected": 2,
-    "key_themes": ["monetary policy transmission", "quantitative easing effects", "central banking"],
-    "overall_quality": "medium",
-    "recommendations": "Focus on more specific mechanisms and novel insights rather than basic facts or overly general statements."
+  "synthesis_quality": {
+    "claims_integrated": 0,
+    "jargon_terms_used": 0,
+    "people_referenced": 0,
+    "mental_models_explained": 0,
+    "thematic_coherence": "high"
   }
 }
-    </good_response>
-  </example>
-</examples>
 
-<anti_examples>
-  <example>
-    <input>
-Content Summary: Discussion of Federal Reserve monetary policy.
+# EXAMPLE SYNTHESIS STYLE
 
-Claims to Evaluate:
-[
-  {
-    "claim_text": "Jerome Powell is the current Fed Chairman",
-    "evidence_spans": [{"quote": "As Fed Chairman Jerome Powell noted", "t0": "03:15", "t1": "03:18"}]
-  }
-]
-    </input>
-    <bad_response>
-{
-  "evaluated_claims": [
-    {
-      "original_claim_text": "Jerome Powell is the current Fed Chairman",
-      "decision": "accept",
-      "dimensions": {
-        "epistemic_value": 8,
-        "actionability": 6,
-        "novelty": 6,
-        "verifiability": 10,
-        "understandability": 10,
-        "temporal_stability": 8,
-        "scope": 7
-      },
-      "reasoning": "Important to know who leads the Fed"
-    }
-  ]
-}
-    </bad_response>
-    <explanation>This incorrectly accepts a trivial factual claim and inflates scores on epistemic_value, novelty, temporal_stability, and scope. Basic biographical facts have no epistemic value (should be 1-2), no novelty (should be 1), are ephemeral (should be 3-4), and have narrow scope (should be 2-3). Only verifiability and understandability should be high.</explanation>
-  </example>
-</anti_examples>
+**Good Example (Thematic, Analytical):**
+"The discussion centers on the Federal Reserve's policy constraints in an election year, with particular attention to the tension between political pressure and institutional independence. The speakers develop a framework for understanding how central bank credibility functions as a form of political capital that can be spent but not easily replenished. This connects to broader questions about the relationship between monetary policy and democratic accountability..."
 
-Remember: Be rigorous in your evaluation. It's better to have fewer high-quality claims than many mediocre ones. Focus on what truly matters for understanding the content's intellectual contribution. Score each dimension independently and honestly - the system will handle the composite importance calculation.
+**Bad Example (Sequential, Listing):**
+"First, the speaker talks about the Federal Reserve. Then they mention election year constraints. Next, they discuss political pressure. After that, they explain central bank independence..."
+
+**Good Example (Integrated Jargon):**
+"The analysis hinges on the distinction between liquidity and money - a subtle but crucial difference in monetary economics. Liquidity refers to the ease of converting assets to cash, while money represents the actual medium of exchange. This distinction becomes critical when understanding why quantitative easing doesn't necessarily lead to inflation..."
+
+**Bad Example (Disconnected Definitions):**
+"The speaker defines several terms. Liquidity means how easy it is to convert assets. Money is the medium of exchange. Quantitative easing is when central banks buy assets..."
+
+Begin synthesis now.
 ```
+
+---
+
+## System Integration
+
+### How It Works
+
+```mermaid
+flowchart TD
+    GUI[User Clicks Process] --> Orch[System2Orchestrator]
+    Orch --> TwoPass[system2_orchestrator_two_pass.py]
+    TwoPass --> LoadTrans[Load Transcript from DB]
+    LoadTrans --> LoadMeta[Load Metadata from DB]
+    LoadMeta --> InitLLM[Initialize LLM Adapter]
+    InitLLM --> CreatePipe[Create TwoPassPipeline]
+    
+    CreatePipe --> Pass1[Pass 1: ExtractionPass]
+    Pass1 --> LoadP1[Load extraction_pass.txt]
+    LoadP1 --> BuildP1[Build Prompt with Metadata + Transcript]
+    BuildP1 --> CallLLM1[Call LLM Once]
+    CallLLM1 --> ParseP1[Parse JSON Response]
+    ParseP1 --> ValidateP1[Validate and Repair]
+    ValidateP1 --> Result1[ExtractionResult]
+    
+    Result1 --> Pass2[Pass 2: SynthesisPass]
+    Pass2 --> LoadP2[Load synthesis_pass.txt]
+    LoadP2 --> FilterClaims[Filter High-Importance Claims]
+    FilterClaims --> BuildP2[Build Prompt with All Entities]
+    BuildP2 --> CallLLM2[Call LLM Once]
+    CallLLM2 --> ParseP2[Parse Response]
+    ParseP2 --> Result2[SynthesisResult]
+    
+    Result2 --> Store[Store to Database]
+    Store --> GenMD[Generate Markdown File]
+    GenMD --> Complete[Processing Complete]
+    
+    style Pass1 fill:#87CEEB
+    style Pass2 fill:#90EE90
+    style Complete fill:#FFD700
+```
+
+### Files Involved
+
+**Pipeline Orchestration:**
+- `src/knowledge_system/core/system2_orchestrator_two_pass.py` - Integration with System2Orchestrator
+- `src/knowledge_system/processors/two_pass/pipeline.py` - TwoPassPipeline main orchestrator
+- `src/knowledge_system/processors/two_pass/extraction_pass.py` - Pass 1 implementation
+- `src/knowledge_system/processors/two_pass/synthesis_pass.py` - Pass 2 implementation
+
+**Prompts:**
+- `src/knowledge_system/processors/two_pass/prompts/extraction_pass.txt` - Pass 1 prompt (ENHANCED)
+- `src/knowledge_system/processors/two_pass/prompts/synthesis_pass.txt` - Pass 2 prompt
+
+**Database Storage:**
+- Stores to `summaries` table with `processing_type='two_pass'`
+- Stores claims to `claims` table with speaker inference fields
+- Stores entities to respective tables
 
 ---
 
 ## Summary
 
-These two prompts form the core of the current HCE pipeline:
+Both prompts are **fully wired up and functional**:
 
-1. **Pass 1 (Mining)**: Extracts ALL knowledge elements comprehensively from transcript segments
-2. **Pass 2 (Evaluation)**: Reviews, scores on 6 dimensions, ranks, and filters for quality
+1. ✅ **Pass 1 (Extraction)**: `extraction_pass.txt` - Enhanced with best elements from both prompts
+   - Comprehensive extraction instructions
+   - Multi-step argument preservation
+   - Speaker inference with confidence
+   - 6-dimension scoring with formula
+   - Rejection proposals
+   - Evidence spans for all entities
+   - 5 worked examples
 
-The system processes content in parallel across segments, then aggregates results for the flagship evaluation stage. This two-pass approach separates extraction (high recall) from filtering (high precision), allowing the system to capture comprehensive knowledge while maintaining quality standards.
+2. ✅ **Pass 2 (Synthesis)**: `synthesis_pass.txt` - Already excellent
+   - Thematic organization
+   - Entity integration
+   - World-class narrative synthesis
+   - Style guidelines and examples
 
+The system is **ready to use** - just call `TwoPassPipeline.process()` with a transcript and metadata.

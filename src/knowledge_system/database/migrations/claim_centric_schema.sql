@@ -92,11 +92,10 @@ CREATE INDEX idx_media_sources_uploader ON media_sources(uploader);
 CREATE INDEX idx_media_sources_upload_date ON media_sources(upload_date);
 
 -- Segments: Temporal chunks for sources (typically source_type='episode')
+-- Note: speaker field removed - speaker attribution now at entity level (claims, jargon, concepts)
 CREATE TABLE IF NOT EXISTS segments (
     segment_id TEXT PRIMARY KEY,
     source_id TEXT NOT NULL,
-
-    speaker TEXT,
     start_time TEXT,
     end_time TEXT,
     text TEXT NOT NULL,

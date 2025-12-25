@@ -66,7 +66,10 @@ flowchart TD
 ```mermaid
 flowchart TD
     subgraph Acquisition [Stage 1: Transcript Acquisition]
-        URL[YouTube URL] --> FetchMeta[Fetch YouTube Metadata]
+        URL[YouTube URL] --> Parallel[Parallel Operations]
+        
+        Parallel --> FetchMeta[Fetch YouTube Metadata]
+        Parallel --> ScrapeAI[Scrape YouTube AI Summary]
         
         FetchMeta --> TryYTTranscript{YouTube Transcript Available?}
         
@@ -75,35 +78,17 @@ flowchart TD
         
         DownloadAudio --> WhisperTranscribe[Whisper Transcription]
         
-        YTTranscript --> ScrapeAI[Scrape YouTube AI Summary]
-        WhisperTranscribe --> ScrapeAI
+        YTTranscript --> Combine[Combine All Data]
+        WhisperTranscribe --> Combine
+        FetchMeta --> Combine
+        ScrapeAI --> Combine
         
-        ScrapeAI --> GatherMeta[Gather Complete Metadata]
-        
-        GatherMeta --> Title[Title]
-        GatherMeta --> Channel[Channel Name]
-        GatherMeta --> Desc[Description]
-        GatherMeta --> Chapters[Chapter Structure]
-        GatherMeta --> Tags[Tags + Categories]
-        GatherMeta --> Duration[Duration]
-        GatherMeta --> UploadDate[Upload Date]
-        GatherMeta --> YTAI[YouTube AI Summary]
-        
-        Title --> Bundle[Complete Bundle]
-        Channel --> Bundle
-        Desc --> Bundle
-        Chapters --> Bundle
-        Tags --> Bundle
-        Duration --> Bundle
-        UploadDate --> Bundle
-        YTAI --> Bundle
-        YTTranscript --> Bundle
-        WhisperTranscribe --> Bundle
+        Combine --> WriteToDB[Write to Local SQLite DB]
     end
     
     style YTTranscript fill:#90EE90
     style WhisperTranscribe fill:#FFE4B5
-    style Bundle fill:#FFD700
+    style WriteToDB fill:#FFD700
 ```
 
 **Transcript Priority:**
@@ -204,36 +189,23 @@ flowchart TD
 ```mermaid
 flowchart TD
     subgraph Pass2 [Pass 2: Long Summary Generation]
-        Input2[Inputs from Pass 1] --> TopClaims[Top-Ranked Claims]
+        Input2[Inputs from Pass 1] --> HighImpClaims[High-Importance Claims]
         Input2 --> AllJargon[Jargon Terms]
         Input2 --> AllPeople[People Mentioned]
         Input2 --> AllConcepts[Mental Models]
-        Input2 --> Stats[Evaluation Statistics]
+        Input2 --> Stats[Statistics]
         
-        External[External Input] --> YTAI2[YouTube AI Summary]
+        External[Scrape via Selenium/Playwright] --> YTAISummary[YouTube AI Summary]
         
-        TopClaims --> Combine[Combine All Inputs]
+        HighImpClaims --> Combine[Combine All Inputs]
         AllJargon --> Combine
         AllPeople --> Combine
         AllConcepts --> Combine
         Stats --> Combine
-        YTAI2 --> Combine
+        YTAISummary --> Combine
         
-        Combine --> Prompt2[Build Long Summary Prompt]
-        Prompt2 --> API2[Single API Call]
-        
-        API2 --> Generate[Generate 3-5 Paragraph Summary]
-        Generate --> Narrative[Narrative Synthesis]
-        
-        Narrative --> Para1[Paragraph 1: Context + Overview]
-        Narrative --> Para2[Paragraph 2-3: Core Insights]
-        Narrative --> Para3[Paragraph 4: Tensions + Nuance]
-        Narrative --> Para4[Paragraph 5: Contribution + Framework]
-        
-        Para1 --> Final2[World-Class Long Summary]
-        Para2 --> Final2
-        Para3 --> Final2
-        Para4 --> Final2
+        Combine --> API2[Single API Call]
+        API2 --> Final2[World-Class Long Summary]
     end
     
     style API2 fill:#90EE90
@@ -287,6 +259,7 @@ flowchart LR
         Meta5[Tags] --> MetaBundle
         Meta6[Duration] --> MetaBundle
         Meta7[Upload Date] --> MetaBundle
+        Meta8[YouTube AI Summary] --> MetaBundle
         
         FullTranscript --> Combined[Combined Input]
         MetaBundle --> Combined
@@ -299,7 +272,7 @@ flowchart LR
     style Prompt1 fill:#FFE4B5
 ```
 
-**Note:** Transcript is processed as a complete document. No segmentation. Timestamps in claims link directly to positions in the full transcript.
+**Note:** Transcript is processed as a complete document. No segmentation. YouTube AI Summary included in metadata for context. Timestamps in claims link directly to positions in the full transcript.
 
 ### Pass 1 Output Structure (All Entity Types)
 
@@ -337,14 +310,16 @@ flowchart TD
         Jargon1 --> Term[term]
         Jargon1 --> Definition[definition]
         Jargon1 --> Domain[domain]
+        Jargon1 --> JargonEvidence[evidence_spans]
         
         Person1 --> Name[name]
         Person1 --> Role[role]
-        Person1 --> FirstMention[first_mention_ts]
+        Person1 --> PersonEvidence[evidence_spans]
         
         Concept1 --> ModelName[name]
         Concept1 --> ModelDesc[description]
         Concept1 --> Implications[implications]
+        Concept1 --> ConceptEvidence[evidence_spans]
     end
     
     style Response fill:#87CEEB
@@ -355,10 +330,16 @@ flowchart TD
 ```
 
 **Complete Entity Extraction:**
-- Claims: Scored on 6 dimensions with absolute importance (0-10), speaker inference included
-- Jargon: Technical terms with definitions and domain
-- People: Individuals mentioned with roles
-- Mental Models: Conceptual frameworks with implications
+- Claims: Scored on 6 dimensions with absolute importance (0-10), speaker inference, evidence spans
+- Jargon: Technical terms with definitions, domain, and evidence spans (for context review)
+- People: Individuals mentioned with roles and evidence spans (where they're mentioned)
+- Mental Models: Conceptual frameworks with implications and evidence spans (where introduced/explained)
+
+**Evidence Spans for All Entities:**
+- Every entity includes evidence_spans array
+- Each span has: timestamp, quote, context
+- Allows user to review context for any entity
+- Essential for verification and curation
 
 **No Tiers or Ranking:**
 - Importance score (0-10) is absolute, not relative to episode
@@ -1014,18 +995,27 @@ flowchart TD
 - Evaluation statistics (total claims, score distribution, average importance, key themes)
 
 **External Sources:**
-- YouTube AI summary (scraped in Stage 1)
+- YouTube AI summary (scraped via Selenium/Playwright in Stage 1)
 
 **Output: Single World-Class Long Summary**
 
-**Structure (3-5 Paragraphs):**
-- Paragraph 1: Context and overview (sets the intellectual landscape)
-- Paragraphs 2-3: Core insights organized thematically (not sequentially)
-- Paragraph 4: Tensions, contradictions, and nuance
-- Paragraph 5: Intellectual contribution, frameworks, key thinkers
+**Content Requirements:**
+- Context and overview (sets the intellectual landscape)
+- Core insights organized thematically (not sequentially)
+- Tensions, contradictions, and nuance
+- Intellectual contributions and frameworks
+- Key thinkers and their perspectives
+- Avenues for future exploration
+- Anything a keen CEO would want brought to their attention
+
+**Length and Structure:**
+- Determined by LLM based on content depth and complexity
+- Not constrained to fixed paragraph count
+- As long as needed to convey the most important insights
+- Could be 3 paragraphs for simple content, 8+ for complex discussions
 
 **Content Integration:**
-- Weaves top claims into narrative
+- Weaves high-importance claims into narrative
 - Defines jargon terms naturally in context
 - References people and their contributions
 - Explains mental models and their implications

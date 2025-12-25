@@ -33,6 +33,7 @@ from .models import (
     PlatformCategory,
     PlatformTag,
     ProcessingJob,
+    ReviewQueueItem,
     Segment,
     SourcePlatformCategory,
     SourcePlatformTag,
@@ -43,6 +44,7 @@ from .models import (
     WikiDataAlias,
     WikiDataCategory,
 )
+from .review_queue_service import ReviewQueueService
 
 # HCE models are available (imported directly from models)
 HCE_AVAILABLE = True
@@ -76,6 +78,9 @@ __all__ = [
     "JargonTerm",
     # Speaker models
     "PersistentSpeakerProfile",
+    # Review workflow
+    "ReviewQueueItem",
+    "ReviewQueueService",
 ]
 
 # Add System 2 models to exports if available

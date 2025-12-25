@@ -518,6 +518,11 @@ class MainWindow(QMainWindow):
 
         self.status_bar.showMessage(f"Operation cancelled: {reason}")
 
+    def _update_status(self, message: str) -> None:
+        """Update the status bar with a message."""
+        if self.status_bar:
+            self.status_bar.showMessage(message)
+
     def _load_api_keys_to_environment(self) -> None:
         """Load API keys to environment variables for processors to use."""
         try:
@@ -1081,6 +1086,50 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event: QCloseEvent | None) -> None:
         """Handle window close event."""
         try:
+            # Check Extract tab for unsynced items
+            if hasattr(self, 'tabs'):
+                extract_tab = None
+                for i in range(self.tabs.count()):
+                    if self.tabs.tabText(i) == "Extract":
+                        extract_tab = self.tabs.widget(i)
+                        break
+                
+                if extract_tab and hasattr(extract_tab, 'get_unsynced_count'):
+                    unsynced_count = extract_tab.get_unsynced_count()
+                    
+                    if unsynced_count > 0:
+                        from PyQt6.QtWidgets import QMessageBox
+                        
+                        reply = QMessageBox.warning(
+                            self,
+                            "Unsynced Items",
+                            f"You have {unsynced_count} accepted item(s) that haven't been synced to GetReceipts.\n\n"
+                            "These items will be lost if you close now.\n\n"
+                            "What would you like to do?",
+                            QMessageBox.StandardButton.Save | 
+                            QMessageBox.StandardButton.Discard | 
+                            QMessageBox.StandardButton.Cancel,
+                            QMessageBox.StandardButton.Save  # Default to Save
+                        )
+                        
+                        if reply == QMessageBox.StandardButton.Save:
+                            # Sync before closing
+                            logger.info(f"User chose to sync {unsynced_count} items before closing")
+                            extract_tab.sync_all_accepted()
+                            # Wait a moment for sync to complete
+                            from PyQt6.QtCore import QTimer
+                            QTimer.singleShot(2000, self.close)  # Retry close after 2s
+                            if event:
+                                event.ignore()
+                            return
+                        elif reply == QMessageBox.StandardButton.Cancel:
+                            logger.info("User cancelled app close")
+                            if event:
+                                event.ignore()
+                            return
+                        # Discard = continue with close
+                        logger.info(f"User chose to discard {unsynced_count} unsynced items")
+            
             # Save session before closing
             self._save_session()
 

@@ -2,201 +2,306 @@
 
 This document catalogs all prompts currently used in the Knowledge_Chipper/SkipThePodcast system.
 
-## Current Active Prompts (HCE Pipeline)
+## Current Active Prompts (Two-Pass Architecture)
 
-### Mining Stage Prompts (Pass 1 - Extraction)
+### ACTIVE SYSTEM: Only 2 Prompts ✅
 
-#### 1. `unified_miner_transcript_own_V3.txt`
-**Purpose:** Extract claims, jargon, people, and mental models from our own high-quality transcripts  
-**Location:** `src/knowledge_system/processors/hce/prompts/`  
-**Usage:** Default for "Transcript (Own)" content type with reliable speaker labels and timestamps  
-**Key Features:** Comprehensive extraction with speaker attribution, evidence spans with timestamps
+The system uses whole-document processing with only **2 API calls per video**:
 
-#### 2. `unified_miner_transcript_third_party.txt`
-**Purpose:** Extract entities from third-party transcripts with missing/unreliable metadata  
-**Location:** `src/knowledge_system/processors/hce/prompts/`  
-**Usage:** For "Transcript (Third-party)" content type  
-**Key Features:** Handles missing speaker labels, imprecise timestamps, transcription errors
-
-#### 3. `unified_miner_document.txt`
-**Purpose:** Extract entities from written documents (PDFs, books, articles, papers)  
-**Location:** `src/knowledge_system/processors/hce/prompts/`  
-**Usage:** For "Document (PDF/eBook)" and "Document (White Paper)" content types  
-**Key Features:** Location-based references instead of timestamps, citation tracking, formal language handling
-
-#### 4. `unified_miner.txt`
-**Purpose:** Generic unified miner prompt (fallback)  
-**Location:** `src/knowledge_system/processors/hce/prompts/`  
-**Usage:** Fallback when content-type-specific prompts don't exist  
-**Key Features:** General-purpose extraction for all entity types
-
-#### 5. `unified_miner_liberal.txt`
-**Purpose:** Liberal extraction variant - extracts everything including trivial claims  
-**Location:** `src/knowledge_system/processors/hce/prompts/`  
-**Usage:** When selectivity="liberal" setting is chosen  
-**Key Features:** High recall, ~15 claims per segment, relies on evaluator to filter
-
-#### 6. `unified_miner_moderate.txt`
-**Purpose:** Moderate extraction variant - balanced approach  
-**Location:** `src/knowledge_system/processors/hce/prompts/`  
-**Usage:** When selectivity="moderate" setting is chosen (current default)  
-**Key Features:** Balanced recall/precision, ~5 claims per segment
-
-#### 7. `unified_miner_conservative.txt`
-**Purpose:** Conservative extraction variant - only high-value claims  
-**Location:** `src/knowledge_system/processors/hce/prompts/`  
-**Usage:** When selectivity="conservative" setting is chosen  
-**Key Features:** High precision, ~2 claims per segment, filters at extraction stage
-
-### Evaluation Stage Prompts (Pass 2 - Ranking & Filtering)
-
-#### 8. `flagship_evaluator.txt`
-**Purpose:** Review and rank all extracted claims using 6-dimension scoring  
-**Location:** `src/knowledge_system/processors/hce/prompts/`  
-**Usage:** Main evaluation prompt for flagship model (Gemini 2.0 Flash, GPT-4o, Claude Sonnet 4.5)  
-**Key Features:** 
-- 6 dimensions: epistemic_value, actionability, novelty, verifiability, understandability, temporal_stability, scope
-- Accept/reject decisions with reasoning
-- Multi-profile scoring for personalized importance
-
-#### 9. `concepts_evaluator.txt`
-**Purpose:** Review, deduplicate, and rank mental models/frameworks  
-**Location:** `src/knowledge_system/processors/hce/prompts/`  
-**Usage:** Post-processing for mental models extracted by miners  
-**Key Features:** Merge similar frameworks, filter vague appeals, rank by analytical sophistication
-
-#### 10. `jargon_evaluator.txt`
-**Purpose:** Review, deduplicate, and rank jargon terms  
-**Location:** `src/knowledge_system/processors/hce/prompts/`  
-**Usage:** Post-processing for jargon terms extracted by miners  
-**Key Features:** Merge aliases, filter common terms, rank by importance and specificity
-
-#### 11. `people_evaluator.txt`
-**Purpose:** Review, deduplicate, and rank person mentions  
-**Location:** `src/knowledge_system/processors/hce/prompts/`  
-**Usage:** Post-processing for people/organizations extracted by miners  
-**Key Features:** Merge name variants, identify roles, filter trivial mentions, rank by significance
-
-### Summary Generation Prompts
-
-#### 12. `short_summary.txt`
-**Purpose:** Generate concise 1-2 paragraph overview of content  
-**Location:** `src/knowledge_system/processors/hce/prompts/`  
-**Usage:** Creates high-level context before detailed claim extraction  
-**Key Features:** Main topic, context, participants, themes, tone
-
-#### 13. `long_summary.txt`
-**Purpose:** Generate comprehensive 3-5 paragraph synthesis from extracted claims  
-**Location:** `src/knowledge_system/processors/hce/prompts/`  
-**Usage:** Final output - integrates top claims, entities, and themes into narrative  
-**Key Features:** Context, core insights, tensions/contradictions, intellectual contribution
-
-## Speaker Attribution Prompts
-
-#### 14. LLM Speaker Suggester Prompt (inline)
-**Purpose:** Suggest speaker names based on metadata and transcript samples  
-**Location:** `src/knowledge_system/utils/llm_speaker_suggester.py` (lines 434-455+)  
-**Usage:** Initial speaker name inference from metadata and first 5 statements per speaker  
-**Key Features:** Skeptical evaluation of diarization splits, phonetic matching, metadata priority
-
-#### 15. LLM Speaker Validator Prompt (inline)
-**Purpose:** Validate proposed speaker assignments using speech content analysis  
-**Location:** `src/knowledge_system/utils/llm_speaker_validator.py` (lines 238-273)  
-**Usage:** "First skim" validation before user confirmation  
-**Key Features:** Confidence scoring, accept/reject/uncertain recommendations, alternative suggestions
-
-## Question Mapper Prompts
-
-#### 16. `discovery.txt`
-**Purpose:** Identify key questions that extracted claims answer  
-**Location:** `src/knowledge_system/processors/question_mapper/prompts/`  
-**Usage:** Question discovery phase - groups related claims by inquiry  
-**Key Features:** Question types (factual, causal, normative, comparative, procedural, forecasting)
-
-#### 17. `assignment.txt`
-**Purpose:** Assign claims to questions with relation types  
-**Location:** `src/knowledge_system/processors/question_mapper/prompts/`  
-**Usage:** Question assignment phase - maps claims to discovered questions  
-**Key Features:** 7 relation types (answers, partial_answer, supports_answer, contradicts, prerequisite, follow_up, context)
-
-## Legacy/Deprecated Prompts
-
-#### 18. `unified_miner_transcript_own.txt`
-**Purpose:** Earlier version of transcript mining prompt  
-**Location:** `src/knowledge_system/processors/hce/prompts/`  
-**Status:** Superseded by V3 variant  
-
-#### 19. `unified_miner_transcript_own_V2.txt`
-**Purpose:** Second version of transcript mining prompt  
-**Location:** `src/knowledge_system/processors/hce/prompts/`  
-**Status:** Superseded by V3 variant
-
-## Planned Prompts (Whole-Document Mining)
-
-### From WHOLE_DOCUMENT_MINING_DETAILED_PLAN.md
-
-#### 20. Whole-Document Mining Prompt (Pass 1)
-**Purpose:** Extract and score all entities from entire document in single API call  
-**Status:** Planned - not yet implemented  
-**Key Features:** 
-- Process complete transcript (no segmentation)
-- Extract claims, jargon, people, mental models
-- Score on 6 dimensions
-- Rank by importance
-- Infer speakers with confidence
-- Filter trivial claims
-- All in one pass
-
-#### 21. Whole-Document Summary Prompt (Pass 2)
-**Purpose:** Generate world-class long summary from Pass 1 results  
-**Status:** Planned - not yet implemented  
+#### 1. Pass 1: Extraction Pass Prompt
+**Purpose:** Extract and score ALL entities from complete transcript in single API call  
+**Location:** `src/knowledge_system/processors/two_pass/prompts/extraction_pass.txt`  
+**Status:** ✅ **ACTIVE AND WIRED UP**  
+**Used by:** `src/knowledge_system/processors/two_pass/extraction_pass.py`  
 **Key Features:**
-- Synthesize from top-ranked claims
-- Integrate all entity types
-- Use YouTube AI summary as additional context
-- 3-5 paragraph narrative
+- Processes entire transcript (no segmentation)
+- Extracts claims, jargon, people, mental models in one pass
+- Scores each claim on 6 dimensions (epistemic_value, actionability, novelty, verifiability, understandability, temporal_stability)
+- Calculates absolute importance score (0-10, globally comparable) using weighted formula
+- Infers speakers from context (no diarization needed)
+- Provides speaker confidence (0-10) and rationale
+- Flags low-confidence attributions for review (< 7)
+- Proposes rejections for trivial/redundant claims
+- Includes evidence spans for ALL entities
+- 5 comprehensive worked examples
 
-## Prompt Selection Logic
+**What it extracts:**
+- **Claims**: With full evidence spans, timestamps, speaker attribution, 6-dimension scores, importance
+- **Jargon**: Technical terms with definitions, domains, evidence spans
+- **People**: Individuals mentioned with roles, context, evidence spans
+- **Mental Models**: Conceptual frameworks with implications, evidence spans
 
-### Content Type Selection
-The system dynamically selects prompts based on content type:
+**What it does NOT do:**
+- No segmentation (processes complete document)
+- No separate evaluation pass (scoring happens in extraction)
+- No tiers (A/B/C) - just absolute importance scores
+- No episode-level ranking - claims are globally comparable
 
-```python
-content_type_files = {
-    "transcript_own": "unified_miner_transcript_own_V3.txt",
-    "transcript_third_party": "unified_miner_transcript_third_party.txt",
-    "document": "unified_miner_document.txt"
-}
+#### 2. Pass 2: Synthesis Pass Prompt
+**Purpose:** Generate world-class 3-5 paragraph summary from Pass 1 results  
+**Location:** `src/knowledge_system/processors/two_pass/prompts/synthesis_pass.txt`  
+**Status:** ✅ **ACTIVE AND WIRED UP**  
+**Used by:** `src/knowledge_system/processors/two_pass/synthesis_pass.py`  
+**Key Features:**
+- Synthesizes from high-importance claims (importance ≥ 7.0)
+- Integrates all entity types (claims, jargon, people, mental models)
+- Uses YouTube AI summary as additional context
+- Creates thematic narrative (not sequential listing)
+- 5-paragraph structure: Context → Core Insights → Tensions → Contribution
+
+**Inputs:**
+- Top-ranked claims from Pass 1
+- All jargon terms with definitions
+- All people mentioned with roles
+- All mental models with implications
+- Evaluation statistics
+- YouTube AI summary
+
+---
+
+## System Integration
+
+### Pipeline Architecture
+
+```
+User Action (GUI)
+    ↓
+System2Orchestrator
+    ↓
+system2_orchestrator_two_pass.py
+    ↓
+TwoPassPipeline (processors/two_pass/pipeline.py)
+    ├─> ExtractionPass (loads extraction_pass.txt)
+    │   └─> 1 API call → ExtractionResult
+    └─> SynthesisPass (loads synthesis_pass.txt)
+        └─> 1 API call → SynthesisResult
+    ↓
+Store to Database (summaries, claims tables)
+    ↓
+Display in GUI
 ```
 
-### Selectivity Selection
-Within each content type, selectivity level determines extraction aggressiveness:
+### Total: 2 API Calls Per Video
 
-```python
-selectivity_files = {
-    "liberal": "unified_miner_liberal.txt",
-    "moderate": "unified_miner_moderate.txt",
-    "conservative": "unified_miner_conservative.txt"
-}
+**Old Architecture:** N+1 API calls (N segments + 1 evaluation)  
+**New Architecture:** 2 API calls (1 extraction + 1 synthesis)
+
+---
+
+## Legacy Prompts (DEPRECATED - Old Segmented Architecture)
+
+The following prompts are part of the old two-step segmented architecture and are **NO LONGER USED** in the active two-pass system:
+
+### Old HCE Mining Stage Prompts (Segment-Based)
+
+**Location:** `src/knowledge_system/processors/hce/prompts/`
+
+#### ~~unified_miner_transcript_own_V3.txt~~ ❌ DEPRECATED
+**Purpose:** Extract entities from transcript segments (our own transcripts)  
+**Status:** Superseded by two-pass extraction_pass.txt  
+**Why deprecated:** Caused claim fragmentation across segment boundaries
+
+#### ~~unified_miner_transcript_third_party.txt~~ ❌ DEPRECATED
+**Purpose:** Extract entities from third-party transcript segments  
+**Status:** Superseded by two-pass extraction_pass.txt  
+**Why deprecated:** Segmentation prevented capturing complete arguments
+
+#### ~~unified_miner_document.txt~~ ❌ DEPRECATED
+**Purpose:** Extract entities from document segments  
+**Status:** Superseded by two-pass extraction_pass.txt  
+**Why deprecated:** Lost context across document sections
+
+#### ~~unified_miner.txt~~ ❌ DEPRECATED
+**Purpose:** Generic segment mining (fallback)  
+**Status:** Superseded by two-pass extraction_pass.txt
+
+#### ~~unified_miner_liberal.txt~~ ❌ DEPRECATED
+**Purpose:** Liberal extraction variant (high recall)  
+**Status:** No longer needed - extraction_pass.txt handles selectivity
+
+#### ~~unified_miner_moderate.txt~~ ❌ DEPRECATED
+**Purpose:** Moderate extraction variant (balanced)  
+**Status:** No longer needed
+
+#### ~~unified_miner_conservative.txt~~ ❌ DEPRECATED
+**Purpose:** Conservative extraction variant (high precision)  
+**Status:** No longer needed
+
+#### ~~unified_miner_transcript_own.txt~~ ❌ DEPRECATED
+**Purpose:** V1 of transcript mining  
+**Status:** Superseded by V3, then by two-pass
+
+#### ~~unified_miner_transcript_own_V2.txt~~ ❌ DEPRECATED
+**Purpose:** V2 of transcript mining  
+**Status:** Superseded by V3, then by two-pass
+
+### Old HCE Evaluation Stage Prompts
+
+**Location:** `src/knowledge_system/processors/hce/prompts/`
+
+#### ~~flagship_evaluator.txt~~ ❌ DEPRECATED
+**Purpose:** Review and rank extracted claims in separate pass  
+**Status:** Functionality merged into extraction_pass.txt  
+**Why deprecated:** Scoring now happens during extraction, not after
+
+#### ~~concepts_evaluator.txt~~ ❌ DEPRECATED
+**Purpose:** Post-process mental models  
+**Status:** No longer needed - extraction and scoring happen together
+
+#### ~~jargon_evaluator.txt~~ ❌ DEPRECATED
+**Purpose:** Post-process jargon terms  
+**Status:** No longer needed
+
+#### ~~people_evaluator.txt~~ ❌ DEPRECATED
+**Purpose:** Post-process person mentions  
+**Status:** No longer needed
+
+### Old Summary Generation Prompts
+
+**Location:** `src/knowledge_system/processors/hce/prompts/`
+
+#### ~~short_summary.txt~~ ❌ DEPRECATED
+**Purpose:** Generate 1-2 paragraph overview  
+**Status:** No longer needed - synthesis_pass.txt generates comprehensive summary directly
+
+#### ~~long_summary.txt~~ ❌ DEPRECATED
+**Purpose:** Generate long summary from flagship evaluation  
+**Status:** Superseded by synthesis_pass.txt (different input structure)
+
+---
+
+## Other System Prompts (Status Unclear)
+
+### Speaker Attribution Prompts
+
+**Location:** Inline in Python files
+
+#### LLM Speaker Suggester Prompt
+**Location:** `src/knowledge_system/utils/llm_speaker_suggester.py`  
+**Status:** ⚠️ **LIKELY DEPRECATED** - extraction_pass.txt now handles speaker inference  
+**Note:** May still be used for Whisper transcripts with diarization
+
+#### LLM Speaker Validator Prompt
+**Location:** `src/knowledge_system/utils/llm_speaker_validator.py`  
+**Status:** ⚠️ **LIKELY DEPRECATED** - extraction_pass.txt includes confidence scoring and flagging
+
+### Question Mapper Prompts (Optional Feature)
+
+**Location:** `src/knowledge_system/processors/question_mapper/prompts/`
+
+#### Question Discovery Prompt
+**File:** `discovery.txt`  
+**Status:** ✅ **ACTIVE** - Optional post-processing feature  
+**Purpose:** Identify key questions that extracted claims answer
+
+#### Question Assignment Prompt
+**File:** `assignment.txt`  
+**Status:** ✅ **ACTIVE** - Optional post-processing feature  
+**Purpose:** Assign claims to questions with relation types
+
+#### Question Merger Prompt
+**File:** `merger.txt`  
+**Status:** ✅ **ACTIVE** - Optional post-processing feature  
+**Purpose:** Deduplicate and merge similar questions
+
+---
+
+## Architecture Comparison
+
+### Old Architecture (Deprecated)
+```
+Transcript → Split into Segments → Mine Each Segment (N API calls)
+  → Collect Claims → Evaluate All Claims (1 API call)
+  → Store to Database
+
+Total: N+1 API calls
+Problems: Fragmentation, lost context, complex coordination
 ```
 
-### Fallback Chain
-1. Try content-type-specific prompt
-2. If not found, try selectivity-based prompt
-3. If not found, use generic `unified_miner.txt`
+### New Architecture (Current)
+```
+Complete Transcript → Pass 1: Extract & Score Everything (1 API call)
+  → Pass 2: Generate Summary (1 API call)
+  → Store to Database
 
-## Prompt Versioning
+Total: 2 API calls
+Benefits: Whole context, simpler, faster, better quality
+```
 
-Prompts use version suffixes when multiple iterations exist:
-- `unified_miner_transcript_own.txt` (original)
-- `unified_miner_transcript_own_V2.txt` (second iteration)
-- `unified_miner_transcript_own_V3.txt` (current, third iteration)
+---
+
+## Summary
+
+### Active Prompts: 2 Core + 3 Optional
+
+**Core (Required):**
+1. ✅ `extraction_pass.txt` - Pass 1 extraction and scoring
+2. ✅ `synthesis_pass.txt` - Pass 2 summary generation
+
+**Optional (Post-Processing):**
+3. ✅ `discovery.txt` - Question discovery
+4. ✅ `assignment.txt` - Question assignment
+5. ✅ `merger.txt` - Question merging
+
+### Deprecated Prompts: 12+
+
+**To Be Removed:**
+- 9 segment-based mining prompts (unified_miner_*.txt)
+- 4 separate evaluation prompts (*_evaluator.txt)
+- 2 old summary prompts (short_summary.txt, long_summary.txt)
+
+**Total:** 2 active core prompts vs 12+ deprecated prompts
+
+This represents a **radical simplification** of the system architecture while improving quality through whole-document context preservation.
+
+---
+
+## Key Design Decisions
+
+### Why Only 2 Core Prompts?
+
+1. **Whole-Document Processing**: No segmentation means no need for segment-specific prompts
+2. **Unified Extraction**: All entity types extracted together, not separately
+3. **Integrated Scoring**: Scoring happens during extraction, not after
+4. **Absolute Importance**: No tiers or episode-level ranking needed
+5. **Speaker Inference Built-In**: No separate speaker attribution pass
+
+### Why This Is Better
+
+- **Simpler**: Single clear path, no parallel systems
+- **Faster**: 2 API calls vs N+1 calls
+- **Better Quality**: Complete context preserved, no fragmentation
+- **Lower Cost**: Fewer tokens, fewer API calls
+- **Easier to Maintain**: Only 2 core prompts to optimize
+
+---
+
+## Migration Status
+
+### Completed ✅
+- ✅ Two-pass pipeline implemented
+- ✅ Extraction pass prompt enhanced
+- ✅ Synthesis pass prompt active
+- ✅ Integration with System2Orchestrator
+- ✅ Database storage layer
+- ✅ Validation and repair logic
+
+### To Do 🔨
+- Move deprecated prompts to `_deprecated/` folder
+- Update GUI to use two-pass by default
+- Add configuration toggle for architecture selection
+- Comprehensive testing with sample videos
+- Performance benchmarking vs old system
+- Documentation updates
+
+---
 
 ## Notes
 
-- All prompts return structured JSON output (except long_summary.txt which returns plain text)
-- Prompts include extensive examples and anti-examples
-- Prompts enforce strict output schemas with validation
-- Most prompts include "worked examples" to demonstrate expected behavior
-- Prompts are designed to be model-agnostic (work with GPT-4, Claude, Gemini, Qwen, etc.)
-
+- The two-pass architecture is **fully implemented and functional**
+- All processing flows through `TwoPassPipeline`
+- The system is **claim-centric** with absolute importance scoring
+- Claims are **globally comparable** across all episodes
+- User curation is built-in with accept/reject decisions
+- Speaker inference is integrated, not a separate step
+- The old segment-based HCE approach is being phased out

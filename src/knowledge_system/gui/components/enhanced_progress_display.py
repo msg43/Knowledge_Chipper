@@ -28,8 +28,8 @@ class TranscriptionProgressDisplay(QFrame):
         self.setStyleSheet(
             """
             QFrame {
-                background-color: #f8f9fa;
-                border: 2px solid #dee2e6;
+                background-color: #2d2d2d;
+                border: 2px solid #3c3c3c;
                 border-radius: 8px;
                 margin: 5px;
             }
@@ -405,7 +405,7 @@ class CloudTranscriptionStatusDisplay(QFrame):
         self.cloud_progress.setStyleSheet(
             """
             QProgressBar {
-                background-color: #ffffff;
+                background-color: #3c3c3c;
                 border: 1px solid #3498db;
                 border-radius: 3px;
                 text-align: center;
@@ -497,8 +497,8 @@ class PipelineProgressDisplay(QFrame):
         self.setFrameStyle(QFrame.Shape.Box)
         self.setStyleSheet("""
             QFrame {
-                background-color: #f8f9fa;
-                border: 2px solid #dee2e6;
+                background-color: #2d2d2d;
+                border: 2px solid #3c3c3c;
                 border-radius: 8px;
                 margin: 5px;
             }

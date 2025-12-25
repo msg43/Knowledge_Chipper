@@ -272,6 +272,11 @@ class ClaimStore:
                 claim.claim_type = claim_data.claim_type
                 claim.domain = getattr(claim_data, "domain", None)
                 claim.tier = claim_data.tier
+                
+                # Speaker attribution (from Pass 1 LLM inference)
+                claim.speaker = self._extract_speaker_from_claim_data(
+                    claim_data, session, source_id
+                )
 
                 # Scores: Store as JSON (canonical format matching HCE schema and GetReceipts API)
                 if hasattr(claim_data, "scores") and claim_data.scores:
@@ -832,6 +837,53 @@ class ClaimStore:
                 results.append(claim_dict)
 
             return results
+    
+    def _extract_speaker_from_claim_data(
+        self, claim_data, session, source_id: str
+    ) -> str:
+        """
+        Extract speaker attribution from claim data.
+        
+        Priority order:
+        1. Speaker field from Pass 1 LLM (if present and not generic)
+        2. Speaker from first evidence span's segment (fallback for diarized content)
+        3. "Unknown" (default)
+        
+        Args:
+            claim_data: Claim data from Pass 1 extraction
+            session: SQLAlchemy session
+            source_id: Source ID for segment lookup
+            
+        Returns:
+            Speaker name or "Unknown"
+        """
+        from .models import Segment
+        
+        # Priority 1: Speaker from Pass 1 LLM inference
+        speaker = getattr(claim_data, "speaker", None)
+        
+        # If speaker is present and not a generic label, use it
+        if speaker and speaker not in ["Unknown", "SPEAKER_00", "SPEAKER_01", "SPEAKER_02", "SPEAKER_03"]:
+            return speaker
+        
+        # Priority 2: Try to get from segment (for diarized content with user-assigned names)
+        if claim_data.evidence and len(claim_data.evidence) > 0:
+            first_evidence = claim_data.evidence[0]
+            if first_evidence.segment_id:
+                # Generate fully qualified segment_id
+                fully_qualified_segment_id = f"{source_id}_{first_evidence.segment_id}"
+                
+                segment = session.query(Segment).filter_by(
+                    segment_id=fully_qualified_segment_id
+                ).first()
+                
+                if segment and segment.speaker:
+                    # Only use if it's not a generic label
+                    if segment.speaker not in ["Unknown", "SPEAKER_00", "SPEAKER_01", "SPEAKER_02", "SPEAKER_03"]:
+                        return segment.speaker
+        
+        # Priority 3: Default to Unknown
+        return "Unknown"
 
     def _update_fts_indexes(
         self, source_id: str, fts_id: str | None, outputs: PipelineOutputs

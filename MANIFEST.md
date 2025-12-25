@@ -45,10 +45,13 @@ Complete inventory of all files in the Knowledge Chipper codebase with descripti
 - `ARCHIVE_VALIDATION_FIX.md` - Fix for archive validation issues
 - `CHANGELOG.md` - Chronological record of all notable changes to the project
 - `CLAUDE.md` - Guidance document for Claude Code AI assistant when working with this codebase
+- `DIARIZATION_DEPRECATED.md` - Documentation of diarization system deprecation: removed complex 6-stage audio processing pipeline in favor of LLM-based speaker inference from content (simpler, faster, more accurate)
+- `AUTO_SYNC_IMPLEMENTATION_COMPLETE.md` - **NEW (Dec 22, 2025):** Auto-sync implementation with close protection: items automatically sync to GetReceipts on accept, close warning prevents data loss, offline support with queue-for-sync, follows standard best practices (Gmail/Slack patterns)
+- `EXTRACT_TAB_UI_IMPROVEMENTS.md` - **NEW (Dec 22, 2025):** Extract tab UI improvements: consistent dark theme, removed tier filter, renamed Video→Source, compact inline review status, dual progress bars (current file + batch)
 - `CODE_DUPLICATION_ELIMINATION.md` - Refactoring to eliminate 70+ lines of duplicated code in summarization tab by extracting helper methods for settings building and worker creation
 - `COLOR_CODED_AND_THUMBNAIL_FIX.md` - Fix for color coding and thumbnail display issues
 - `CONTRIBUTING.md` - Guidelines for contributing to the project (code style, PR process, testing)
-- `CURRENT_ACTIVE_PROMPTS.md` - Full text of Pass 1 (mining) and Pass 2 (evaluation) prompts currently used in the active HCE pipeline
+- `CURRENT_ACTIVE_PROMPTS.md` - Full text and documentation of the 2 prompts used in the active two-pass architecture: Pass 1 (extraction_pass.txt - whole-document extraction & scoring) and Pass 2 (synthesis_pass.txt - long summary synthesis). Includes system integration diagram and usage examples. Both prompts are fully wired up and functional.
 - `DEPLOYMENT_READY.txt` - Deployment readiness checklist and status
 - `FINAL_INTEGRATION_STATUS.md` - Status of final system integration across all components
 - `FLAGSHIP_EVALUATOR_MODEL_DEFAULT_FIX.md` - Fix for Flagship Evaluator Model dropdown appearing empty on launch due to mismatch between stored model names and displayed names with "(Installed)" suffix
@@ -128,7 +131,7 @@ Complete inventory of all files in the Knowledge Chipper codebase with descripti
 
 - `docs/FILE_ORGANIZATION.md` - Comprehensive guide to output file organization: explains directory structure (transcripts/, summaries/, moc/, exports/), file naming conventions, relationship between transcript and summary files, database as source of truth, and how to find/regenerate files. Addresses common confusion about where files are saved and why they don't overwrite each other.
 - `ARCHITECTURE_WEB_CANONICAL.md` - Complete architecture documentation for web-canonical implementation where GetReceipts Supabase is single source of truth and Knowledge_Chipper acts as ephemeral processor. Documents philosophy, workflows, database schemas, user experience, API endpoints, and rollback instructions.
-- `PROMPT_INVENTORY.md` - Complete catalog of all prompts in the system: mining prompts (unified_miner variants for different content types and selectivity levels), evaluation prompts (flagship_evaluator, entity-specific evaluators), summary generation prompts, speaker attribution prompts, question mapper prompts, and legacy/deprecated prompts. Includes prompt selection logic and versioning conventions.
+- `PROMPT_INVENTORY.md` - Complete catalog of all prompts in the system: ACTIVE two-pass architecture uses 2 core prompts (extraction_pass.txt + synthesis_pass.txt) plus 3 optional question mapper prompts; documents 15 deprecated HCE segment-based prompts; explains architecture comparison, system integration, and migration status. Both active prompts are fully wired up and functional.
 - `VESTIGIAL_CODE_ANALYSIS.md` - Comprehensive analysis of unused/vestigial code from pre-unified-pipeline architecture, including old extraction modules (people.py, glossary.py, concepts.py, skim.py), unused prompt files (judge_high/low variants), and unimplemented features (relations, contradictions). Documents architecture evolution and provides removal recommendations.
 - `VESTIGIAL_CODE_REMOVAL_COMPLETE.md` - Completion documentation for vestigial code cleanup: moved 4 old extraction modules and 12 unused prompt files to _deprecated/, updated __init__.py, verified all imports still work. Includes before/after architecture comparison, verification tests, and rollback plan.
 - `VESTIGIAL_PROMPT_PICKER_REMOVED.md` - Documentation of removal of non-functional prompt file picker from Summarization tab
@@ -536,9 +539,10 @@ Core orchestration and processing coordination.
 Database models, migrations, and service layer.
 
 - `__init__.py` - Database module initialization
-- `models.py` - SQLAlchemy models for all database tables, defining the comprehensive schema including Question* models
+- `models.py` - SQLAlchemy models for all database tables, defining the comprehensive schema including Question* models and ReviewQueueItem; **UPDATED (Dec 22, 2025):** Added speaker attribution fields (Claim.speaker, JargonTerm.introduced_by, Concept.advocated_by), added web-based claim merging fields (Claim.cluster_id, Claim.is_canonical_instance), removed Segment.speaker (deprecated)
 - `service.py` - Database service layer with high-level operations including question management methods; includes extraction checkpoint methods (Dec 2025) for auth failure recovery persistence
-- `claim_store.py` - Claim-centric storage operations for the HCE system
+- `review_queue_service.py` - Service for managing review queue items: load/save/update pending items for bulk review workflow persistence across sessions
+- `claim_store.py` - Claim-centric storage operations for the HCE system; **UPDATED (Dec 22, 2025):** Added _extract_speaker_from_claim_data() method to populate claims.speaker from Pass 1 LLM inference (priority) or segments.speaker (fallback)
 - `speaker_models.py` - Speaker and voice fingerprint models, re-exported from the unified models.py for backward compatibility
 - `system2_models.py` - System 2 processing job and checkpoint models for orchestration and LLM tracking
 - `alembic_migrations.py` - Alembic migration management
@@ -579,8 +583,11 @@ SQL migration files for database schema changes.
 - `system2_migration.py` - System 2 processing tables migration
 - `2025_12_07_persistent_speaker_profiles.sql` - Persistent speaker profiles for cross-episode voice recognition
 - `2025_12_20_claims_first_support.sql` - Claims-first pipeline database schema: new columns for transcript source/quality, candidate_claims table for re-evaluation, claims_first_processing_log for metrics
+- `2025_12_22_add_speaker_to_entities.sql` - **NEW:** Add speaker attribution to entity tables (claims.speaker, jargon.introduced_by, concepts.advocated_by), add web-based claim merging support (cluster_id, is_canonical_instance), migrate existing data from segments.speaker, deprecate segment-level speaker attribution
+- `2025_12_22_multi_profile_scoring.sql` - Multi-profile scoring system for claims
 - `2025_12_21_add_youtube_ai_summary.sql` - **NEW (Dec 2025):** YouTube AI summary integration: adds youtube_ai_summary, youtube_ai_summary_fetched_at, youtube_ai_summary_method columns to media_sources for storing YouTube's AI-generated summaries alongside Knowledge_Chipper summaries
 - `2025_12_22_multi_profile_scoring.sql` - Multi-profile scoring system: dimensions JSON, profile_scores JSON, best_profile TEXT, temporal_stability REAL, scope REAL columns with indexes
+- `2025_12_22_review_queue.sql` - Review queue table for bulk review workflow persistence: stores pending/accepted/rejected items across sessions until synced to GetReceipts
 
 ### EXAMPLES/
 
@@ -631,12 +638,16 @@ Reusable GUI components.
 
 - `__init__.py` - Components module initialization
 - `base_tab.py` - Base class for all tab implementations
+- `bulk_action_toolbar.py` - Toolbar for bulk review actions (Accept/Reject/Set Tier) that appears when items are selected in review queue
 - `completion_summary.py` - Completion summary display widget
 - `enhanced_error_dialog.py` - Enhanced error dialog with detailed information
 - `enhanced_progress_display.py` - Enhanced progress display with rich formatting; includes PipelineProgressDisplay class (Dec 2025) for 6-stage claims-first pipeline with batch mode, pause/resume, quality warnings
 - `file_operations.py` - File operation utilities for GUI
+- `filter_bar.py` - Horizontal filter bar for review queue with Type, Video, Status, Tier, and Search filters
 - `model_preloader.py` - Model preloading widget for Whisper models
 - `progress_tracking.py` - Progress tracking components
+- `review_dashboard.py` - Collapsible dashboard showing real-time processing and review statistics (videos processed, items extracted, pending/accepted/rejected counts)
+- `review_queue.py` - Unified review queue components: ReviewItem data class, ReviewQueueModel (QAbstractTableModel), ReviewQueueFilterModel (QSortFilterProxyModel), ReviewQueueView (QTableView)
 - `rich_log_display.py` - Rich log display with syntax highlighting
 - `simple_progress_bar.py` - Simple progress bar widget
 
@@ -719,6 +730,7 @@ Specialized widgets.
 Background worker threads for GUI operations.
 
 - `__init__.py` - Workers module initialization
+- `auto_sync_worker.py` - **NEW (Dec 22, 2025):** Background worker for auto-syncing accepted items to GetReceipts immediately after acceptance; handles offline gracefully by queuing for retry; includes speaker attribution in uploaded data
 - `dmg_update_worker.py` - DMG update checker worker
 - `ffmpeg_installer.py` - FFmpeg installation worker
 - `processing_workers.py` - Processing operation workers; includes ClaimsFirstWorker class (Dec 2025) with stage signals, pause/resume/cancel, quality warning signals
@@ -799,27 +811,46 @@ ML models for HCE.
 
 ##### PROCESSORS/HCE/PROMPTS/
 
-Prompt templates for HCE (13 prompt files).
+Prompt templates for legacy HCE system (15 prompt files - DEPRECATED).
 
-- `concepts_evaluator.txt` - Concepts evaluation prompt
-- `flagship_evaluator.txt` - Flagship evaluation prompt
-- `jargon_evaluator.txt` - Jargon evaluation prompt
-- `long_summary.txt` - Long-form summary generation prompt
-- `people_evaluator.txt` - People/entity evaluation prompt
-- `short_summary.txt` - Short summary generation prompt
-- `unified_miner_conservative.txt` - Conservative mining prompt
-- `unified_miner_document.txt` - Document-specific mining prompt
-- `unified_miner_liberal.txt` - Liberal mining prompt
-- `unified_miner_moderate.txt` - Moderate mining prompt (default)
-- `unified_miner_transcript_own.txt` - Own-transcript mining prompt (V1, verbose with extensive examples)
-- `unified_miner_transcript_own_V2.txt` - Own-transcript mining prompt V2 (concise, ~258 lines)
-- `unified_miner_transcript_own_V3.txt` - Own-transcript mining prompt V3 (recommended): concise structure with worked example, mental model calibration list, anti-hallucination safeguards, and speaker entity handling
-- `unified_miner_transcript_third_party.txt` - Third-party transcript mining prompt
-- `unified_miner.txt` - Base unified mining prompt
+**LEGACY PROMPTS (Segment-Based Architecture - Being Phased Out):**
+- `concepts_evaluator.txt` - Concepts evaluation prompt (legacy)
+- `flagship_evaluator.txt` - Flagship evaluation prompt (legacy - functionality merged into two-pass extraction_pass.txt)
+- `jargon_evaluator.txt` - Jargon evaluation prompt (legacy)
+- `long_summary.txt` - Long-form summary generation prompt (legacy - superseded by two-pass synthesis_pass.txt)
+- `people_evaluator.txt` - People/entity evaluation prompt (legacy)
+- `short_summary.txt` - Short summary generation prompt (legacy)
+- `unified_miner_conservative.txt` - Conservative mining prompt (legacy)
+- `unified_miner_document.txt` - Document-specific mining prompt (legacy)
+- `unified_miner_liberal.txt` - Liberal mining prompt (legacy)
+- `unified_miner_moderate.txt` - Moderate mining prompt (legacy)
+- `unified_miner_transcript_own.txt` - Own-transcript mining prompt V1 (legacy)
+- `unified_miner_transcript_own_V2.txt` - Own-transcript mining prompt V2 (legacy)
+- `unified_miner_transcript_own_V3.txt` - Own-transcript mining prompt V3 (legacy)
+- `unified_miner_transcript_third_party.txt` - Third-party transcript mining prompt (legacy)
+- `unified_miner.txt` - Base unified mining prompt (legacy)
+
+**Note:** These prompts are being phased out in favor of the two-pass architecture (see PROCESSORS/TWO_PASS/ below).
+
+#### PROCESSORS/TWO_PASS/
+
+**NEW ARCHITECTURE (December 2025):** Two-pass whole-document processing system.
+
+- `__init__.py` - Two-pass module initialization and public API exports
+- `pipeline.py` - TwoPassPipeline orchestrator: coordinates extraction → synthesis passes
+- `extraction_pass.py` - Pass 1: Extract and score all entities from complete document in one API call
+- `synthesis_pass.py` - Pass 2: Generate world-class long summary from Pass 1 results
+
+##### PROCESSORS/TWO_PASS/PROMPTS/
+
+**ACTIVE PROMPTS (2 prompts - this is the current system):**
+
+- `extraction_pass.txt` - **ACTIVE:** Pass 1 extraction prompt; processes entire transcripts in one API call; extracts and scores all entities (claims, jargon, people, mental models); includes 6-dimension scoring with weighted formula, speaker inference with confidence, rejection proposals, evidence spans for all entities, and 5 worked examples; replaces 11 old segment-based prompts; enhanced December 2025
+- `synthesis_pass.txt` - **ACTIVE:** Pass 2 synthesis prompt; generates world-class 3-5 paragraph summary from high-importance claims (≥7.0); integrates all entity types thematically; uses YouTube AI summary as reference; sophisticated analytical prose with thematic organization
 
 #### PROCESSORS/QUESTION_MAPPER/
 
-Question mapping system (NEW: November 2025).
+Question mapping system (NEW: November 2025) - Optional post-processing feature.
 
 - `__init__.py` - Question mapper module initialization
 - `assignment.py` - Claim-to-question assignment stage (Stage 3)
@@ -831,7 +862,7 @@ Question mapping system (NEW: November 2025).
 
 ##### PROCESSORS/QUESTION_MAPPER/PROMPTS/
 
-Question mapper LLM prompts (3 prompts).
+Question mapper LLM prompts (3 prompts - optional feature).
 
 - `assignment.txt` - Claim assignment prompt with 7 relation types
 - `discovery.txt` - Question discovery prompt with taxonomy

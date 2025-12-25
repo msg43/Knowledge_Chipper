@@ -250,7 +250,12 @@ class SourceIDAlias(Base):
 
 
 class Segment(Base):
-    """Segments: Temporal chunks for sources (typically source_type='episode')."""
+    """Segments: Temporal chunks for sources (typically source_type='episode').
+    
+    Note: Speaker attribution is now stored at entity level (claims.speaker, 
+    jargon.introduced_by, concepts.advocated_by) via Pass 1 LLM inference.
+    Diarization system deprecated in favor of content-based speaker inference.
+    """
 
     __tablename__ = "segments"
 
@@ -262,7 +267,7 @@ class Segment(Base):
         nullable=False,
     )
 
-    speaker = Column(String)
+    # Note: speaker column removed - see class docstring
     start_time = Column(String)
     end_time = Column(String)
     text = Column(Text, nullable=False)
@@ -729,6 +734,9 @@ class Claim(Base):
     original_text = Column(Text)
     claim_type = Column(String)
     domain = Column(String)  # Broad field classification (e.g., 'physics', 'economics')
+    
+    # Speaker attribution (from Pass 1 LLM inference)
+    speaker = Column(String)  # Who made this claim
 
     # System evaluation (from HCE)
     tier = Column(String)
@@ -763,6 +771,10 @@ class Claim(Base):
     upload_status = Column(String, default="pending")
     upload_timestamp = Column(DateTime)
     upload_error = Column(Text)
+    
+    # Web-based claim merging support
+    cluster_id = Column(String)  # For grouping duplicate claims
+    is_canonical_instance = Column(Boolean, default=False)  # Primary version in cluster
 
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -1043,6 +1055,9 @@ class Concept(Base):
     name = Column(String, nullable=False, unique=True)
     description = Column(Text)
     definition = Column(Text)
+    
+    # Speaker attribution (from Pass 1 LLM inference)
+    advocated_by = Column(String)  # Who advocates for/uses this mental model
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -1139,6 +1154,9 @@ class JargonTerm(Base):
     term = Column(String, nullable=False, unique=True)
     definition = Column(Text)
     domain = Column(String)
+    
+    # Speaker attribution (from Pass 1 LLM inference)
+    introduced_by = Column(String)  # Who first used/explained this term
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -2113,6 +2131,76 @@ class QuestionJargon(Base):
     # Relationships
     question = relationship("Question", back_populates="jargon")
     jargon_term = relationship("JargonTerm")
+
+
+# ============================================================================
+# REVIEW WORKFLOW: Queue for bulk review and sync
+# ============================================================================
+
+
+class ReviewQueueItem(Base):
+    """
+    Review queue items for bulk review workflow.
+    
+    Stores extracted items (claims, jargon, people, concepts) pending user review.
+    Items persist across sessions until confirmed and synced to GetReceipts.
+    """
+
+    __tablename__ = "review_queue_items"
+
+    # Primary key
+    item_id = Column(String, primary_key=True)
+    
+    # Entity type: 'claim', 'jargon', 'person', 'concept'
+    entity_type = Column(String, nullable=False)
+    
+    # Review status: 'pending', 'accepted', 'rejected'
+    review_status = Column(String, nullable=False, default="pending")
+    
+    # Source attribution
+    source_id = Column(
+        String, ForeignKey("media_sources.source_id", ondelete="SET NULL")
+    )
+    source_title = Column(String)
+    
+    # Content (display text)
+    content = Column(Text, nullable=False)
+    
+    # Quality scores
+    tier = Column(String, default="C")
+    importance = Column(Float, default=0)
+    
+    # Raw data JSON (stores all entity-specific fields)
+    raw_data = Column(JSONEncodedType)
+    
+    # Reference to actual entity (if already created in respective table)
+    entity_ref_id = Column(String)
+    
+    # Sync tracking
+    synced_at = Column(DateTime)
+    sync_error = Column(Text)
+    
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    reviewed_at = Column(DateTime)
+
+    # Relationships
+    source = relationship("MediaSource", foreign_keys=[source_id])
+
+    __table_args__ = (
+        CheckConstraint(
+            "entity_type IN ('claim', 'jargon', 'person', 'concept')",
+            name="ck_review_entity_type",
+        ),
+        CheckConstraint(
+            "review_status IN ('pending', 'accepted', 'rejected')",
+            name="ck_review_status",
+        ),
+        Index("idx_review_queue_status", "review_status"),
+        Index("idx_review_queue_entity_type", "entity_type"),
+        Index("idx_review_queue_source", "source_id"),
+    )
 
 
 # Database initialization functions

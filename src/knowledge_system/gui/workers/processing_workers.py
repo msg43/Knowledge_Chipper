@@ -413,9 +413,6 @@ class TwoPassWorker(QThread):
         
         # Results storage
         self.results = []
-
-# Backward compatibility alias
-ClaimsFirstWorker = TwoPassWorker
     
     def pause(self) -> None:
         """Pause processing after current stage completes."""
@@ -681,3 +678,7 @@ ClaimsFirstWorker = TwoPassWorker
             logger.info(f"Whisper fallback requested for episode {episode_index}: {url}")
             # This would trigger a re-run with force_whisper=True
             # For now, just log - the full implementation would re-queue
+
+
+# Backward compatibility alias
+ClaimsFirstWorker = TwoPassWorker

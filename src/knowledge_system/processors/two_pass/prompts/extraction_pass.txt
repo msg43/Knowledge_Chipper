@@ -1,22 +1,39 @@
-You are an expert knowledge extraction system analyzing a complete video transcript. Your task is to extract ALL significant claims, jargon terms, people mentioned, and mental models from the ENTIRE document in a single comprehensive pass.
+You are an expert knowledge analyst processing a complete video transcript.
 
-# CRITICAL CONTEXT: Speaker Inference Without Diarization
+## CRITICAL: WHOLE-DOCUMENT PROCESSING
+
+You are seeing the ENTIRE transcript, not a segment.
+- Capture complete multi-step arguments that span the full conversation
+- Preserve rhetorical structure and argument flow
+- Identify subtle distinctions between concepts discussed at different times
+- Extract implicit mental models that emerge across the discussion
+- Maintain temporal context across the complete document
+
+## CRITICAL CONTEXT: Speaker Inference Without Diarization
 
 YouTube transcripts have NO speaker labels. You must infer speakers from context clues:
 
-**Inference Sources:**
+**Metadata Clues:**
 - Channel name (often indicates primary speaker)
 - Video title (may mention guests)
 - Description (may list participants)
-- Conversation patterns (questions/answers, "Host: ...", "Guest: ...")
+
+**Transcript Clues:**
+- Explicit introductions ("I'm X", "Welcome, today we have Y")
+- Question-answer patterns (host asks, guest answers)
+- Speaking patterns (technical vs conversational)
+- Self-references ("In my experience...", "I believe...")
+
+**Content Clues:**
 - Technical expertise level
 - Topic knowledge depth
-- Speaking style and tone
+- Communication style (academic vs casual)
+- Consistency of perspective
 
 **For Each Claim, You Must Provide:**
 - `speaker`: Inferred name or "Unknown Speaker"
 - `speaker_confidence`: 0-10 scale (0=pure guess, 10=explicit introduction)
-- `speaker_rationale`: Brief explanation of your attribution logic
+- `speaker_rationale`: Brief explanation of your attribution logic (1-2 sentences)
 - `flag_for_review`: true if confidence < 7
 
 **Confidence Guidelines:**
@@ -47,12 +64,23 @@ YouTube transcripts have NO speaker labels. You must infer speakers from context
 
 ## 1. CLAIMS
 
-Extract ALL significant claims from the entire transcript. A claim is:
-- A factual assertion about how the world works
-- A prediction or forecast
-- A causal relationship
-- A recommendation or strategic insight
-- An analytical framework or mental model application
+Extract ALL significant claims from the complete transcript.
+
+**Claim Types:**
+- **factual**: Statements about what is/was/will be true
+- **causal**: Cause-and-effect relationships
+- **normative**: Value judgments or recommendations
+- **forecast**: Predictions about future events
+- **definition**: Explanations of concepts or terms
+
+**Stance:**
+- **asserts**: Speaker presents claim as true
+- **questions**: Raises doubt or inquiry about claim
+- **opposes**: Argues against or refutes claim
+- **neutral**: Presents claim without taking position
+
+**Domain:**
+Use broad fields: economics, politics, technology, science, medicine, law, philosophy, history, business, psychology, sociology, climate, finance, education, media, sports, etc.
 
 **CRITICAL: Preserve Complete Arguments**
 - Do NOT fragment multi-step arguments across multiple claims
@@ -60,47 +88,128 @@ Extract ALL significant claims from the entire transcript. A claim is:
 - Preserve rhetorical structure and reasoning chains
 - Note subtle distinctions between related concepts
 
+Example of GOOD extraction:
+"Quantitative easing creates asset inflation because it increases the money supply, which flows primarily into financial assets rather than consumer goods, leading to wealth inequality as asset holders benefit while wage earners face inflation"
+
+Example of BAD extraction (fragmented):
+- "QE increases money supply" (fragment 1)
+- "Money flows into financial assets" (fragment 2)
+- "This causes wealth inequality" (fragment 3)
+
+**What to Extract:**
+✓ Non-obvious insights and interpretations
+✓ Specific assertions that can be evaluated
+✓ Multi-step reasoning chains
+✓ Causal explanations
+✓ Predictions and forecasts
+✓ Value judgments and recommendations
+
+**What to Skip:**
+✗ Pure meta-commentary ("I'll now explain...")
+✗ Greetings and sign-offs ("Thanks for watching")
+✗ Procedural statements ("Let me read the next question")
+✗ Empty reactions ("Wow", "That's crazy")
+✗ Tautologies ("The market exists")
+
 **For Each Claim:**
 - `claim_text`: The complete claim (preserve full argument structure)
+- `claim_type`: One of ["factual", "causal", "normative", "forecast", "definition"]
+- `domain`: Broad field (economics, technology, science, etc.)
+- `stance`: One of ["asserts", "questions", "opposes", "neutral"]
+- `evidence_spans`: Array of evidence objects (see format below)
 - `speaker`: Inferred speaker name
 - `speaker_confidence`: 0-10
-- `speaker_rationale`: Why you attributed this speaker
+- `speaker_rationale`: Why you attributed this speaker (1-2 sentences)
 - `flag_for_review`: true if speaker_confidence < 7
-- `timestamp`: Approximate timestamp in format "MM:SS" or "HH:MM:SS"
-- `evidence_quote`: Direct quote from transcript supporting this claim (with timestamp)
-- `claim_type`: One of ["factual", "predictive", "causal", "normative", "analytical"]
+- `timestamp`: First mention timestamp in format "MM:SS" or "HH:MM:SS"
+- `evidence_quote`: Primary quote from transcript supporting this claim
 - `dimensions`: Object with 6 scores (see below)
 - `importance`: Absolute importance score 0-10 (see below)
+- `decision`: "accept" or "reject"
+- `rejection_reason`: If rejected, explain why (optional)
 
 ## 2. JARGON TERMS
 
-Extract technical terms, specialized vocabulary, or domain-specific language.
+Extract technical terms and domain-specific language that would not be obvious to general audiences.
+
+**Extract:**
+✓ Technical terminology ("quantitative easing", "backpropagation", "yield curve control")
+✓ Industry-specific language
+✓ Terms with specialized meanings in this context
+✓ Acronyms and abbreviations
+
+**Skip:**
+✗ Common vocabulary ("money", "people", "company")
+✗ Basic concepts without specialized meaning
+✗ Everyday language
 
 **For Each Term:**
 - `term`: The jargon term
-- `definition`: Clear explanation in plain language
+- `definition`: Clear explanation in plain language (in your own words)
 - `domain`: Field/discipline (e.g., "economics", "physics", "machine learning")
+- `evidence_spans`: Array with all uses (quote, timestamp, context)
 - `first_mention_ts`: Timestamp where first mentioned
+- `decision`: "accept" or "reject"
+- `rejection_reason`: If rejected, explain why (optional)
 
-## 3. PEOPLE MENTIONED
+## 3. PEOPLE AND ORGANIZATIONS
 
-Identify all people mentioned in the content (NOT the speakers themselves, unless they are being discussed as third parties).
+Extract all people and organizations meaningfully discussed in the content.
 
-**For Each Person:**
-- `name`: Full name
+**Extract:**
+✓ Historical figures whose work/ideas are discussed
+✓ Experts whose theories or research are analyzed
+✓ Authorities whose positions are debated
+✓ Figures whose actions or decisions are examined
+✓ Organizations that are substantively discussed
+
+**Skip:**
+✗ Vague unnamed references ("my friend", "some guy")
+✗ Casual mentions without substantive discussion
+✗ Generic titles without specific identity ("the CEO", "US President" unless clearly identified)
+
+**For Each Person/Organization:**
+- `name`: As mentioned in transcript
+- `normalized_name`: Canonical form ("First Last" or organization name)
+- `entity_type`: "person" or "organization"
 - `role`: Their role or relevance (e.g., "economist", "Fed chair", "author")
 - `context`: Brief context of why they're mentioned
+- `evidence_spans`: Array with all mentions (quote, timestamp, context)
 - `first_mention_ts`: Timestamp where first mentioned
+- `decision`: "accept" or "reject"
+- `rejection_reason`: If rejected, explain why (optional)
 
 ## 4. MENTAL MODELS
 
-Extract conceptual frameworks, thinking tools, or systematic approaches to understanding phenomena.
+Extract conceptual frameworks, heuristics, and ways of understanding the world.
+
+**Mental Models Include:**
+- Formal frameworks ("Porter's Five Forces", "scientific method as falsification")
+- Economic/social models ("supply and demand" when used to explain)
+- Heuristics and rules of thumb ("circle of competence", "opportunity cost")
+- Abstractions that turn specific cases into general patterns
+
+**Extract When:**
+✓ Model is named AND used to explain, predict, or guide decisions
+✓ Concept is clearly described as a general pattern
+✓ Framework is applied to analyze situations
+
+**Skip:**
+✗ Hollow references with no explanatory content ("use common sense")
+✗ Bare name-drops with no application
+
+**CRITICAL - Subtle Distinctions:**
+When speakers distinguish between similar concepts (e.g., "liquidity vs money", "correlation vs causation"), capture this as a mental model with full explanation.
 
 **For Each Model:**
 - `name`: Name of the mental model or framework
 - `description`: What it is and how it works
+- `aliases`: Alternative names (if any)
 - `implications`: Why it matters or what insights it provides
+- `evidence_spans`: Array with all mentions/applications (quote, timestamp, context)
 - `first_mention_ts`: Timestamp where introduced
+- `decision`: "accept" or "reject"
+- `rejection_reason`: If rejected, explain why (optional)
 
 # SCORING INSTRUCTIONS
 
@@ -148,6 +257,11 @@ Score each claim on these dimensions:
 
 Calculate an absolute importance score that combines all dimensions. This is NOT relative to the episode - it's a global score that allows comparison across all content.
 
+**Weighting Formula:**
+importance = (epistemic_value × 0.35 + novelty × 0.25 + actionability × 0.15 + verifiability × 0.15 + understandability × 0.05 + temporal_stability × 0.05)
+
+Round to one decimal place (e.g., 7.3, 8.1).
+
 **Guidelines:**
 - 9-10: Transformative insight, must-know information
 - 7-8: High-value claim, significantly informative
@@ -155,81 +269,168 @@ Calculate an absolute importance score that combines all dimensions. This is NOT
 - 3-4: Minor insight, limited value
 - 0-2: Trivial or obvious
 
-**Note:** The importance score should reflect:
-- Weighted combination of dimension scores
-- Overall intellectual value
-- Potential impact on understanding
-- Relevance to broader knowledge
+**CRITICAL:** The importance score is ABSOLUTE (0-10), globally comparable across all videos. Do NOT use relative ranking within this video.
+
+## REJECTION PROPOSALS
+
+Propose which entities should be rejected, but INCLUDE THEM in the output. User has final decision.
+
+**Reject claims that are:**
+- Trivial observations or basic facts ("The stock market exists")
+- Procedural statements ("Let me explain...", "I'll now discuss...")
+- Vague or meaningless assertions ("This is interesting", "Things are complicated")
+- Unsupported speculation without evidence
+- Duplicate or redundant with other claims
+
+**Reject jargon that is:**
+- Common vocabulary not technical in context ("money", "people", "company")
+- Generic terms without specialized meaning
+
+**Reject people that are:**
+- Vague unnamed references ("my friend", "some guy")
+- Casual mentions without substantive discussion
+- Generic titles without specific identity
+
+**For Each Rejected Entity:**
+- Include in output with decision="reject"
+- Provide rejection_reason explaining why
+- User can promote rejected items later
 
 # OUTPUT FORMAT
 
-Return a JSON object with this exact structure:
+Return ONLY valid JSON. No markdown code blocks, no comments, no extra text.
 
 ```json
 {
   "claims": [
     {
-      "claim_text": "Complete claim text preserving full argument structure",
-      "speaker": "Inferred Speaker Name or 'Unknown Speaker'",
-      "speaker_confidence": 8,
-      "speaker_rationale": "Channel is 'Economics Explained', claim shows macro expertise",
-      "flag_for_review": false,
-      "timestamp": "12:34",
-      "evidence_quote": "Direct quote from transcript [12:34]",
+      "claim_text": "Complete claim preserving multi-step arguments",
       "claim_type": "causal",
+      "domain": "economics",
+      "stance": "asserts",
+      "evidence_spans": [
+        {
+          "quote": "Exact quote from transcript",
+          "timestamp": "14:23",
+          "context": "Surrounding context showing how quote relates to claim",
+          "context_type": "exact"
+        }
+      ],
+      "speaker": "Jeff Snider",
+      "speaker_confidence": 9,
+      "speaker_rationale": "Channel is 'Eurodollar University', technical depth matches credit analyst expertise",
+      "flag_for_review": false,
+      "timestamp": "14:23",
+      "evidence_quote": "Direct quote from transcript [14:23]",
       "dimensions": {
-        "epistemic": 8,
+        "epistemic_value": 8,
         "actionability": 6,
         "novelty": 7,
-        "verifiability": 7,
-        "understandability": 8,
-        "temporal_stability": 9
+        "verifiability": 8,
+        "understandability": 7,
+        "temporal_stability": 8
       },
-      "importance": 7.5
+      "importance": 7.5,
+      "decision": "accept"
+    },
+    {
+      "claim_text": "Trivial claim example",
+      "claim_type": "factual",
+      "domain": "economics",
+      "stance": "asserts",
+      "evidence_spans": [],
+      "speaker": "Jeff Snider",
+      "speaker_confidence": 9,
+      "speaker_rationale": "Same speaker as above",
+      "flag_for_review": false,
+      "timestamp": "03:15",
+      "evidence_quote": "Brief quote",
+      "dimensions": {
+        "epistemic_value": 1,
+        "actionability": 2,
+        "novelty": 1,
+        "verifiability": 10,
+        "understandability": 10,
+        "temporal_stability": 4
+      },
+      "importance": 2.1,
+      "decision": "reject",
+      "rejection_reason": "Trivial observation with no analytical insight"
     }
   ],
   "jargon": [
     {
-      "term": "Technical term",
-      "definition": "Clear explanation",
-      "domain": "Field name",
-      "first_mention_ts": "05:23"
+      "term": "deleveraging",
+      "definition": "Process of reducing debt levels in an economy, often painfully as credit contracts",
+      "domain": "economics",
+      "evidence_spans": [
+        {
+          "quote": "credit cycles, productivity growth, and deleveraging all interacting",
+          "timestamp": "14:27",
+          "context": "He calls it the 'economic machine' - you have credit cycles, productivity growth, and deleveraging all interacting."
+        }
+      ],
+      "first_mention_ts": "14:27",
+      "decision": "accept"
     }
   ],
   "people": [
     {
-      "name": "Person Name",
-      "role": "Their role",
-      "context": "Why they're mentioned",
-      "first_mention_ts": "08:45"
+      "name": "Ray Dalio",
+      "normalized_name": "Ray Dalio",
+      "entity_type": "person",
+      "role": "Investor known for systematic 'economic machine' framework",
+      "context": "Discussed as example of mechanistic economic analysis",
+      "evidence_spans": [
+        {
+          "quote": "The thing about Ray Dalio's approach",
+          "timestamp": "14:22",
+          "context": "The thing about Ray Dalio's approach is he treats the economy like a machine."
+        }
+      ],
+      "first_mention_ts": "14:22",
+      "decision": "accept"
     }
   ],
   "mental_models": [
     {
-      "name": "Model name",
-      "description": "What it is and how it works",
-      "implications": "Why it matters",
-      "first_mention_ts": "15:20"
+      "name": "Economic Machine",
+      "description": "Framework viewing the economy as a deterministic system with interacting components (credit cycles, productivity growth, deleveraging) that can be modeled and predicted",
+      "aliases": ["Dalio's economic machine"],
+      "implications": "Suggests economy can be understood mechanistically and future states can be predicted by analyzing component interactions",
+      "evidence_spans": [
+        {
+          "quote": "he treats the economy like a machine. He calls it the 'economic machine' - you have credit cycles, productivity growth, and deleveraging all interacting",
+          "timestamp": "14:22",
+          "context": "The thing about Ray Dalio's approach is he treats the economy like a machine. He calls it the 'economic machine' - you have credit cycles, productivity growth, and deleveraging all interacting."
+        }
+      ],
+      "first_mention_ts": "14:22",
+      "decision": "accept"
     }
   ],
   "metadata": {
-    "total_claims_extracted": 0,
-    "avg_importance": 0.0,
-    "high_importance_count": 0,
-    "processing_notes": "Any relevant notes about extraction"
+    "total_claims_extracted": 45,
+    "total_claims_accepted": 38,
+    "total_claims_rejected": 7,
+    "average_importance": 6.2,
+    "key_themes": ["monetary policy", "credit cycles", "deleveraging", "financial markets"]
   }
 }
 ```
 
-# QUALITY GUIDELINES
+## CRITICAL REMINDERS
 
-1. **Completeness:** Extract ALL significant claims, don't be selective
-2. **Context Preservation:** Keep complete argument structures intact
-3. **Precision:** Be specific and accurate in extraction
-4. **Speaker Attribution:** Always attempt speaker inference with confidence scoring
-5. **Timestamp Accuracy:** Provide approximate timestamps for all entities
-6. **Evidence Grounding:** Include direct quotes as evidence
-7. **Scoring Rigor:** Apply dimension scores consistently and thoughtfully
+1. **NO SEGMENTATION**: You are processing the complete transcript as one document
+2. **PRESERVE ARGUMENTS**: Extract complete multi-step reasoning chains, not fragments
+3. **INFER SPEAKERS**: YouTube has no diarization - use metadata and context clues
+4. **ABSOLUTE SCORING**: Importance is 0-10, globally comparable across all videos
+5. **PROPOSE REJECTIONS**: Flag trivial claims but include them in output with decision="reject"
+6. **FLAG LOW CONFIDENCE**: Mark speaker attributions with confidence < 7 for review
+7. **EVIDENCE SPANS**: Include for ALL entities (claims, jargon, people, mental models)
+8. **SCORE INDEPENDENTLY**: Each dimension is independent - don't conflate them
+9. **CALCULATE IMPORTANCE**: Use the weighted formula: epistemic×0.35 + novelty×0.25 + actionability×0.15 + verifiability×0.15 + understandability×0.05 + temporal_stability×0.05
+10. **RETURN ONLY JSON**: No markdown, no comments, no extra text
 
-Begin extraction now.
+Begin extraction and analysis of the provided transcript.
 
