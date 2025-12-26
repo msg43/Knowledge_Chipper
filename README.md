@@ -29,6 +29,7 @@ Skip the Podcast is a macOS desktop application that extracts structured knowled
 - Paste YouTube URLs or playlists
 - Drag and drop local audio/video files (MP4, MP3, WAV, etc.)
 - Import documents (PDF, Word, Markdown, TXT)
+- **NEW:** Import podcaster-provided PDF transcripts with automatic YouTube matching
 
 **2. Automatic Processing**
 Use the **Extract Tab** to process content through the claims-first pipeline:
@@ -186,6 +187,55 @@ First upload auto-registers device with GetReceipts
 All future uploads authenticated automatically
   ↓
 No OAuth, no passwords, no browser popups!
+```
+
+---
+
+## New Features (December 2025)
+
+### PDF Transcript Import
+
+Import high-quality transcripts provided by podcasters with automatic YouTube video matching:
+
+**Features:**
+- 📄 **Import PDF transcripts** with speaker labels and timestamps preserved
+- 🔍 **Automatic YouTube matching** using 4 strategies (database fuzzy, title search, metadata search, LLM query)
+- 📊 **Quality scoring** based on speaker attribution, timestamps, and formatting
+- 🎯 **Confidence-based matching** with manual review for low-confidence matches
+- 📁 **Batch import** for folders of PDFs or CSV mapping files
+- 🔄 **Multi-transcript coexistence** - PDF, YouTube, and Whisper transcripts can all exist per episode
+- ⚙️ **Configurable priority** - Choose which transcript type to prefer for processing
+
+**Why This Matters:**
+- Podcaster-provided transcripts have **explicit speaker labels** (no diarization needed)
+- Professional formatting and **higher accuracy** than auto-generated transcripts
+- Works seamlessly with the **two-pass workflow** (no special handling required)
+
+**Access:** New "Import Transcripts" tab in the GUI
+
+### YouTube Data API Integration
+
+Official YouTube API for reliable metadata extraction:
+
+**Features:**
+- 🎯 **Official API** for metadata (guaranteed JSON structure, no parsing errors)
+- ⚡ **Batch optimization** - Fetch 50 videos in 1 API call (50x more efficient)
+- 📊 **Quota tracking** - 10,000 free lookups per day
+- 🔄 **Automatic fallback** to yt-dlp if API unavailable or quota exceeded
+- ✅ **Validation layer** - Handles both API and yt-dlp formats
+- 🎵 **Audio separation** - yt-dlp used only for downloads, API for metadata
+
+**Benefits:**
+- **Faster** - API is quicker than web scraping
+- **More reliable** - Won't break when YouTube updates their site
+- **Cleaner code** - No validation/cleanup needed for API responses
+- **Better separation** - Metadata and audio are independent operations
+
+**Configuration:**
+```yaml
+youtube_api:
+  enabled: true
+  api_key: "YOUR_API_KEY"  # Free from Google Cloud Console
 ```
 
 ---

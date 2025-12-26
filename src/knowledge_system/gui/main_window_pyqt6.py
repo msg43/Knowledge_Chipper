@@ -52,6 +52,7 @@ from .tabs import QueueTab  # Queue tab  # noqa: E402
 from .tabs import SummarizationTab  # Summarize tab  # noqa: E402
 from .tabs import TranscriptionTab  # Transcribe tab  # noqa: E402
 from .tabs.extract_tab import ExtractTab  # Extract tab (claims-first)  # noqa: E402
+from .tabs.import_transcripts_tab import ImportTranscriptsTab  # Import PDF transcripts  # noqa: E402
 
 logger = get_logger(__name__)
 
@@ -336,6 +337,10 @@ class MainWindow(QMainWindow):
         transcription_tab = TranscriptionTab(self)
         transcription_tab.navigate_to_tab.connect(self._navigate_to_tab)
         self.tabs.addTab(transcription_tab, "Transcribe")
+
+        # 2.5. Import Transcripts tab (PDF transcript import with YouTube matching)
+        import_transcripts_tab = ImportTranscriptsTab(self)
+        self.tabs.addTab(import_transcripts_tab, "Import Transcripts")
 
         # 3. Prompts tab (prompt and schema management)
         prompts_tab = PromptsTab(self)

@@ -2457,6 +2457,26 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
         self.claims_first_checkbox.toggled.connect(self._on_setting_changed)
         layout.addWidget(self.claims_first_checkbox, 1, 5)
 
+        # Force Whisper Transcription checkbox (Row 2, column 4)
+        self.force_whisper_checkbox = QCheckBox("Force Whisper Transcription")
+        self.force_whisper_checkbox.setChecked(False)  # Default disabled
+        self.force_whisper_checkbox.setToolTip(
+            "<b>Force Whisper Transcription</b><br/><br/>"
+            "Skip YouTube transcript API and always download audio + transcribe with Whisper.<br/><br/>"
+            "Use this for:<br/>"
+            "• Higher quality transcripts (Whisper often more accurate)<br/>"
+            "• Videos with poor auto-generated captions<br/><br/>"
+            "⚠️ <b>WARNING:</b> Much slower (3-5 minute delays between videos to avoid bot detection)"
+        )
+        self.force_whisper_checkbox.toggled.connect(self._on_force_whisper_toggled)
+        layout.addWidget(self.force_whisper_checkbox, 2, 4)
+
+        # Warning label for Force Whisper (shown when checked)
+        self.force_whisper_warning = QLabel("⚠️ Slow mode: 3-5 min delays")
+        self.force_whisper_warning.setStyleSheet("color: orange; font-weight: bold; font-size: 10px;")
+        self.force_whisper_warning.setVisible(False)
+        layout.addWidget(self.force_whisper_warning, 2, 5)
+
         # YouTube to RSS mapping checkbox
         # POSITIONED ABOVE Proxy selector per user request
         self.enable_rss_mapping_checkbox = QCheckBox("Enable YT→RSS")
@@ -4000,10 +4020,16 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
 
     # Hardware recommendations methods moved to Settings tab
 
+    def _on_force_whisper_toggled(self, checked: bool):
+        """Show/hide warning when force whisper is toggled."""
+        self.force_whisper_warning.setVisible(checked)
+        self._save_settings()
+
     def _get_transcription_settings(self) -> dict[str, Any]:
         """Get current transcription settings."""
         return {
             "model": self.model_combo.currentText(),
+            "force_whisper": self.force_whisper_checkbox.isChecked(),
             "device": self.device_combo.currentText(),
             "language": self.language_combo.currentText(),  # Always pass the language, including "auto"
             "format": self.format_combo.currentText(),
@@ -4218,6 +4244,15 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
                 )
                 # Color-coded checkbox is deprecated - always false
                 self.color_coded_checkbox.setChecked(False)
+                
+                # Load force whisper checkbox state
+                self.force_whisper_checkbox.setChecked(
+                    self.gui_settings.get_checkbox_state(
+                        self.tab_name, "force_whisper", False  # Default disabled
+                    )
+                )
+                # Update warning visibility based on loaded state
+                self.force_whisper_warning.setVisible(self.force_whisper_checkbox.isChecked())
 
             finally:
                 # Always restore signals
@@ -4373,6 +4408,13 @@ class TranscriptionTab(BaseTab, FileOperationsMixin):
                 self.tab_name,
                 "enable_rss_mapping",
                 self.enable_rss_mapping_checkbox.isChecked(),
+            )
+            
+            # Save force whisper checkbox state
+            self.gui_settings.set_checkbox_state(
+                self.tab_name,
+                "force_whisper",
+                self.force_whisper_checkbox.isChecked(),
             )
 
             # Save proxy mode

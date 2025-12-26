@@ -99,8 +99,8 @@ class TwoPassPipeline:
     def process(
         self,
         source_id: str,
-        transcript: str,
-        metadata: dict[str, Any],
+        transcript: str = None,
+        metadata: dict[str, Any] = None,
         youtube_ai_summary: Optional[str] = None,
     ) -> TwoPassResult:
         """
@@ -108,7 +108,7 @@ class TwoPassPipeline:
         
         Args:
             source_id: Unique identifier for source (e.g., YouTube video ID)
-            transcript: Complete transcript text
+            transcript: Complete transcript text (optional - will be auto-selected if not provided)
             metadata: Source metadata (title, channel, description, etc.)
             youtube_ai_summary: Optional YouTube AI-generated summary
         
@@ -119,6 +119,45 @@ class TwoPassPipeline:
         stats = {}
         
         logger.info(f"Starting two-pass pipeline for source: {source_id}")
+        
+        # If transcript not provided, get best available using TranscriptManager
+        if transcript is None:
+            from ...services.transcript_manager import TranscriptManager
+            from ...database import DatabaseService
+            
+            db_service = DatabaseService()
+            transcript_manager = TranscriptManager(db_service=db_service)
+            
+            best_transcript = transcript_manager.get_best_transcript(source_id)
+            
+            if not best_transcript:
+                raise ValueError(f"No transcript found for source: {source_id}")
+            
+            transcript = best_transcript.transcript_text
+            
+            logger.info(
+                f"📄 Auto-selected transcript type: {best_transcript.transcript_type} "
+                f"(quality: {best_transcript.quality_score if best_transcript.quality_score else 'N/A'})"
+            )
+            
+            stats['transcript_type'] = best_transcript.transcript_type
+            stats['transcript_quality'] = best_transcript.quality_score
+            
+            # Get metadata from source if not provided
+            if metadata is None:
+                source = db_service.get_source(source_id)
+                if source:
+                    metadata = {
+                        "title": source.title,
+                        "channel": source.uploader,
+                        "description": source.description,
+                        "upload_date": source.upload_date,
+                    }
+                else:
+                    metadata = {}
+        
+        if metadata is None:
+            metadata = {}
         
         # Pass 1: Extraction
         logger.info("=" * 60)

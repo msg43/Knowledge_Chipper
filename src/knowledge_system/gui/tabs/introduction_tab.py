@@ -85,6 +85,7 @@ class IntroductionTab(BaseTab):
             <br>• <b>Audio Files:</b> Podcasts, interviews, lectures (MP3, WAV, M4A, FLAC, OGG, AAC, OPUS)
             <br>• <b>Video Files:</b> Local recordings, screen captures (MP4, WEBM, MOV, AVI, MKV)
             <br>• <b>Documents:</b> Research papers, articles, reports (PDF, Word, Markdown)
+            <br>• <b>PDF Transcripts:</b> 🆕 Import podcaster-provided transcripts with automatic YouTube matching
             <br>• <b>RSS Feeds:</b> Automatically monitor and process new episodes
 
             <br><br><b>🌟 How It Works (Desktop + Web):</b>
@@ -181,7 +182,18 @@ class IntroductionTab(BaseTab):
             <br><b>Batch mode:</b> Select entire folders to process multiple files at once
             <br><b>Output:</b> Transcript files with speaker labels and timestamps
 
-            <br><br><b style="color: #007acc;">3. Prompts</b> - Customize What Gets Extracted
+            <br><br><b style="color: #007acc;">3. Import Transcripts</b> 🆕 - Import High-Quality PDF Transcripts
+            <br><b>What you'll do:</b> Import podcaster-provided PDF transcripts with speaker labels already included
+            <br><b>Why this matters:</b> Professional transcripts have explicit speaker attribution and better accuracy
+            <br><b>Key features:</b>
+            <br>• <b>Single import:</b> Browse for one PDF, optionally provide YouTube URL
+            <br>• <b>Batch import:</b> Scan entire folders of PDFs
+            <br>• <b>Auto-matching:</b> System automatically finds the YouTube video using 4 strategies
+            <br>• <b>Multi-transcript:</b> PDF, YouTube, and Whisper transcripts can coexist per episode
+            <br>• <b>Quality priority:</b> System uses highest-quality transcript (PDF > YouTube > Whisper)
+            <br><b>Perfect for:</b> When podcasters provide official transcripts (better than auto-generated)
+
+            <br><br><b style="color: #007acc;">4. Prompts</b> - Customize What Gets Extracted
             <br><b>What you'll do:</b> Edit the instructions that tell the AI what to look for and how to analyze content
             <br><b>Why this matters:</b> The AI follows written prompts (instructions) to extract claims. You can customize
             these to focus on what you care about - technical details, business insights, controversial arguments, etc.
@@ -192,7 +204,11 @@ class IntroductionTab(BaseTab):
             <br><b>What you'll see:</b> Text files containing the prompts, plus JSON schemas that define the output structure
             <br><b>Note:</b> The defaults work great for most content - only customize if you have specific needs
 
-            <br><br><b style="color: #007acc;">4. Summarize</b> - The Analysis Engine
+            <br><br><b style="color: #007acc;">5. Extract</b> - Claims-First Extraction
+            <br><b>What you'll do:</b> Process transcripts through the claims-first pipeline
+            <br><b>Output:</b> Structured claims with scoring, speaker attribution, and quality assessment
+
+            <br><br><b style="color: #007acc;">6. Summarize</b> - The Analysis Engine
             <br><b>What you'll do:</b> This is where transcripts become structured knowledge
             <br><b>The process:</b>
             <br>1. Select transcript files (single file or entire folders)
@@ -209,13 +225,13 @@ class IntroductionTab(BaseTab):
             <br><b>Output files:</b> Markdown summaries, CSV exports, and database entries you can review/edit
             <br><b>Time estimate:</b> ~30-90 seconds per 10,000 words, depending on AI model speed
 
-            <br><br><b style="color: #007acc;">5. Queue</b> - Monitor Processing Pipeline
+            <br><br><b style="color: #007acc;">7. Queue</b> - Monitor Processing Pipeline
             <br><b>What you'll do:</b> Watch your files as they move through the processing pipeline
             <br><b>What you'll see:</b> Real-time status of transcription, speaker detection, and claim extraction
             <br><b>When to use:</b> Check progress on long-running jobs, see if anything got stuck
             <br><b>Note:</b> This is for monitoring - actual review happens on the web at getreceipts.org
 
-            <br><br><b style="color: #007acc;">6. Monitor</b> - Automated Background Processing
+            <br><br><b style="color: #007acc;">8. Monitor</b> - Automated Background Processing
             <br><b>What you'll do:</b> Set up a folder for automatic monitoring, then forget about it
             <br><b>How it works:</b>
             <br>1. Choose a folder to watch (e.g., your Downloads folder or podcast directory)
@@ -236,10 +252,12 @@ class IntroductionTab(BaseTab):
             <br>• <b>Lecture series:</b> Professor uploads weekly lectures → all automatically analyzed
             <br><b>Control:</b> Stop/start watching anytime, change folders, adjust file patterns on the fly
 
-            <br><br><b style="color: #007acc;">7. Settings</b> - One-Time Setup
+            <br><br><b style="color: #007acc;">9. Settings</b> - One-Time Setup
             <br><b>What you'll do:</b> Configure API keys, install AI models, and set preferences
             <br><b>Required:</b> Choose local AI (free via Ollama) or cloud AI (paid via OpenAI/Anthropic)
-            <br><b>Optional:</b> Add PacketStream credentials if you want to process YouTube videos
+            <br><b>Optional:</b>
+            <br>• Add YouTube Data API key for reliable metadata (free 10,000 lookups/day)
+            <br>• Add PacketStream credentials if you want to process YouTube videos
             <br><b>Device Linking:</b> Get your claim code here to link this device to your GetReceipts account
             <br>• <b>Auto-upload:</b> Enabled by default - claims automatically sync to web after processing
             <br>• <b>Claim code:</b> Use this code on getreceipts.org/dashboard to link your device
@@ -253,9 +271,9 @@ class IntroductionTab(BaseTab):
         parent_layout.addWidget(tabs_text)
 
     def _create_youtube_guide_section(self, parent_layout: Any) -> None:
-        """Create YouTube bulk downloads guide section."""
+        """Create YouTube processing guide section."""
         # Section header
-        header_label = QLabel("📹 YouTube Bulk Downloads - Complete Setup Guide")
+        header_label = QLabel("📹 YouTube Video Processing - Two-Phase System")
         header_font = QFont()
         header_font.setPointSize(14)
         header_font.setBold(True)
@@ -267,142 +285,174 @@ class IntroductionTab(BaseTab):
 
         youtube_text = QLabel(
             """
-            <b>⚠️ IMPORTANT: This is for processing 10+ YouTube videos. Skip this section if you only need 1-5 videos.</b>
+            <b>🚀 NEW: Two-Phase Transcript Acquisition (10-100x Faster!)</b>
 
-            <br><br><b>Why You Need This:</b>
-            <br>YouTube has bot detection that blocks bulk downloads from anonymous requests. The solution is to use
-            cookies from a <b>throwaway Google account</b> to authenticate downloads, combined with smart rate limiting
-            to avoid account flags.
+            <br><br><b>How It Works:</b>
+            <br>The system now uses an intelligent two-phase approach to get transcripts from YouTube:
+
+            <br><br><b style="color: #388e3c;">Phase 1: Rapid Metadata + Transcript Fetch (1-3 seconds per video)</b>
+            <br>• Fetches video metadata (title, description, duration, etc.) via YouTube API
+            <br>• Attempts to get official YouTube transcript (auto-generated or manual captions)
+            <br>• Uses burst pattern: processes 20 videos rapidly, then pauses 30-60 seconds (mimics human browsing)
+            <br>• <b>Result:</b> Most videos get transcripts instantly without downloading any audio!
+
+            <br><br><b style="color: #ff9800;">Phase 2: Selective Whisper Fallback (3-5 minutes per video)</b>
+            <br>• Only runs for videos that don't have YouTube transcripts available
+            <br>• Downloads audio file from YouTube
+            <br>• Transcribes with Whisper AI (no speaker diarization in fallback mode)
+            <br>• Uses slow, careful pacing (3-5 minute delays) to avoid bot detection
+            <br>• <b>Result:</b> High-quality Whisper transcripts for videos without captions
+
+            <br><br><b>🎯 What This Means For You:</b>
+            <br>• <b>Playlists with captions:</b> 100 videos processed in ~5-10 minutes (vs. 5-8 hours before!)
+            <br>• <b>Mixed playlists:</b> Fast for videos with captions, slow only for those without
+            <br>• <b>No setup required:</b> Works out of the box for most content
+            <br>• <b>User control:</b> New "Force Whisper" checkbox if you prefer Whisper quality over speed
+
+            <br><br><b style="color: #007acc;">Using the Force Whisper Option</b>
+            <br>In the <b>Transcribe</b> tab, you'll now see a checkbox: <b>"Force Whisper Transcription"</b>
+
+            <br><br><b>When to use it:</b>
+            <br>• YouTube's auto-generated captions are poor quality for your content
+            <br>• You need the highest accuracy possible (Whisper is often more accurate)
+            <br>• You're processing technical content where precision matters
+            <br>• You don't mind waiting longer for better quality
+
+            <br><br><b>What it does:</b>
+            <br>• Skips Phase 1 entirely (doesn't try YouTube transcripts)
+            <br>• Goes straight to Phase 2 (downloads audio + Whisper transcription)
+            <br>• Uses slow 3-5 minute delays between videos
+            <br>• <b>Warning label appears:</b> "⚠️ Slow mode: 3-5 min delays"
+
+            <br><br><b>Time comparison for 50 videos:</b>
+            <br>• <b>Default (two-phase):</b> 5-15 minutes if all have captions, up to 4 hours if none do
+            <br>• <b>Force Whisper:</b> 2.5-4 hours regardless (always downloads + transcribes)
+
+            <br><br><b style="color: #007acc;">Small Scale (1-10 videos) - No Setup Needed</b>
+            <br>For small batches, the system works without any configuration:
+            <br>1. Paste YouTube URLs in the <b>Transcribe</b> tab
+            <br>2. Check "Process automatically through entire pipeline"
+            <br>3. Click <b>Start Transcription</b>
+            <br>4. Phase 1 gets transcripts for videos with captions (~seconds)
+            <br>5. Phase 2 handles any videos without captions (~minutes each)
+            <br>6. Claims automatically upload to GetReceipts.org
+
+            <br><br><b style="color: #007acc;">Bulk Downloads (10+ videos) - Cookie Authentication</b>
+            <br>For larger batches or if you encounter rate limiting, use cookie authentication:
+
+            <br><br><b>Why cookies help:</b>
+            <br>• Phase 1 rarely needs them (metadata/transcript fetching is fast and light)
+            <br>• Phase 2 benefits from cookies (audio downloads can trigger bot detection)
+            <br>• Cookies authenticate you as a real user, not a bot
 
             <br><br><b style="color: #d32f2f;">🔒 Security First - Read This!</b>
-            <br><b style="color: #d32f2f;">NEVER use your main Google account for this!</b> YouTube may flag accounts doing
-            bulk downloads. Always create a dedicated throwaway account.
+            <br><b style="color: #d32f2f;">NEVER use your main Google account!</b> Create a throwaway account for bulk downloads.
 
-            <br><br><b>The Complete Setup Process:</b>
+            <br><br><b>Quick Cookie Setup (5 minutes):</b>
 
             <br><br><b style="color: #007acc;">Step 1: Create Throwaway Google Account</b>
-            <br>1. Go to <a href="https://accounts.google.com">accounts.google.com</a> and create a new Google account
-            <br>2. Use a name like "YouTube Downloader" or "Research Account" - doesn't matter
-            <br>3. <b>Write down the email and password</b> - you'll need them again when cookies expire
-            <br>4. Log in to YouTube with this account (visit youtube.com)
-            <br>5. This is your dedicated download account - <b>never use it for anything personal</b>
+            <br>1. Go to <a href="https://accounts.google.com">accounts.google.com</a> and create new account
+            <br>2. Log in to YouTube with this account
+            <br>3. This is your dedicated download account - never use for personal stuff
 
-            <br><br><b style="color: #007acc;">Step 2: Export Cookies from Throwaway Account</b>
-            <br>1. <b>Open incognito/private browsing window</b> (this is crucial!)
-            <br>   • Chrome: Ctrl+Shift+N (Windows) or Cmd+Shift+N (Mac)
-            <br>   • Firefox: Ctrl+Shift+P (Windows) or Cmd+Shift+P (Mac)
-            <br>   • Safari: File → New Private Window
-            <br>2. In the private window, go to YouTube and log in with your <b>throwaway account only</b>
-            <br>3. Install a cookie export extension in your browser:
-            <br>   • Chrome: "<b>Get cookies.txt LOCALLY</b>" extension (search Chrome Web Store)
-            <br>   • Firefox: "<b>cookies.txt</b>" add-on (search Firefox Add-ons)
-            <br>   • Make sure it's a reputable extension with good reviews
-            <br>4. With YouTube still open, click the extension icon
-            <br>5. Click "Export" or "Download" to save cookies as a <b>.txt file</b> (Netscape format)
-            <br>6. Save the file somewhere safe (e.g., Documents/youtube-cookies.txt)
-            <br>7. Close the incognito window
+            <br><br><b style="color: #007acc;">Step 2: Export Cookies</b>
+            <br>1. Open <b>incognito/private window</b> and log in to YouTube with throwaway account
+            <br>2. Install cookie export extension (Chrome: "Get cookies.txt LOCALLY", Firefox: "cookies.txt")
+            <br>3. Click extension icon → Export → Save as .txt file
+            <br>4. Close incognito window
 
-            <br><br><b style="color: #007acc;">Step 3: Configure Cookie Authentication in Skip the Podcast</b>
-            <br>1. Open Skip the Podcast Desktop → go to <b>Transcribe</b> tab
-            <br>2. Scroll down to find "<b>Cookie Authentication (Throwaway Account)</b>" section
-            <br>3. Check the box: <b>"Enable cookie-based authentication"</b>
-            <br>4. Click the <b>"Browse..."</b> button next to "Cookie file"
-            <br>5. Navigate to and select your youtube-cookies.txt file
-            <br>6. You should see the file path appear in the text box
+            <br><br><b style="color: #007acc;">Step 3: Configure in App</b>
+            <br>1. <b>Transcribe</b> tab → scroll to "Cookie Authentication" section
+            <br>2. Check "Enable cookie-based authentication"
+            <br>3. Click "Browse" and select your cookies.txt file
+            <br>4. Done! The system will now use cookies for Phase 2 downloads
 
-            <br><br><b style="color: #007acc;">Step 4: Configure Rate Limiting (Anti-Bot Protection)</b>
-            <br>In the same Transcribe tab, scroll to "<b>Rate Limiting (Anti-Bot Protection)</b>" section:
-            <br>• <b>Min delay:</b> 180 seconds (3 minutes) - <i>recommended default</i>
-            <br>• <b>Max delay:</b> 300 seconds (5 minutes) - <i>recommended default</i>
-            <br>• <b>Randomization:</b> 25% - <i>adds natural variation, keep this</i>
-            <br>• Check <b>"Disable proxies when cookies enabled"</b> - <i>highly recommended</i>
-            <br><br><b>What these settings mean:</b>
-            <br>The app will wait 3-5 minutes between each download (randomly varied by ±25%). This mimics human
-            behavior and prevents YouTube from flagging your throwaway account.
+            <br><br><b>⚡ New Time Estimates with Two-Phase System:</b>
+            <br><b>10 videos (all with captions):</b>
+            <br>• Phase 1: ~1-2 minutes (rapid transcript fetch)
+            <br>• Phase 2: Not needed!
+            <br>• <b>Total: 1-2 minutes</b> (vs. 30-50 minutes before)
 
-            <br><br><b style="color: #007acc;">Step 5: Start Bulk Downloads</b>
-            <br>1. In the <b>Transcribe</b> tab, paste your YouTube URLs (one per line) or a playlist URL
-            <br>2. Check <b>"Process automatically through entire pipeline"</b> if you want automatic analysis
-            <br>3. Check <b>"Enable Speaker Diarization"</b> if the videos have multiple speakers
-            <br>4. Click <b>"Start Transcription"</b>
-            <br>5. Sit back and let it run - downloads will proceed one at a time with delays between them
-            <br><br><b>Time estimates for bulk downloads:</b>
-            <br>• 10 videos: 30-50 minutes (download time) + processing time
-            <br>• 50 videos: 2.5-4 hours (download time) + processing time
-            <br>• 100 videos: 5-8 hours (download time) + processing time
-            <br>These are just download times - add transcription and analysis time on top
+            <br><br><b>50 videos (40 with captions, 10 without):</b>
+            <br>• Phase 1: ~5-10 minutes (gets 40 transcripts)
+            <br>• Phase 2: ~30-50 minutes (downloads + transcribes 10 videos)
+            <br>• <b>Total: 35-60 minutes</b> (vs. 2.5-4 hours before)
 
-            <br><br><b style="color: #ffa000;">⚡ Troubleshooting Common Issues</b>
+            <br><br><b>100 videos (all with captions):</b>
+            <br>• Phase 1: ~10-15 minutes (rapid transcript fetch)
+            <br>• Phase 2: Not needed!
+            <br>• <b>Total: 10-15 minutes</b> (vs. 5-8 hours before)
 
-            <br><br><b>Issue: "Sign in to confirm you're not a bot" errors even with cookies</b>
-            <br><b>Solution:</b> Your cookies may have expired. Repeat Step 2 to export fresh cookies from your throwaway account.
+            <br><br><b>100 videos (Force Whisper enabled):</b>
+            <br>• Phase 1: Skipped
+            <br>• Phase 2: ~5-8 hours (downloads + transcribes all 100)
+            <br>• <b>Total: 5-8 hours</b> (same as before, but higher quality)
 
-            <br><br><b>Issue: Downloads work for a while then start failing</b>
-            <br><b>Solution:</b> YouTube flagged your usage. Stop downloads for 24 hours, then:
-            <br>• Increase delays: Try min=300 (5 min), max=600 (10 min)
-            <br>• Export fresh cookies
-            <br>• Resume downloads slowly
+            <br><br><b style="color: #ffa000;">⚡ Troubleshooting</b>
 
-            <br><br><b>Issue: "Cookie file not found" error</b>
-            <br><b>Solution:</b> Check the file path in the text box. Click Browse again and make sure you select the
-            .txt file you exported.
+            <br><br><b>Issue: Phase 1 gets transcripts but they're poor quality</b>
+            <br><b>Solution:</b> Check the "Force Whisper Transcription" checkbox to skip YouTube transcripts and use Whisper for higher accuracy.
 
-            <br><br><b>Issue: Some videos fail with "Video unavailable"</b>
-            <br><b>Solution:</b> The video may be age-restricted, private, or region-locked. Your throwaway account needs to
-            verify age or the video may simply not be accessible.
+            <br><br><b>Issue: "Sign in to confirm you're not a bot" during Phase 2</b>
+            <br><b>Solution:</b> This only affects Phase 2 (audio downloads). Set up cookie authentication as described above.
 
-            <br><br><b>Issue: Want to download faster (smaller delays)</b>
-            <br><b>⚠️ Not recommended!</b> But if you must:
-            <br>• Min=60 seconds (1 min), Max=120 (2 min) - <b>high risk of account flags</b>
-            <br>• Only use for small batches (5-10 videos max)
-            <br>• Be prepared to get blocked and need to wait 24 hours
+            <br><br><b>Issue: Some videos fail with "No transcript available"</b>
+            <br><b>Solution:</b> Normal! Phase 1 tries YouTube transcripts, Phase 2 automatically handles videos without them via Whisper.
 
-            <br><br><b style="color: #388e3c;">✅ Best Practices for Bulk Downloads</b>
-            <br>• <b>Keep the defaults:</b> 3-5 minute delays work great and rarely get flagged
-            <br>• <b>Run overnight:</b> Start a batch before bed, check results in the morning
-            <br>• <b>Multiple accounts:</b> If you need to download thousands, create 2-3 throwaway accounts and rotate them
-            <br>• <b>Refresh cookies weekly:</b> Export fresh cookies every 7-10 days to avoid expiration issues
-            <br>• <b>Monitor first batch:</b> Watch the first 5-10 downloads to make sure everything works
-            <br>• <b>Split large batches:</b> Instead of 500 videos at once, do 5 batches of 100
-            <br>• <b>Use "Process automatically":</b> Transcription and analysis happen while downloads continue
+            <br><br><b>Issue: Want faster processing for videos without captions</b>
+            <br><b>Solution:</b> Phase 2 delays are intentionally slow (3-5 min) to avoid bot detection. This is necessary for reliability.
+            <br>Consider: Most content has captions now - Phase 1 handles those in seconds!
 
-            <br><br><b style="color: #007acc;">🎯 Real-World Example: Processing a 100-Video Playlist</b>
+            <br><br><b style="color: #388e3c;">✅ Best Practices with Two-Phase System</b>
+            <br>• <b>Try default first:</b> Let Phase 1 get transcripts rapidly, Phase 2 handles exceptions
+            <br>• <b>Use Force Whisper sparingly:</b> Only when you need maximum accuracy and don't mind waiting
+            <br>• <b>Check "Process automatically":</b> Claims extraction happens while transcripts are being fetched
+            <br>• <b>Cookies optional for Phase 1:</b> Only needed if you hit rate limits or for Phase 2 downloads
+            <br>• <b>Monitor progress:</b> Watch the log to see which phase is handling each video
+            <br>• <b>Refresh cookies weekly:</b> If using cookie auth, export fresh cookies every 7-10 days
 
-            <br><b>Scenario:</b> You found a lecture series with 100 videos and want to extract all key claims.
+            <br><br><b style="color: #007acc;">🎯 Real-World Example: Processing a 100-Video Lecture Series</b>
 
-            <br><br><b>Your approach:</b>
-            <br>1. Create throwaway Google account (5 minutes)
-            <br>2. Export cookies following steps above (5 minutes)
-            <br>3. Configure app with cookies and rate limiting (2 minutes)
-            <br>4. Paste the playlist URL in Transcribe tab
-            <br>5. Check "Process automatically through entire pipeline"
-            <br>6. Click Start → go to bed 😴
-            <br>7. Wake up → 100 videos transcribed, analyzed, and searchable in Review tab
+            <br><b>Scenario:</b> Educational playlist with 100 lectures, all have auto-generated captions.
 
-            <br><br><b>What you get:</b>
-            <br>• All videos downloaded with 3-5 minute delays (total: 5-8 hours)
-            <br>• All transcripts with speaker labels
+            <br><br><b>OLD SYSTEM (before two-phase):</b>
+            <br>• Setup: 12 minutes (create account, export cookies, configure)
+            <br>• Processing: 5-8 hours (download all 100 audio files with delays)
+            <br>• <b>Total: ~6-9 hours</b>
+
+            <br><br><b>NEW SYSTEM (two-phase):</b>
+            <br>• Setup: None required! (works out of the box)
+            <br>• Phase 1: 10-15 minutes (rapid transcript fetch for all 100 videos)
+            <br>• Phase 2: Not needed (all videos had captions)
+            <br>• <b>Total: 10-15 minutes</b> 🎉
+
+            <br><br><b>What you get (same as before):</b>
+            <br>• All 100 transcripts
             <br>• All claims extracted and scored
-            <br>• Searchable database in Review tab
-            <br>• Can now find "What did the professor say about machine learning?" across all 100 lectures in seconds
+            <br>• Automatically uploaded to GetReceipts.org
+            <br>• Searchable on web: "What did the professor say about machine learning?"
 
-            <br><br><b>Total time investment:</b>
-            <br>• Your time: 12 minutes of setup
-            <br>• Computer time: ~10-12 hours running unattended
-            <br>• Result: 100 hours of lectures → searchable knowledge base
+            <br><br><b>Time savings: 6-9 hours → 10-15 minutes (30-50x faster!)</b>
 
-            <br><br><b style="color: #007acc;">📝 Summary Checklist</b>
-            <br>✅ Created throwaway Google account (not main account!)
-            <br>✅ Exported cookies in incognito window from throwaway account only
-            <br>✅ Saved cookies.txt file somewhere accessible
-            <br>✅ Enabled cookie authentication in Transcribe tab
-            <br>✅ Selected cookie file using Browse button
-            <br>✅ Set rate limiting to 3-5 minute delays
-            <br>✅ Checked "Disable proxies when cookies enabled"
-            <br>✅ Ready to paste YouTube URLs and start bulk downloads!
+            <br><br><b style="color: #007acc;">📝 Quick Decision Guide</b>
 
-            <br><br><b>🎓 Remember:</b> This setup is one-time. After initial configuration, you just paste URLs and
-            click Start. Cookies last 7-10 days before needing refresh. The system handles everything else automatically!
+            <br><br><b>Processing 1-10 videos?</b>
+            <br>→ Just paste URLs and click Start. No setup needed. Phase 1 handles most, Phase 2 handles exceptions.
+
+            <br><br><b>Processing 10-100 videos with captions?</b>
+            <br>→ No setup needed! Phase 1 gets all transcripts in minutes.
+
+            <br><br><b>Processing 100+ videos or hitting rate limits?</b>
+            <br>→ Set up cookie authentication (5 min setup). Helps with Phase 2 downloads.
+
+            <br><br><b>Need maximum transcript accuracy?</b>
+            <br>→ Check "Force Whisper Transcription". Slower but higher quality.
+
+            <br><br><b>Videos don't have captions?</b>
+            <br>→ Phase 2 automatically handles them. Set up cookies if processing many.
+
+            <br><br><b>🎓 Remember:</b> The two-phase system is automatic. You don't choose phases - the system intelligently
+            uses Phase 1 when possible (fast) and Phase 2 when needed (slow but thorough). Just paste URLs and go!
             """
         )
 
@@ -504,9 +554,10 @@ class IntroductionTab(BaseTab):
             <br><br><b>Bonus:</b> Export the claims with speaker labels from the web to share meeting notes with your team.
 
             <br><br><b>💡 Quick Tips for Success:</b>
-            <br>• <b>First time?</b> Start with one short video/audio file (5-10 min) to see how it works
-            <br>• <b>Using YouTube?</b> Remember to set up PacketStream in Settings first
-            <br>• <b>Want faster processing?</b> Use cloud models (OpenAI/Anthropic) instead of local Ollama
+            <br>• <b>First time?</b> Start with one YouTube video to see the two-phase system in action
+            <br>• <b>YouTube playlists?</b> No setup needed for most content - Phase 1 gets transcripts in seconds!
+            <br>• <b>Force Whisper checkbox:</b> Use when you need maximum accuracy (slower but better quality)
+            <br>• <b>Want faster processing?</b> Use cloud models (OpenAI/Anthropic) instead of local Ollama for claim extraction
             <br>• <b>Understanding the scores:</b> Importance = how significant, Novelty = how unique/surprising,
             Confidence = how reliable
             <br>• <b>Auto-upload enabled?</b> Claims automatically sync to getreceipts.org - that's where you review and edit
@@ -519,6 +570,7 @@ class IntroductionTab(BaseTab):
             <br>• <b>Monitor vs Manual:</b> Use Monitor for ongoing series (podcasts, courses), use Transcribe for one-off processing
             <br>• <b>Link your device:</b> Get your claim code from Settings → use it on getreceipts.org/dashboard to link multiple devices
             <br>• <b>Desktop vs Web:</b> Desktop processes files, web stores and organizes claims. Once uploaded, claims disappear from desktop.
+            <br>• <b>Two-phase is automatic:</b> You don't choose phases - system uses Phase 1 when possible, Phase 2 when needed
             """
         )
 

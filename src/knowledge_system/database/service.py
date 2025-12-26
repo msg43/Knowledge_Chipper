@@ -1257,6 +1257,164 @@ class DatabaseService:
             logger.error(f"Failed to update metadata status for {source_id}: {e}")
             return False
 
+    def link_audio_to_source(
+        self,
+        source_id: str,
+        audio_file_path: str | Path,
+        audio_metadata: dict[str, Any] | None = None
+    ) -> bool:
+        """
+        Link downloaded audio file to existing source metadata.
+        
+        Validates:
+        - Source exists in database
+        - Audio file exists on disk
+        - File size is reasonable (> 200KB)
+        - Updates audio_downloaded, audio_file_path, audio_file_size_bytes
+        
+        Args:
+            source_id: Source identifier
+            audio_file_path: Path to downloaded audio file
+            audio_metadata: Optional metadata about audio file
+        
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            audio_path = Path(audio_file_path)
+            
+            # Validate audio file exists
+            if not audio_path.exists():
+                logger.error(f"Audio file not found: {audio_path}")
+                return False
+            
+            # Validate file size
+            file_size = audio_path.stat().st_size
+            MIN_AUDIO_SIZE = 200 * 1024  # 200 KB
+            if file_size < MIN_AUDIO_SIZE:
+                logger.error(
+                    f"Audio file too small ({file_size} bytes): {audio_path.name}"
+                )
+                return False
+            
+            # Validate source exists
+            source = self.get_source(source_id)
+            if not source:
+                logger.error(f"Source not found: {source_id}")
+                return False
+            
+            # Extract audio format from file extension
+            audio_format = audio_path.suffix.lstrip('.')
+            
+            # Update source with audio information
+            success = self.update_audio_status(
+                source_id=source_id,
+                audio_file_path=str(audio_path),
+                audio_downloaded=True,
+                audio_file_size_bytes=file_size,
+                audio_format=audio_format
+            )
+            
+            if success:
+                logger.info(
+                    f"✅ Linked audio to source {source_id}: "
+                    f"{audio_path.name} ({file_size / (1024*1024):.1f} MB)"
+                )
+            
+            return success
+        
+        except Exception as e:
+            logger.error(f"Failed to link audio to source {source_id}: {e}")
+            return False
+
+    def verify_audio_metadata_link(self, source_id: str) -> dict[str, Any]:
+        """
+        Verify that audio file and metadata are properly linked.
+        
+        Checks:
+        - Source record exists
+        - audio_file_path is set
+        - File exists on disk
+        - File size matches database
+        - Metadata is complete
+        
+        Args:
+            source_id: Source identifier
+        
+        Returns:
+            Diagnostic dict with status and issues
+        """
+        result = {
+            "source_id": source_id,
+            "valid": True,
+            "issues": [],
+            "warnings": [],
+        }
+        
+        try:
+            # Check source exists
+            source = self.get_source(source_id)
+            if not source:
+                result["valid"] = False
+                result["issues"].append("Source record not found in database")
+                return result
+            
+            # Check audio_file_path is set
+            if not source.audio_file_path:
+                result["valid"] = False
+                result["issues"].append("audio_file_path not set")
+                return result
+            
+            # Check file exists on disk
+            audio_path = Path(source.audio_file_path)
+            if not audio_path.exists():
+                result["valid"] = False
+                result["issues"].append(f"Audio file not found: {audio_path}")
+                return result
+            
+            # Check file size
+            actual_size = audio_path.stat().st_size
+            db_size = source.audio_file_size_bytes
+            
+            if db_size and abs(actual_size - db_size) > 1024:  # Allow 1KB difference
+                result["warnings"].append(
+                    f"File size mismatch: disk={actual_size}, db={db_size}"
+                )
+            
+            # Check audio_downloaded flag
+            if not source.audio_downloaded:
+                result["warnings"].append("audio_downloaded flag is False")
+            
+            # Check metadata complete
+            if not source.metadata_complete:
+                result["warnings"].append("metadata_complete flag is False")
+            
+            # Check minimum file size
+            MIN_SIZE = 200 * 1024  # 200 KB
+            if actual_size < MIN_SIZE:
+                result["warnings"].append(
+                    f"Audio file very small: {actual_size} bytes"
+                )
+            
+            result["file_size"] = actual_size
+            result["audio_format"] = source.audio_format
+            result["audio_path"] = str(audio_path)
+            
+            if result["warnings"]:
+                logger.info(
+                    f"⚠️ Audio link verification has warnings for {source_id}: "
+                    f"{len(result['warnings'])} warnings"
+                )
+            else:
+                logger.debug(f"✅ Audio link verified for {source_id}")
+        
+        except Exception as e:
+            result["valid"] = False
+            result["issues"].append(f"Verification error: {str(e)}")
+            logger.error(f"Failed to verify audio link for {source_id}: {e}")
+        
+        return result
+
     def mark_for_retry(
         self,
         source_id: str,
@@ -1566,6 +1724,117 @@ class DatabaseService:
         except Exception as e:
             logger.error(f"Failed to update transcript {transcript_id}: {e}")
             return False
+
+    def get_transcript_by_type(
+        self,
+        source_id: str,
+        transcript_type: str
+    ) -> Transcript | None:
+        """Get specific transcript type for source."""
+        try:
+            with self.get_session() as session:
+                return (
+                    session.query(Transcript)
+                    .filter(
+                        Transcript.source_id == source_id,
+                        Transcript.transcript_type == transcript_type
+                    )
+                    .first()
+                )
+        except Exception as e:
+            logger.error(
+                f"Failed to get transcript type {transcript_type} for source {source_id}: {e}"
+            )
+            return None
+
+    def set_preferred_transcript(
+        self,
+        source_id: str,
+        transcript_id: str
+    ) -> bool:
+        """Set which transcript to use for processing."""
+        try:
+            with self.get_session() as session:
+                source = (
+                    session.query(MediaSource)
+                    .filter(MediaSource.source_id == source_id)
+                    .first()
+                )
+                
+                if not source:
+                    logger.error(f"Source not found: {source_id}")
+                    return False
+                
+                source.preferred_transcript_id = transcript_id
+                session.commit()
+                
+                logger.info(f"Set preferred transcript for {source_id}: {transcript_id}")
+                return True
+        
+        except Exception as e:
+            logger.error(f"Failed to set preferred transcript: {e}")
+            return False
+
+    def get_preferred_transcript(self, source_id: str) -> Transcript | None:
+        """Get the preferred transcript for a source."""
+        try:
+            with self.get_session() as session:
+                source = (
+                    session.query(MediaSource)
+                    .filter(MediaSource.source_id == source_id)
+                    .first()
+                )
+                
+                if not source or not source.preferred_transcript_id:
+                    return None
+                
+                return (
+                    session.query(Transcript)
+                    .filter(Transcript.transcript_id == source.preferred_transcript_id)
+                    .first()
+                )
+        
+        except Exception as e:
+            logger.error(f"Failed to get preferred transcript for {source_id}: {e}")
+            return None
+
+    def calculate_transcript_quality(self, transcript: Transcript) -> float:
+        """
+        Calculate quality score for transcript.
+        
+        Factors:
+        - Has speaker labels: +0.3
+        - Has timestamps: +0.2
+        - Formatting quality: +0.3
+        - Length/completeness: +0.2
+        """
+        score = 0.0
+        
+        # Speaker labels
+        if transcript.has_speaker_labels:
+            score += 0.3
+        
+        # Timestamps
+        if transcript.has_timestamps:
+            score += 0.2
+        
+        # Formatting quality (check segment count)
+        if transcript.segment_count and transcript.segment_count > 10:
+            score += 0.15
+        
+        # Length/completeness
+        if transcript.transcript_text:
+            word_count = len(transcript.transcript_text.split())
+            if word_count > 1000:
+                score += 0.2
+            elif word_count > 500:
+                score += 0.1
+        
+        # PDF provided transcripts get bonus
+        if transcript.transcript_type == "pdf_provided":
+            score += 0.15
+        
+        return min(score, 1.0)  # Cap at 1.0
 
     def get_transcript_path_for_regeneration(
         self, transcript_id: str

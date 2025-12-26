@@ -109,6 +109,8 @@ class GUISettingsManager:
                     return self.system_settings.transcription.diarization
                 elif checkbox_name == "use_gpu":
                     return self.system_settings.transcription.use_gpu
+                elif checkbox_name == "force_whisper":
+                    return getattr(self.system_settings.transcription, "force_whisper", False)
 
             # Process tab checkboxes
             elif tab_name == "Process":
@@ -125,6 +127,11 @@ class GUISettingsManager:
                     return self.system_settings.file_watcher.default_auto_process
                 elif checkbox_name == "system2_pipeline":
                     return self.system_settings.file_watcher.default_system2_pipeline
+            
+            # Batch Processing tab checkboxes
+            elif tab_name == "Batch Processing":
+                if checkbox_name == "force_whisper":
+                    return getattr(self.system_settings.transcription, "force_whisper", False)
 
         return default
 

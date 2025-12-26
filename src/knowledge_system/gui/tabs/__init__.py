@@ -29,6 +29,7 @@ except Exception:
 from .monitor_tab import MonitorTab
 from .question_review_tab import QuestionReviewTab
 from .transcription_tab import TranscriptionTab
+from .import_transcripts_tab import ImportTranscriptsTab
 
 # YouTube tab removed - use Transcription tab for YouTube URLs
 
@@ -38,6 +39,7 @@ __all__ = [
     "ExtractTab",  # Claims-first extraction
     "MonitorTab",
     "TranscriptionTab",
+    "ImportTranscriptsTab",  # PDF transcript import
     "SummarizationTab",
     "QueueTab",
     "ClaimSearchTab",

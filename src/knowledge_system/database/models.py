@@ -161,6 +161,9 @@ class MediaSource(Base):
     fetched_at = Column(DateTime)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    # Transcript management
+    preferred_transcript_id = Column(String(50))  # Points to preferred transcript for processing
+
     # Relationships
     claims = relationship(
         "Claim", back_populates="source", foreign_keys="Claim.source_id"
@@ -297,6 +300,7 @@ class Transcript(Base):
     language = Column(String(10), nullable=False)
     is_manual = Column(Boolean, nullable=False)  # Manual vs auto-generated
     transcript_type = Column(String(30))  # 'youtube_api', 'diarized', 'whisper', etc.
+    transcript_source = Column(String(50))  # 'youtube_api', 'whisper_fallback', 'whisper_forced', 'unknown'
 
     # Full transcript content
     transcript_text = Column(Text, nullable=False)  # Clean full text without timestamps
@@ -324,6 +328,13 @@ class Transcript(Base):
     confidence_score = Column(Float)
     segment_count = Column(Integer)
     total_duration = Column(Float)
+    quality_score = Column(Float)  # Overall quality score (0-1)
+    has_speaker_labels = Column(Boolean, default=False)  # Explicit speaker attribution
+    has_timestamps = Column(Boolean, default=True)  # Timestamp availability
+    
+    # Source tracking (for PDF transcripts)
+    source_file_path = Column(Text)  # Original file path if from PDF
+    extraction_metadata = Column(JSONEncodedType)  # PDF metadata, page count, etc.
 
     # Processing metadata
     created_at = Column(DateTime, default=datetime.utcnow)

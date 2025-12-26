@@ -227,6 +227,46 @@ class TranscriptionConfig(BaseModel):
     use_whisper_cpp: bool = False
 
 
+class TranscriptProcessingConfig(BaseModel):
+    """Transcript processing and selection configuration."""
+
+    # Priority order for transcript selection (highest to lowest)
+    transcript_priority: list[str] = Field(
+        default=["pdf_provided", "youtube_api", "whisper", "diarized"],
+        description="Priority order for selecting which transcript to use for processing"
+    )
+    
+    # Quality thresholds
+    min_quality_score: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="Minimum quality score for transcript acceptance"
+    )
+    
+    # Auto-matching settings for PDF transcripts
+    youtube_matching_enabled: bool = Field(
+        default=True,
+        description="Enable automatic YouTube video matching for PDF transcripts"
+    )
+    youtube_matching_confidence_threshold: float = Field(
+        default=0.8,
+        ge=0.0,
+        le=1.0,
+        description="Minimum confidence for auto-match acceptance"
+    )
+    youtube_matching_require_manual_review: bool = Field(
+        default=True,
+        description="Flag low-confidence matches for manual review"
+    )
+    
+    # Search strategies (tried in order)
+    youtube_matching_strategies: list[str] = Field(
+        default=["database_fuzzy_match", "title_search", "metadata_search", "llm_query_generation"],
+        description="YouTube matching strategies in priority order"
+    )
+
+
 class LLMConfig(BaseModel):
     """LLM configuration."""
 
@@ -429,6 +469,38 @@ class FileWatcherConfig(BaseModel):
     )
     default_system2_pipeline: bool = Field(
         default=False, description="Use System 2 pipeline by default"
+    )
+
+
+class YouTubeAPIConfig(BaseModel):
+    """YouTube Data API v3 configuration."""
+    
+    enabled: bool = Field(
+        default=False,
+        description="Use YouTube Data API for metadata (recommended for reliability)"
+    )
+    api_key: str = Field(
+        default="",
+        description="YouTube Data API v3 key from Google Cloud Console"
+    )
+    quota_limit: int = Field(
+        default=10000,
+        ge=1,
+        description="Daily quota limit (free tier: 10,000 units/day)"
+    )
+    fallback_to_ytdlp: bool = Field(
+        default=True,
+        description="Fall back to yt-dlp if API fails or quota exceeded"
+    )
+    batch_size: int = Field(
+        default=50,
+        ge=1,
+        le=50,
+        description="Videos per batch request (API max: 50)"
+    )
+    use_for_pdf_matching: bool = Field(
+        default=True,
+        description="Use API for PDF transcript matching (faster, more reliable)"
     )
 
 
@@ -1211,11 +1283,15 @@ class Settings(BaseSettings):
         default_factory=ThreadManagementConfig
     )
     transcription: TranscriptionConfig = Field(default_factory=TranscriptionConfig)
+    transcript_processing: TranscriptProcessingConfig = Field(
+        default_factory=TranscriptProcessingConfig
+    )
     llm: LLMConfig = Field(default_factory=LLMConfig)
     local_config: LocalLLMConfig = Field(default_factory=LocalLLMConfig)
     api_keys: APIKeysConfig = Field(default_factory=APIKeysConfig)
     processing: ProcessingConfig = Field(default_factory=ProcessingConfig)
     file_watcher: FileWatcherConfig = Field(default_factory=FileWatcherConfig)
+    youtube_api: YouTubeAPIConfig = Field(default_factory=YouTubeAPIConfig)
     youtube_processing: YouTubeProcessingConfig = Field(
         default_factory=YouTubeProcessingConfig
     )

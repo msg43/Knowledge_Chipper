@@ -7,6 +7,179 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Feature - PDF Transcript Import System (December 25, 2025)
+
+**Import podcaster-provided transcripts with automatic YouTube matching**
+
+#### New Features
+
+- **PDF Transcript Import**: Import high-quality PDF transcripts from podcasters
+  - Automatic speaker label detection (multiple formats supported)
+  - Timestamp parsing (multiple formats)
+  - Quality scoring based on speaker labels, timestamps, formatting
+  - Metadata extraction (title, date, speakers)
+- **Multi-Transcript Management**: Store multiple transcript versions per episode
+  - PDF (podcaster-provided), YouTube API, Whisper transcripts coexist
+  - Configurable priority order (pdf_provided > youtube_api > whisper)
+  - Automatic quality-based selection
+  - Per-source preferred transcript tracking
+- **YouTube Video Matching**: Automatic matching of PDFs to YouTube videos
+  - 4 matching strategies: database fuzzy match, title search, metadata search, LLM query
+  - Confidence scoring (0-100%)
+  - Manual review for low-confidence matches
+  - Playwright-based YouTube search with fallback
+- **Import Transcripts Tab**: New GUI tab for PDF import
+  - Single PDF import with optional YouTube URL
+  - Batch folder scanning
+  - Auto-match toggle with confidence threshold
+  - Results table with match status
+  - Real-time progress tracking
+- **Batch Import Script**: CLI tool for bulk PDF import
+  - Folder scanning support
+  - CSV mapping file support (pdf_path, youtube_url)
+  - Configurable confidence threshold
+  - Progress reporting and statistics
+
+#### Architecture Improvements
+
+- **Two-Pass Integration**: PDF transcripts work seamlessly with two-pass workflow
+- **Quality-Based Selection**: System automatically uses highest-quality transcript
+- **Database Schema**: Added quality_score, has_speaker_labels, has_timestamps, preferred_transcript_id fields
+- **Transcript Priority**: Configurable in config.yaml
+
+#### Files Added
+
+- `src/knowledge_system/database/migrations/add_pdf_transcript_support.sql`
+- `src/knowledge_system/processors/pdf_transcript_processor.py`
+- `src/knowledge_system/services/youtube_video_matcher.py`
+- `src/knowledge_system/services/transcript_manager.py`
+- `src/knowledge_system/gui/tabs/import_transcripts_tab.py`
+- `scripts/import_pdf_transcripts_batch.py`
+- `tests/test_pdf_transcript_import.py`
+- `PDF_TRANSCRIPT_IMPORT_IMPLEMENTATION_COMPLETE.md`
+- `GUI_INTEGRATION_COMPLETE.md`
+
+#### Files Modified
+
+- `src/knowledge_system/database/models.py` - Extended Transcript and MediaSource models
+- `src/knowledge_system/database/service.py` - Added transcript management methods
+- `src/knowledge_system/processors/two_pass/pipeline.py` - Integrated TranscriptManager
+- `src/knowledge_system/config.py` - Added TranscriptProcessingConfig
+- `src/knowledge_system/gui/main_window_pyqt6.py` - Added Import Transcripts tab
+- `src/knowledge_system/gui/tabs/__init__.py` - Exported new tab
+
+### Feature - YouTube Data API v3 Integration (December 25, 2025)
+
+**Official YouTube API for reliable metadata, yt-dlp for audio only**
+
+#### New Features
+
+- **YouTube Data API Service**: Official API wrapper for metadata fetching
+  - Single video metadata fetch (1 quota unit)
+  - Batch metadata fetch (50 videos per request, 1 quota unit)
+  - Video search functionality (100 quota units)
+  - Automatic quota tracking (10,000 free units/day)
+  - Quota reset handling
+  - API key validation
+- **Metadata Validator**: Universal validator for both API and yt-dlp
+  - Format conversion (ISO 8601 duration → seconds, dates → YYYYMMDD)
+  - Type validation and coercion
+  - String sanitization
+  - Default values for missing fields
+  - Handles both API and yt-dlp response formats
+- **Audio Linking Methods**: Robust audio-to-metadata linking
+  - `link_audio_to_source()` - Link downloaded audio to existing metadata
+  - `verify_audio_metadata_link()` - Comprehensive verification
+  - File existence validation
+  - File size validation (minimum 200KB)
+  - Diagnostic reporting
+- **Two-Stage Download Coordinator**: Metadata-first workflow
+  - Stage 1: Fetch all metadata via API (fast, batch-optimized)
+  - Stage 2: Download audio via yt-dlp (only for new videos)
+  - Deduplication before download
+  - Automatic fallback to yt-dlp for metadata if API unavailable
+
+#### Architecture Improvements
+
+- **Separation of Concerns**: Metadata (API) separate from audio (yt-dlp)
+- **Reliability**: API guarantees JSON structure, no parsing errors
+- **Speed**: API is faster than web scraping, batch requests are 50x more efficient
+- **Robustness**: Audio failures don't lose metadata
+- **Quota Efficiency**: Batch optimization maximizes free tier
+
+#### Files Added
+
+- `src/knowledge_system/services/youtube_data_api.py` - API wrapper
+- `src/knowledge_system/utils/youtube_metadata_validator.py` - Validation layer
+- `src/knowledge_system/services/two_stage_download_coordinator.py` - Orchestrator
+- `tests/test_youtube_data_api.py` - API tests
+- `tests/test_metadata_validator.py` - Validator tests
+- `YOUTUBE_DATA_API_INTEGRATION_COMPLETE.md`
+
+#### Files Modified
+
+- `src/knowledge_system/config.py` - Added YouTubeAPIConfig
+- `src/knowledge_system/database/service.py` - Added audio linking methods
+- `src/knowledge_system/services/youtube_video_matcher.py` - Integrated API with Playwright fallback
+
+#### Configuration
+
+```yaml
+youtube_api:
+  enabled: true
+  api_key: "YOUR_API_KEY"  # From Google Cloud Console
+  quota_limit: 10000
+  fallback_to_ytdlp: true
+  batch_size: 50
+```
+
+### Feature - Two-Phase Transcript Acquisition (December 25, 2025)
+
+**10-100x faster transcript acquisition for YouTube playlists**
+
+#### New Features
+
+- **TranscriptAcquisitionOrchestrator**: New unified orchestrator with two-phase workflow
+  - Phase 1: Rapid metadata + transcript fetch (1-3 second delays, burst pattern)
+  - Phase 2: Selective Whisper fallback (3-5 minute delays, only for videos without transcripts)
+- **Force Whisper checkbox**: User control to skip YouTube API and force Whisper transcription
+  - Added to Transcription Tab and Batch Processing Tab
+  - Warning indicator shows when slow mode is enabled
+- **Database tracking**: New `transcript_source` field tracks origin (youtube_api, whisper_fallback, whisper_forced)
+- **Settings persistence**: Force Whisper preference saved across sessions
+
+#### Architecture Improvements
+
+- **Clean orchestration**: Single clear path for transcript acquisition
+- **Intelligent pacing**: Fast for metadata (mimics human browsing), slow only when downloading audio
+- **Database-centric**: All metadata stored immediately in Phase 1
+- **No redundant code**: Deleted unused `unified_download_orchestrator_v2.py`
+
+#### Files Added
+
+- `src/knowledge_system/services/transcript_acquisition_orchestrator.py` - New two-phase orchestrator
+- `src/knowledge_system/database/migrations/add_transcript_source.sql` - Database migration
+
+#### Files Modified
+
+- `src/knowledge_system/database/models.py` - Added `transcript_source` field to Transcript model
+- `src/knowledge_system/gui/tabs/transcription_tab.py` - Added Force Whisper checkbox and settings
+- `src/knowledge_system/gui/tabs/batch_processing_tab.py` - Added Force Whisper checkbox
+- `src/knowledge_system/gui/core/settings_manager.py` - Added force_whisper settings support
+
+#### Files Removed
+
+- `src/knowledge_system/services/unified_download_orchestrator_v2.py` - Unused V2 orchestrator (replaced)
+
+#### Benefits
+
+- 10-100x faster for playlists with available YouTube transcripts
+- User control via Force Whisper checkbox for quality preference
+- Clean codebase with no orphaned orchestrator code
+- Intelligent pacing mimics human behavior patterns
+
+---
+
 ### Feature - Auto-Sync with Close Protection (December 22, 2025)
 
 **Prevents data loss with automatic syncing and close warnings**

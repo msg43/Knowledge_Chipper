@@ -212,6 +212,17 @@ class BatchProcessingTab(BaseTab):
         self.resume_checkbox.setChecked(True)
         config_layout.addWidget(self.resume_checkbox, 4, 0, 1, 2)
 
+        # Force Whisper Transcription checkbox
+        self.force_whisper_checkbox = QCheckBox("Force Whisper Transcription")
+        self.force_whisper_checkbox.setChecked(False)
+        self.force_whisper_checkbox.setToolTip(
+            "<b>Force Whisper Transcription</b><br/><br/>"
+            "Skip YouTube transcript API and always download audio + transcribe with Whisper.<br/><br/>"
+            "⚠️ <b>WARNING:</b> Much slower (3-5 minute delays between videos to avoid bot detection)"
+        )
+        self.force_whisper_checkbox.stateChanged.connect(self._on_setting_changed)
+        config_layout.addWidget(self.force_whisper_checkbox, 5, 0, 1, 2)
+
         # Connect signals for auto-save
         self.batch_name_input.textChanged.connect(self._on_setting_changed)
         self.max_downloads_spin.valueChanged.connect(self._on_setting_changed)
@@ -740,6 +751,13 @@ Recommended Settings:
                     self.tab_name, "enable_resume", True
                 )
             )
+            
+            # Load force whisper checkbox state
+            self.force_whisper_checkbox.setChecked(
+                self.gui_settings.get_checkbox_state(
+                    self.tab_name, "force_whisper", False
+                )
+            )
 
             logger.debug(f"Settings loaded for {self.tab_name} tab")
         except Exception as e:
@@ -774,6 +792,11 @@ Recommended Settings:
             # Save checkbox states
             self.gui_settings.set_checkbox_state(
                 self.tab_name, "enable_resume", self.resume_checkbox.isChecked()
+            )
+            
+            # Save force whisper checkbox state
+            self.gui_settings.set_checkbox_state(
+                self.tab_name, "force_whisper", self.force_whisper_checkbox.isChecked()
             )
 
             logger.debug(f"Saved settings for {self.tab_name} tab")

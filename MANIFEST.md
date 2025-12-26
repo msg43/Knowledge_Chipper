@@ -486,6 +486,7 @@ Contains 196 utility scripts for:
 Key scripts:
 - `bundle_deno.sh` - Downloads and packages Deno JavaScript runtime for DMG installer (required for yt-dlp YouTube downloads since 2025.11.12)
 - `silent_deno_installer.py` - Python script to install Deno into app bundle for DMG distribution
+- `import_pdf_transcripts_batch.py` - **NEW (Dec 25, 2025):** Batch import PDF transcripts with automatic YouTube video matching, folder scanning, and CSV mapping support
 - `comprehensive_episode_cleanup.py` - Clean up episode data inconsistencies
 - `fix_unified_schema.py` - Apply unified schema fixes to database
 - `add_rss_progress_indicators.py` - Add progress tracking for RSS downloads
@@ -588,6 +589,7 @@ SQL migration files for database schema changes.
 - `2025_12_21_add_youtube_ai_summary.sql` - **NEW (Dec 2025):** YouTube AI summary integration: adds youtube_ai_summary, youtube_ai_summary_fetched_at, youtube_ai_summary_method columns to media_sources for storing YouTube's AI-generated summaries alongside Knowledge_Chipper summaries
 - `2025_12_22_multi_profile_scoring.sql` - Multi-profile scoring system: dimensions JSON, profile_scores JSON, best_profile TEXT, temporal_stability REAL, scope REAL columns with indexes
 - `2025_12_22_review_queue.sql` - Review queue table for bulk review workflow persistence: stores pending/accepted/rejected items across sessions until synced to GetReceipts
+- `add_pdf_transcript_support.sql` - **NEW (Dec 25, 2025):** PDF transcript support: adds quality_score, has_speaker_labels, has_timestamps, source_file_path, extraction_metadata to transcripts table; adds preferred_transcript_id to media_sources for multi-transcript management
 
 ### EXAMPLES/
 
@@ -685,7 +687,7 @@ GUI mixins for shared functionality.
 
 #### GUI/TABS/
 
-Main application tabs (18 total).
+Main application tabs (19 total).
 
 - `__init__.py` - Tabs module initialization
 - `api_keys_tab.py` - API key management tab
@@ -693,6 +695,7 @@ Main application tabs (18 total).
 - `claim_search_tab.py` - Claim search and filtering tab
 - `cloud_uploads_tab.py` - Cloud upload status and management tab
 - `extract_tab.py` - **NEW (Dec 2025):** Claims-first extraction tab with two-pane editor, LLM selection per stage, 6-stage progress display, quality assessment panel, rejected claims with promote button
+- `import_transcripts_tab.py` - **NEW (Dec 25, 2025):** PDF transcript import tab with drag-drop upload, automatic YouTube video matching, batch folder scanning, confidence-based matching, and real-time progress tracking
 - `introduction_tab.py` - Introduction and welcome tab with feature overview
 - `monitor_tab.py` - System monitoring and diagnostics tab
 - `process_tab.py` - Processing pipeline control tab
@@ -753,6 +756,7 @@ Media processing and transformation.
 - `dual_summary_processor.py` - **NEW (Dec 2025):** Dual summary processor for comparing YouTube AI vs local LLM summaries; runs both paths in parallel for quality comparison and testing
 - `html.py` - HTML document processing
 - `pdf.py` - PDF document processing
+- `pdf_transcript_processor.py` - **NEW (Dec 25, 2025):** PDF transcript processor with speaker label parsing, timestamp extraction, quality scoring, and YouTube video matching for podcaster-provided transcripts
 - `registry.py` - Processor registry for dynamic processor selection
 - `rss_processor.py` - RSS feed processing
 - `unified_batch_processor.py` - Unified batch processor for multiple files
@@ -891,10 +895,17 @@ High-level service layer.
 - `supabase_auth.py` - Supabase authentication
 - `supabase_storage.py` - Supabase cloud storage operations
 - `supabase_sync.py` - Supabase synchronization service
-- `unified_download_orchestrator.py` - Unified download orchestrator (YouTube, RSS, local)
-- `unified_download_orchestrator_v2.py` - V2 of unified download orchestrator
+- `transcript_acquisition_orchestrator.py` - **NEW (Dec 25, 2025):** Two-phase transcript acquisition orchestrator: Phase 1 rapid metadata+transcript fetch (1-3s delays), Phase 2 selective Whisper fallback (3-5min delays). Replaces fragmented download logic with unified workflow.
+- `transcript_manager.py` - **NEW (Dec 25, 2025):** Multi-transcript management service for handling multiple transcript versions per source (PDF, YouTube, Whisper) with quality-based selection and configurable priority ordering
+- `two_stage_download_coordinator.py` - **NEW (Dec 25, 2025):** Two-stage download coordinator that separates metadata fetching (YouTube Data API) from audio downloads (yt-dlp) for reliability and efficiency
+- `unified_download_orchestrator.py` - Unified download orchestrator (YouTube, RSS, local) - V1, still in use by transcription tab
 - `wikidata_categorizer.py` - WikiData-based categorization service
+- `youtube_data_api.py` - **NEW (Dec 25, 2025):** Official YouTube Data API v3 wrapper with batch fetching (50 videos per request), quota tracking (10,000 free units/day), and automatic fallback to yt-dlp
 - `youtube_download_service.py` - YouTube download service
+- `youtube_video_matcher.py` - **NEW (Dec 25, 2025):** YouTube video matcher for PDF transcripts using 4 strategies (database fuzzy match, title search, metadata search, LLM query) with Playwright and YouTube Data API support
+
+**REMOVED (Dec 25, 2025):**
+- `unified_download_orchestrator_v2.py` - DELETED: Unused V2 orchestrator, replaced by transcript_acquisition_orchestrator.py
 - `youtube_to_podcast_mapper.py` - Map YouTube URLs to podcast RSS feeds
 
 ### SUPERCHUNK/
@@ -925,7 +936,7 @@ SuperChunk system for advanced document processing (experimental).
 
 ### UTILS/
 
-Utility functions and helpers (90+ utility files).
+Utility functions and helpers (92+ utility files).
 
 - `__init__.py` - Utils module initialization
 - `ad_detector.py` - Advertisement detection in podcast transcripts
@@ -934,6 +945,8 @@ Utility functions and helpers (90+ utility files).
 - `llm_speaker_validator.py` - LLM-based speaker name validation
 - `rss_feed_extractor.py` - Extract RSS feeds from Apple Podcasts/RSS.com URLs
 - `warning_suppressions.py` - Centralized warning suppression configuration
+- `youtube_metadata_validator.py` - **NEW (Dec 25, 2025):** Universal metadata validator for both YouTube Data API and yt-dlp responses; handles format conversion, type validation, string sanitization, and provides defaults for missing fields
+- `video_id_extractor.py` - Robust YouTube video ID extraction from various URL formats with validation
 - Additional 80+ utility modules for various functions
 
 #### UTILS/PROXY/
