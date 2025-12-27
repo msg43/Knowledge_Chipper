@@ -5,7 +5,11 @@ All daemon REST API endpoints.
 """
 
 import logging
+import os
+from typing import Optional
+
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 
 from daemon import __version__
 from daemon.models.schemas import (
@@ -113,14 +117,14 @@ async def list_all_jobs():
 
 
 # ============================================
-# Cancel Job (Phase 2)
+# Cancel Job
 # ============================================
 @router.post("/jobs/{job_id}/cancel")
 async def cancel_job(job_id: str):
     """
     Cancel a running job.
     
-    Phase 2: Not yet implemented.
+    Not yet implemented.
     """
     job = processing_service.get_job(job_id)
 
@@ -130,6 +134,60 @@ async def cancel_job(job_id: str):
     if job.status in ["complete", "failed"]:
         raise HTTPException(status_code=400, detail="Job already finished")
 
-    # TODO: Implement actual cancellation
-    raise HTTPException(status_code=501, detail="Cancellation not yet implemented (Phase 2)")
+    # TODO: Implement actual cancellation with CancellationToken
+    raise HTTPException(status_code=501, detail="Cancellation not yet implemented")
+
+
+# ============================================
+# API Key Configuration
+# ============================================
+class APIKeyConfig(BaseModel):
+    """API key configuration for cloud LLM providers."""
+    openai_api_key: Optional[str] = None
+    anthropic_api_key: Optional[str] = None
+
+
+class APIKeyStatus(BaseModel):
+    """Status of configured API keys."""
+    openai_configured: bool
+    anthropic_configured: bool
+
+
+@router.get("/config/api-keys", response_model=APIKeyStatus)
+async def get_api_key_status():
+    """
+    Check which API keys are configured.
+    
+    Returns boolean flags for each provider.
+    Does not return the actual keys for security.
+    """
+    return APIKeyStatus(
+        openai_configured=bool(os.environ.get("OPENAI_API_KEY")),
+        anthropic_configured=bool(os.environ.get("ANTHROPIC_API_KEY")),
+    )
+
+
+@router.post("/config/api-keys")
+async def set_api_keys(config: APIKeyConfig):
+    """
+    Set API keys for cloud LLM providers.
+    
+    Keys are stored in environment variables for the current session.
+    For persistent storage, users should set them in their shell profile.
+    
+    Note: In production, consider using macOS Keychain for secure storage.
+    """
+    if config.openai_api_key:
+        os.environ["OPENAI_API_KEY"] = config.openai_api_key
+        logger.info("OpenAI API key configured")
+    
+    if config.anthropic_api_key:
+        os.environ["ANTHROPIC_API_KEY"] = config.anthropic_api_key
+        logger.info("Anthropic API key configured")
+    
+    return {
+        "status": "configured",
+        "openai_configured": bool(config.openai_api_key or os.environ.get("OPENAI_API_KEY")),
+        "anthropic_configured": bool(config.anthropic_api_key or os.environ.get("ANTHROPIC_API_KEY")),
+    }
 

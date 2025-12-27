@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+    LaunchAgent for GetReceipts Daemon
+
+    This plist configures the daemon to start automatically on user login
+    and restart if it crashes.
+
+    Installation:
+        cp org.getreceipts.daemon.plist ~/Library/LaunchAgents/
+        launchctl load ~/Library/LaunchAgents/org.getreceipts.daemon.plist
+
+    Removal:
+        launchctl unload ~/Library/LaunchAgents/org.getreceipts.daemon.plist
+        rm ~/Library/LaunchAgents/org.getreceipts.daemon.plist
+-->
+<plist version="1.0">
+<dict>
+    <!-- Unique identifier for the service -->
+    <key>Label</key>
+    <string>org.getreceipts.daemon</string>
+
+    <!-- Program to execute -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/Shared/GetReceipts/GetReceiptsDaemon</string>
+    </array>
+
+    <!-- Start on user login -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- Restart if the daemon crashes -->
+    <key>KeepAlive</key>
+    <dict>
+        <!-- Restart if exits with non-zero code -->
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+
+    <!-- Throttle restarts (wait 10 seconds between attempts) -->
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <!-- Working directory -->
+    <key>WorkingDirectory</key>
+    <string>/Users/Shared/GetReceipts</string>
+
+    <!-- Log files -->
+    <key>StandardOutPath</key>
+    <string>/Users/Shared/GetReceipts/logs/daemon.stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/Shared/GetReceipts/logs/daemon.stderr.log</string>
+
+    <!-- Environment variables -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <!-- Use a known port -->
+        <key>KC_PORT</key>
+        <string>8765</string>
+        <!-- Log level -->
+        <key>KC_LOG_LEVEL</key>
+        <string>INFO</string>
+    </dict>
+
+    <!-- Process type: Background -->
+    <key>ProcessType</key>
+    <string>Background</string>
+
+    <!-- Nice level (lower priority to avoid impacting foreground apps) -->
+    <key>Nice</key>
+    <integer>5</integer>
+</dict>
+</plist>
+

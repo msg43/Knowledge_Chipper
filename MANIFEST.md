@@ -433,7 +433,18 @@ Comprehensive project documentation (128+ files).
 ### services/
 
 - `__init__.py` - Services module init
-- `processing_service.py` - Wraps existing processors (YouTubeDownloadProcessor, etc.) for REST API
+- `processing_service.py` - Wraps existing processors (YouTubeDownloadProcessor, AudioProcessor, TwoPassPipeline, GetReceiptsUploader) for REST API
+
+---
+
+## installer/
+
+**NEW (Dec 27, 2025):** macOS installer components for the daemon.
+
+- `daemon.spec` - PyInstaller spec file for building standalone executable
+- `org.getreceipts.daemon.plist` - LaunchAgent for auto-starting daemon on login
+- `install.sh` - Post-install script (copies daemon, installs LaunchAgent, creates shortcut)
+- `build_dmg.sh` - Build script to create .dmg installer
 
 ---
 
