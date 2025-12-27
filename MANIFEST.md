@@ -117,6 +117,7 @@ Complete inventory of all files in the Knowledge Chipper codebase with descripti
 - `MULTI_ACCOUNT_GUI_IMPLEMENTATION.md` - Implementation details for multi-account GUI features
 - `MULTI_ACCOUNT_IMPLEMENTATION_STATUS.md` - Status tracking for multi-account feature implementation
 - `MULTI_ACCOUNT_INTEGRATION_COMPLETE.md` - Completion documentation for multi-account integration
+- `MULTI_ACCOUNT_TIMEOUT_FIX.md` - **NEW (Dec 26, 2025):** Fix for stuck downloads blocking other accounts: 60-second timeout per download, automatic failover to next account, enhanced retry queue with better logging and statistics
 - `MULTI_ACCOUNT_VS_SINGLE_ACCOUNT_CODE_PATHS.md` - Comparison of code paths for single vs multi-account modes
 - `SESSION_BASED_ANTI_BOT_COMPLETE.md` - Completion documentation for session-based anti-bot system
 - `SESSION_BASED_ANTI_BOT_IMPLEMENTATION.md` - Implementation details for session-based anti-bot detection avoidance
@@ -221,6 +222,7 @@ Complete inventory of all files in the Knowledge Chipper codebase with descripti
 - `test_expanded_vocab.py` - Test script for expanded WikiData vocabulary
 - `test_full_download_flow.py` - Integration test for complete download flow
 - `test_multi_account_downloads.py` - Test script for multi-account download functionality
+- `tests/test_multi_account_timeout.py` - **NEW (Dec 26, 2025):** Unit tests for multi-account timeout handling: verifies 60s timeout behavior, retry queue management, statistics tracking, and multi-account timeout independence (5 tests, all passing)
 - `test_summarize_tab_refresh.py` - Test script for Summarize tab refresh functionality
 - `test_summarize_tab_selection.py` - Test script for Summarize tab selection functionality
 - `test_web_canonical_upload.py` - Automated test script for web-canonical upload workflow (device auth + upload)

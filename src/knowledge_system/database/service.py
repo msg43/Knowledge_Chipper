@@ -259,6 +259,8 @@ class DatabaseService:
             # These are migrations that add columns or indexes to existing tables
             incremental_migrations = [
                 "2025_11_16_add_user_notes_to_claims.sql",
+                "add_pdf_transcript_support.sql",  # Add quality tracking and PDF support
+                "add_transcript_source.sql",  # Add transcript_source column
                 # Note: verification_status fix requires table rebuild, apply manually if needed
                 # Add new migrations here as needed
             ]

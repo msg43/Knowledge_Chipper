@@ -3,14 +3,18 @@
 -- Purpose: Track the source of transcripts (youtube_api, whisper_fallback, whisper_forced)
 
 -- Add transcript_source column to track where transcript came from
-ALTER TABLE transcripts ADD COLUMN IF NOT EXISTS transcript_source VARCHAR(50);
+-- Note: Will error if column already exists, but error is caught by migration framework
+ALTER TABLE transcripts ADD COLUMN transcript_source VARCHAR(50);
 
--- Set default value for existing records
+-- Set default value for existing records (only runs if column was just added)
 UPDATE transcripts 
 SET transcript_source = 'unknown' 
-WHERE transcript_source IS NULL;
+WHERE transcript_source IS NULL OR transcript_source = '';
 
--- Add comment explaining the field
-COMMENT ON COLUMN transcripts.transcript_source IS 
-'Source of the transcript: youtube_api (from YouTube API), whisper_fallback (Whisper after YouTube API failed), whisper_forced (user forced Whisper), unknown (legacy data)';
+-- Note: Comment explaining the field (SQLite doesn't support COMMENT ON COLUMN)
+-- transcript_source values:
+--   - 'youtube_api': from YouTube API
+--   - 'whisper_fallback': Whisper after YouTube API failed
+--   - 'whisper_forced': user forced Whisper
+--   - 'unknown': legacy data
 

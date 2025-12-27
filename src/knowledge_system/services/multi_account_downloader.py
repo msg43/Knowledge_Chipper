@@ -168,6 +168,7 @@ class MultiAccountDownloadScheduler:
         account_idx: int,
         scheduler: DownloadScheduler,
         output_dir: Path,
+        timeout: float = 60.0,
     ) -> dict:
         """
         Download with stale cookie detection and failover.
@@ -177,12 +178,17 @@ class MultiAccountDownloadScheduler:
             account_idx: Index of account being used
             scheduler: DownloadScheduler for this account
             output_dir: Output directory for downloaded files
+            timeout: Timeout in seconds for download attempt (default: 60s)
 
         Returns:
             Result dict with success status
         """
         try:
-            result = await scheduler.download_single(url, output_dir)
+            # Wrap download with timeout
+            result = await asyncio.wait_for(
+                scheduler.download_single(url, output_dir),
+                timeout=timeout
+            )
 
             if result["success"]:
                 # Success - reset failure counters
@@ -230,6 +236,18 @@ class MultiAccountDownloadScheduler:
 
                 self.stats["downloads_failed"] += 1
                 return result
+
+        except asyncio.TimeoutError:
+            logger.warning(
+                f"⏱️ Download timeout (account {account_idx+1}): {url} "
+                f"exceeded {timeout}s - moving to next account"
+            )
+            self.account_health[account_idx]["consecutive_failures"] += 1
+            self.account_health[account_idx]["total_failures"] += 1
+            self.stats["downloads_failed"] += 1
+            # Add to retry queue for later attempt
+            self.retry_queue.append(url)
+            return {"success": False, "url": url, "error": f"Timeout after {timeout}s"}
 
         except Exception as e:
             logger.error(f"Download exception (account {account_idx+1}): {e}")
@@ -392,9 +410,9 @@ class MultiAccountDownloadScheduler:
 
             account_idx, scheduler = account_info
 
-            # Download with this account
+            # Download with this account (60s timeout per download)
             result = await self.download_with_failover(
-                url, account_idx, scheduler, output_dir
+                url, account_idx, scheduler, output_dir, timeout=60.0
             )
             results.append(result)
 
@@ -451,15 +469,26 @@ class MultiAccountDownloadScheduler:
         retry_urls = self.retry_queue.copy()
         self.retry_queue.clear()
 
-        for url in retry_urls:
+        logger.info(f"🔄 Retry round 1: Processing {len(retry_urls)} failed URLs")
+        if self.progress_callback:
+            self.progress_callback(f"🔄 Retrying {len(retry_urls)} failed downloads...")
+
+        for idx, url in enumerate(retry_urls, 1):
             self.stats["retries_attempted"] += 1
 
-            # Try with a different account
+            # Try with a different account (with timeout)
             account_info = None
+            wait_start = time.time()
+            
             while account_info is None and self._get_active_account_count() > 0:
                 account_info = await self.get_available_account()
                 if account_info is None:
                     await asyncio.sleep(10)
+                
+                # Timeout waiting for account (max 2 min per retry)
+                if time.time() - wait_start > 120:
+                    logger.warning(f"Timeout waiting for account (retry {idx}/{len(retry_urls)})")
+                    break
 
             if not account_info:
                 logger.error(f"No available accounts for retry: {url}")
@@ -468,19 +497,32 @@ class MultiAccountDownloadScheduler:
 
             account_idx, scheduler = account_info
 
+            # Retry with 60s timeout
             result = await self.download_with_failover(
-                url, account_idx, scheduler, output_dir
+                url, account_idx, scheduler, output_dir, timeout=60.0
             )
 
             if result["success"]:
-                logger.info(f"✅ Retry successful with account {account_idx+1}")
+                logger.info(f"✅ Retry {idx}/{len(retry_urls)} successful with account {account_idx+1}")
                 self.stats["retries_successful"] += 1
 
                 if processing_queue:
                     await processing_queue.put(result.get("audio_file"))
             else:
-                logger.warning(f"❌ Retry failed: {url}")
+                logger.warning(f"❌ Retry {idx}/{len(retry_urls)} failed: {url}")
                 self.retry_queue.append(url)  # Failed again
+        
+        # Log retry results
+        retry_success = self.stats["retries_successful"]
+        retry_failed = len(self.retry_queue)
+        logger.info(
+            f"📊 Retry round complete: {retry_success} successful, {retry_failed} still failed"
+        )
+        
+        if self.progress_callback:
+            self.progress_callback(
+                f"✅ Retry complete: {retry_success} recovered, {retry_failed} still failed"
+            )
 
     def get_stats(self) -> dict:
         """Get download statistics"""

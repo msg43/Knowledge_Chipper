@@ -7,6 +7,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed - Database Schema Migration for transcript_source Column (December 26, 2025)
+
+**Fixed missing transcript_source column causing transcription failures**
+
+#### Changes
+
+- **Added transcript_source Column**: Added missing `transcript_source` column to transcripts table
+  - Tracks the origin of transcripts (youtube_api, whisper_fallback, whisper_forced, unknown)
+  - Applied retroactively to existing database with default value of 'unknown'
+- **Automatic Migration System**: Configured automatic application of schema migrations
+  - Added `add_pdf_transcript_support.sql` to incremental migrations list
+  - Added `add_transcript_source.sql` to incremental migrations list
+  - Fixed SQLite compatibility issues (removed PostgreSQL-specific COMMENT syntax)
+  - Migrations now apply automatically on database service initialization
+
+#### Files Modified
+
+- `src/knowledge_system/database/service.py` - Added migrations to incremental_migrations list
+- `src/knowledge_system/database/migrations/add_transcript_source.sql` - Fixed SQLite compatibility
+
+### Fixed - Multi-Account Download Timeout Handling (December 26, 2025)
+
+**Prevent stuck downloads from blocking other accounts**
+
+#### Changes
+
+- **60-Second Download Timeout**: Each download attempt now has a 60-second timeout
+  - If a channel doesn't make progress for 60 seconds, system moves to next account
+  - Prevents single stuck download from blocking entire batch
+  - Failed downloads automatically added to retry queue
+- **Improved Retry Logic**: Enhanced retry queue processing
+  - Retries use same 60-second timeout
+  - Better logging for retry attempts (shows progress: "Retry 5/23 successful")
+  - Timeout for waiting on accounts during retry (max 2 minutes)
+  - Clear statistics on retry success/failure rates
+- **Better Progress Reporting**: More detailed status messages
+  - Timeout notifications show which account got stuck
+  - Retry round summaries show recovered vs still-failed counts
+  - Progress callbacks keep GUI updated during retries
+
+#### Technical Details
+
+- Modified `download_with_failover()` to accept timeout parameter (default: 60s)
+- Added `asyncio.TimeoutError` exception handling
+- Timeout downloads automatically added to retry queue
+- Retry queue processing now includes wait timeout (120s max per retry)
+
+#### Files Modified
+
+- `src/knowledge_system/services/multi_account_downloader.py`
+
 ### Feature - PDF Transcript Import System (December 25, 2025)
 
 **Import podcaster-provided transcripts with automatic YouTube matching**
