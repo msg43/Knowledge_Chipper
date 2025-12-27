@@ -2,7 +2,7 @@
 
 Complete inventory of all files in the Knowledge Chipper codebase with descriptions of actual functionality.
 
-**Last Updated:** December 22, 2025
+**Last Updated:** December 27, 2025
 
 ---
 
@@ -212,6 +212,7 @@ Complete inventory of all files in the Knowledge Chipper codebase with descripti
 ### Utility Scripts
 
 - `analyze_code.py` - Code analysis utility script
+- `launch_layer_cake_gui.py` - **NEW (Dec 26, 2025):** Launch script for new layer cake GUI interface
 - `check_cookie_persistence.py` - Script to check cookie persistence functionality
 - `check_schema.py` - Script to check which tables exist in GetReceipts Supabase database, diagnoses missing schema migrations
 - `compare_youtube_summaries.py` - **NEW (Dec 2025):** Compare YouTube AI summary vs Knowledge_Chipper local LLM summary side-by-side; shows timing, length, and quality comparison for testing
@@ -402,6 +403,37 @@ Comprehensive project documentation (128+ files).
 
 - `archive/` - Archived documentation (older versions and deprecated guides)
 - `adr/` - Architecture Decision Records (ADRs) documenting key architectural decisions
+
+---
+
+## daemon/
+
+**NEW (Dec 27, 2025):** FastAPI-based REST API daemon for web-first integration with GetReceipts.org.
+
+### Core Files
+
+- `__init__.py` - Package init with version
+- `main.py` - FastAPI app entry point with CORS configuration and lifespan handlers
+
+### config/
+
+- `__init__.py` - Config module init
+- `settings.py` - Pydantic-based settings with environment variable support (KC_ prefix)
+
+### api/
+
+- `__init__.py` - API module init
+- `routes.py` - REST endpoints: /health, /process, /jobs/{id}, /jobs
+
+### models/
+
+- `__init__.py` - Models module init
+- `schemas.py` - Pydantic request/response schemas (HealthResponse, ProcessRequest, JobStatus, etc.)
+
+### services/
+
+- `__init__.py` - Services module init
+- `processing_service.py` - Wraps existing processors (YouTubeDownloadProcessor, etc.) for REST API
 
 ---
 
@@ -642,6 +674,16 @@ Reusable GUI components.
 
 - `__init__.py` - Components module initialization
 - `base_tab.py` - Base class for all tab implementations
+- `layer_tile.py` - **NEW (Dec 26, 2025):** Fixed-height tile with gradient painting, rounded corners, click detection, and dynamic color support for layer cake GUI
+- `expansion_panel.py` - **NEW (Dec 26, 2025):** Expansion panel that unrolls below tiles with smooth 300ms animation, file list support, and Start button
+- `droppable_tile.py` - **NEW (Dec 26, 2025):** Droppable tile with drag-drop support, frosted overlay on hover, and file validation
+- `status_box.py` - **NEW (Dec 26, 2025):** Colored status box for right pane with expand/collapse animations, individual scrollbar, progress bar, and timestamped logs
+- `layer_cake_widget.py` - **NEW (Dec 26, 2025):** Main left pane widget managing all 6 tiles, expansion panels, file accumulation, and color customization
+- `settings_panel_content.py` - **NEW (Dec 26, 2025):** Settings and Help panel content with model selection, color customization button, and getting started guide
+- `claims_panel_content.py` - **NEW (Dec 26, 2025):** Claims, Summaries, and Cloud panel content with database integration, tier filters, and sync status
+- `color_customization_dialog.py` - **NEW (Dec 26, 2025):** Color customization dialog with 8 presets and individual color pickers
+- `settings_tile.py` - **NEW (Dec 26, 2025):** Special Settings/Help/Contact tile with 3 independently clickable sub-tiles
+- `sources_tile.py` - **NEW (Dec 26, 2025):** Special Sources tile showing 4 source types (MP3, YouTube, RSS, Text) with visual separators
 - `bulk_action_toolbar.py` - Toolbar for bulk review actions (Accept/Reject/Set Tier) that appears when items are selected in review queue
 - `completion_summary.py` - Completion summary display widget
 - `enhanced_error_dialog.py` - Enhanced error dialog with detailed information
@@ -873,6 +915,19 @@ Question mapper LLM prompts (3 prompts - optional feature).
 - `assignment.txt` - Claim assignment prompt with 7 relation types
 - `discovery.txt` - Question discovery prompt with taxonomy
 - `merger.txt` - Question merging and deduplication prompt
+
+### GUI/
+
+PyQt6-based graphical user interface.
+
+- `__init__.py` - GUI module initialization
+- `__main__.py` - GUI entry point
+- `main_window_pyqt6.py` - Main application window with tab management (legacy interface)
+- `layer_cake_main_window.py` - **NEW (Dec 26, 2025):** New layer cake main window with intuitive two-pane design (Settings-first, top-to-bottom flow)
+- `batch_processing_widget.py` - Batch processing UI widget
+- `legacy_dialogs.py` - Legacy dialog implementations (being phased out)
+- `startup_integration.py` - Startup integration and initialization
+- `queue_event_bus.py` - Real-time event bus for queue status updates
 
 ### SERVICES/
 

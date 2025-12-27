@@ -34,6 +34,11 @@ pyannote-whisper @ git+https://github.com/yinruiqing/pyannote-whisper.git  # Bat
 yt-dlp==2025.11.12  # Last tested: 2025-12-09 - Requires Deno for YouTube signature extraction
 pytube>=15.0.0
 
+# FastAPI daemon
+fastapi>=0.108.0
+uvicorn[standard]>=0.25.0
+python-multipart>=0.0.6
+
 # HTTP requests
 requests>=2.31.0
 aiohttp>=3.8.0
