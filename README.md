@@ -21,6 +21,73 @@ Skip the Podcast is a macOS desktop application that extracts structured knowled
 
 ---
 
+## 🆕 New Layer Cake GUI (December 2025)
+
+**Introducing an intuitive visual interface** that shows your entire processing pipeline at a glance!
+
+### What Is It?
+
+The **Layer Cake GUI** is a beautiful two-pane interface where:
+- **Left Pane** = 6 colorful tiles representing each processing stage
+- **Right Pane** = Live status logs showing what's happening
+
+### How to Launch
+
+```bash
+python launch_layer_cake_gui.py
+```
+
+### The 6 Processing Stages (Top → Bottom)
+
+1. **⚙️ Settings / Help / Contact** (Gray)
+   - Configure API keys, select models
+   - Customize tile colors (8 presets!)
+   - Get help or contact support
+
+2. **🎵📺 Sources** (Purple)
+   - Drag & drop: MP3, YouTube, RSS, PDF, Text
+   - System transcribes audio/video
+   - Processes documents
+
+3. **📝 Transcripts** (Orange)
+   - Drag & drop: .txt or .json transcripts
+   - Skip transcription step
+   - Jump straight to claims/summaries
+
+4. **💡 Claims** (Green)
+   - Review extracted claims
+   - Filter by tier (High/Medium/Low)
+   - Export claims to JSON/CSV
+
+5. **📄 Summaries** (Pink)
+   - Review generated summaries
+   - Regenerate with different settings
+   - Edit before uploading
+
+6. **☁️ Cloud** (Blue - SkipThePodcast.com)
+   - Upload to web platform
+   - View sync status
+   - Manual upload for failed items
+
+### Key Features
+
+✨ **Drag & Drop** - Drop files directly onto tiles
+✨ **Expansion Panels** - Click any tile to reveal options (smooth animation!)
+✨ **Unified Start Button** - 3 checkboxes: Create Claims, Create Summary, Upload
+✨ **Live Logs** - Click any status box on right to expand and see details
+✨ **Customizable Colors** - Choose from 8 presets or pick your own colors
+✨ **Settings Persist** - All preferences saved across sessions
+
+### Why Layer Cake?
+
+The traditional multi-tab interface hid the processing flow. The Layer Cake makes it visual:
+- See where your content is in the pipeline
+- Start processing from any stage
+- Watch progress in real-time
+- Jump between stages easily
+
+---
+
 ## How Does It Work?
 
 ### The Desktop App (Local Processing)
@@ -111,7 +178,34 @@ On your Mac, synced refinements are stored in:
 └── sync_metadata.json          # Sync timestamp and statistics
 ```
 
-These files are automatically injected into the extraction prompts when you process new content.
+### How Refinements Are Applied
+
+**Automatic Injection** (January 2026):
+When you process new content, the two-pass extraction system automatically:
+1. **Syncs on startup** - Downloads latest refinements from GetReceipts.org
+2. **Injects into prompts** - Adds `<bad_example>` patterns before LLM call
+3. **LLM learns** - The AI sees your corrections and avoids those mistakes
+4. **Logs activity** - Shows "✅ Injected N refinement type(s)" in logs
+
+**Example Injected Content:**
+```
+# 🔄 LEARNED PATTERNS - AVOID THESE MISTAKES
+
+## Patterns to Avoid (From Previous Web Corrections)
+
+### ❌ People Extraction Mistakes:
+
+<bad_example>
+  <input>"The US President announced policy changes..."</input>
+  <explanation>DON'T extract titles like "US President", "CEO" 
+    as people. Extract actual names only.</explanation>
+</bad_example>
+
+# EXTRACTION INSTRUCTIONS
+[... rest of prompt ...]
+```
+
+This closes the learning loop - your web corrections automatically improve all future extractions!
 
 ---
 

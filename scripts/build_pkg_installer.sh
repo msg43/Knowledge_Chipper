@@ -143,6 +143,19 @@ cat > "$APP_BUNDLE/Contents/Info.plist" << EOF
         <key>NSAllowsArbitraryLoads</key>
         <true/>
     </dict>
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>Skip the Podcast URL Handler</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>skipthepodcast</string>
+            </array>
+            <key>CFBundleTypeRole</key>
+            <string>Viewer</string>
+        </dict>
+    </array>
 </dict>
 </plist>
 EOF
@@ -219,10 +232,14 @@ echo -e "\n${BLUE}📁 Copying app source code...${NC}"
 # Copy the main Python source code
 cp -r "$PROJECT_ROOT/src" "$APP_BUNDLE/Contents/Resources/"
 
+# Copy the daemon directory (required for background server)
+cp -r "$PROJECT_ROOT/daemon" "$APP_BUNDLE/Contents/Resources/"
+
 # Copy essential configuration files
 mkdir -p "$APP_BUNDLE/Contents/Resources/config"
 cp "$PROJECT_ROOT/pyproject.toml" "$APP_BUNDLE/Contents/Resources/"
 cp "$PROJECT_ROOT/requirements.txt" "$APP_BUNDLE/Contents/Resources/"
+cp "$PROJECT_ROOT/requirements-daemon.txt" "$APP_BUNDLE/Contents/Resources/"
 
 # Copy essential data files (excluding test files)
 if [ -d "$PROJECT_ROOT/data" ]; then
@@ -235,6 +252,52 @@ fi
 
 APP_CODE_SIZE=$(du -sh "$APP_BUNDLE/Contents/Resources/src" | cut -f1)
 print_status "App source code copied ($APP_CODE_SIZE)"
+
+# Create URL handler script
+echo -e "\n${BLUE}🔗 Creating URL handler script...${NC}"
+
+cat > "$APP_BUNDLE/Contents/MacOS/url-handler" << 'URL_HANDLER_EOF'
+#!/bin/bash
+# URL Handler for skipthepodcast:// URLs
+# Handles commands from the web interface
+
+URL="$1"
+
+# Extract command from URL (format: skipthepodcast://command)
+COMMAND=$(echo "$URL" | sed 's|skipthepodcast://||')
+
+case "$COMMAND" in
+    start-daemon)
+        echo "Starting daemon..."
+        launchctl start org.skipthepodcast.daemon
+        # Show notification if terminal-notifier is available
+        if command -v terminal-notifier &>/dev/null; then
+            terminal-notifier -title "Skip the Podcast" -message "Daemon starting..." -sound default
+        fi
+        # Use osascript as fallback
+        osascript -e 'display notification "Daemon starting..." with title "Skip the Podcast"' 2>/dev/null || true
+        ;;
+    stop-daemon)
+        echo "Stopping daemon..."
+        launchctl stop org.skipthepodcast.daemon
+        osascript -e 'display notification "Daemon stopped" with title "Skip the Podcast"' 2>/dev/null || true
+        ;;
+    status)
+        if curl -s http://localhost:8765/health > /dev/null 2>&1; then
+            osascript -e 'display notification "Daemon is running" with title "Skip the Podcast"' 2>/dev/null || true
+        else
+            osascript -e 'display notification "Daemon is not running" with title "Skip the Podcast"' 2>/dev/null || true
+        fi
+        ;;
+    *)
+        echo "Unknown command: $COMMAND"
+        osascript -e "display dialog \"Unknown command: $COMMAND\" with title \"Skip the Podcast\" buttons {\"OK\"} default button 1" 2>/dev/null || true
+        ;;
+esac
+URL_HANDLER_EOF
+
+chmod +x "$APP_BUNDLE/Contents/MacOS/url-handler"
+print_status "URL handler script created"
 
 # Create app source code archive for component system
 echo -e "\n${BLUE}📦 Creating app source code archive...${NC}"
@@ -505,7 +568,7 @@ class ComponentDownloader:
         # Copy framework
         if framework_dst.exists():
             shutil.rmtree(framework_dst)
-        shutil.copytree(framework_src, framework_dst)
+        shutil.copytree(framework_src, framework_dst, symlinks=True)
 
         self._report_progress("Python framework installed", 100)
 
@@ -735,6 +798,20 @@ class ComponentDownloader:
     def download_and_install_all(self):
         """Download and install all components."""
         try:
+            # Check if we should only install critical components
+            install_only_critical = os.environ.get('INSTALL_ONLY_CRITICAL', '').lower() == 'true'
+            install_python = os.environ.get('INSTALL_PYTHON_FRAMEWORK', '').lower() == 'true'
+            
+            if install_only_critical:
+                print("📦 Installing critical components only...")
+                # Define which components are critical
+                if install_python:
+                    critical_components = ['python_framework', 'ffmpeg']
+                else:
+                    critical_components = ['ffmpeg']  # Python already available on system
+            else:
+                critical_components = None  # Install everything
+            
             # Get download URLs
             self._report_progress("Getting download URLs", 5)
             assets = self.get_latest_release_assets()
@@ -746,6 +823,11 @@ class ComponentDownloader:
             component_progress = 0
 
             for component_name, component_info in COMPONENT_MANIFEST.items():
+                # Skip non-critical components if in critical-only mode
+                if critical_components is not None and component_name not in critical_components:
+                    print(f"⏭️  Skipping {component_info['description']} (will download on first use)")
+                    component_progress += 1
+                    continue
                 filename = component_info['name']
                 current_version = component_info['version']
                 update_frequency = component_info['update_frequency']
@@ -1475,6 +1557,17 @@ except:
 
 report_progress 15 "Hardware detection complete"
 
+# Clean up old LaunchAgent if it exists
+ACTUAL_USER=$(stat -f '%Su' /dev/console)
+USER_HOME=$(eval echo ~$ACTUAL_USER)
+OLD_PLIST="$USER_HOME/Library/LaunchAgents/org.skipthepodcast.daemon.plist"
+
+if [ -f "$OLD_PLIST" ]; then
+    echo "Removing old daemon LaunchAgent..."
+    sudo -u "$ACTUAL_USER" launchctl unload "$OLD_PLIST" 2>/dev/null || true
+    rm -f "$OLD_PLIST"
+fi
+
 # Component download will be handled by the main installer
 report_progress 20 "Pre-install checks complete"
 
@@ -1514,53 +1607,372 @@ report_progress() {
 
 report_progress 80 "Finalizing installation"
 
-# Skip component downloads during installation; handled on first run
-echo "Skipping component downloads during installation"
-report_progress 95 "Components will download on first launch if needed"
+# Waterfall approach to Python detection and installation
+echo ""
+echo "=== Python Waterfall Detection ==="
+PYTHON_OK=false
+SYSTEM_PYTHON=""
+PYTHON_SOURCE=""
 
-# Create launch script
+# Step 1: Check for system Python 3.10+
+echo "Step 1: Checking for system Python 3.10+..."
+for python_cmd in python3.13 python3.12 python3.11 python3.10 python3; do
+    if command -v $python_cmd >/dev/null 2>&1; then
+        PYTHON_VERSION=$($python_cmd --version 2>&1 | awk '{print $2}')
+        PYTHON_MAJOR=$(echo $PYTHON_VERSION | cut -d. -f1)
+        PYTHON_MINOR=$(echo $PYTHON_VERSION | cut -d. -f2)
+        if [ "$PYTHON_MAJOR" -eq 3 ] && [ "$PYTHON_MINOR" -ge 10 ]; then
+            echo "✅ Found system Python: $python_cmd ($PYTHON_VERSION)"
+            PYTHON_OK=true
+            SYSTEM_PYTHON=$python_cmd
+            PYTHON_SOURCE="system"
+            break
+        fi
+    fi
+done
+
+# Step 2: Check for Homebrew Python
+if [ "$PYTHON_OK" = false ]; then
+    echo "Step 2: Checking for Homebrew Python..."
+    for brew_py in /opt/homebrew/bin/python3.13 /opt/homebrew/bin/python3.12 /opt/homebrew/bin/python3.11 /opt/homebrew/bin/python3.10 /usr/local/bin/python3.13 /usr/local/bin/python3.12 /usr/local/bin/python3.11 /usr/local/bin/python3.10; do
+        if [ -f "$brew_py" ]; then
+            PYTHON_VERSION=$($brew_py --version 2>&1 | awk '{print $2}')
+            PYTHON_MAJOR=$(echo $PYTHON_VERSION | cut -d. -f1)
+            PYTHON_MINOR=$(echo $PYTHON_VERSION | cut -d. -f2)
+            if [ "$PYTHON_MAJOR" -eq 3 ] && [ "$PYTHON_MINOR" -ge 10 ]; then
+                echo "✅ Found Homebrew Python: $brew_py ($PYTHON_VERSION)"
+                PYTHON_OK=true
+                SYSTEM_PYTHON=$brew_py
+                PYTHON_SOURCE="homebrew"
+                break
+            fi
+        fi
+    done
+fi
+
+# Step 3: Try to install Python via Homebrew (if Homebrew exists)
+if [ "$PYTHON_OK" = false ]; then
+    echo "Step 3: Checking if Homebrew is available..."
+    if command -v brew >/dev/null 2>&1; then
+        echo "✅ Homebrew found, attempting to install Python 3.13..."
+        report_progress 82 "Installing Python via Homebrew"
+        
+        # Try to install Python via Homebrew (with timeout)
+        if timeout 120 brew install python@3.13 >/dev/null 2>&1; then
+            # Check if installation succeeded
+            for brew_py in /opt/homebrew/bin/python3.13 /usr/local/bin/python3.13; do
+                if [ -f "$brew_py" ]; then
+                    PYTHON_VERSION=$($brew_py --version 2>&1 | awk '{print $2}')
+                    echo "✅ Python installed via Homebrew: $brew_py ($PYTHON_VERSION)"
+                    PYTHON_OK=true
+                    SYSTEM_PYTHON=$brew_py
+                    PYTHON_SOURCE="homebrew_installed"
+                    break
+                fi
+            done
+        else
+            echo "⚠️  Homebrew Python installation failed or timed out"
+        fi
+    else
+        echo "⚠️  Homebrew not found, skipping Homebrew installation"
+    fi
+fi
+
+# Step 4: Download and install bundled Python framework
+if [ "$PYTHON_OK" = false ]; then
+    echo "Step 4: No suitable Python found, installing bundled framework..."
+    echo "    This will download ~40MB and may take a few minutes..."
+    report_progress 85 "Downloading Python 3.13 framework"
+    
+    # Run download manager to install Python framework
+    if [ -f "/tmp/skip_the_podcast_installer_scripts/download_manager.py" ]; then
+        # Set environment variable to install only critical components
+        export INSTALL_ONLY_CRITICAL=true
+        export INSTALL_PYTHON_FRAMEWORK=true
+        
+        # Use system python3 to run the installer (any version for bootstrapping)
+        if /usr/bin/python3 /tmp/skip_the_podcast_installer_scripts/download_manager.py "$APP_BUNDLE" 2>&1 | tee -a /tmp/skip_the_podcast_install.log; then
+            echo "✅ Python framework installed successfully"
+            PYTHON_OK=true
+            PYTHON_SOURCE="bundled"
+        else
+            echo "⚠️  Python framework installation failed - app may not launch"
+            echo "    User will be prompted to install Python from python.org"
+        fi
+    fi
+else
+    # Create marker file to indicate which Python to use
+    mkdir -p "$APP_BUNDLE/Contents/Resources"
+    echo "$SYSTEM_PYTHON" > "$APP_BUNDLE/Contents/Resources/.use_system_python"
+    echo "✅ Using $PYTHON_SOURCE Python, skipping framework download"
+fi
+
+echo ""
+echo "=== Python Setup Summary ==="
+if [ "$PYTHON_OK" = true ]; then
+    echo "✅ Python ready: $PYTHON_SOURCE"
+    if [ -n "$SYSTEM_PYTHON" ]; then
+        echo "   Location: $SYSTEM_PYTHON"
+    fi
+else
+    echo "⚠️  No Python found - user will need to install Python 3.10+"
+fi
+echo "==========================="
+echo ""
+
+# Install FFmpeg if available (small and useful)
+echo "Checking for FFmpeg..."
+if [ ! -f "$APP_BUNDLE/Contents/MacOS/ffmpeg" ]; then
+    echo "FFmpeg will be downloaded on first use (optional)"
+fi
+
+# Defer large components to first launch
+report_progress 95 "Critical setup complete - AI models will download on first use"
+
+# Create launch script with safety checks
 echo "Creating launch script..."
 cat > "$APP_BUNDLE/Contents/MacOS/launch" << 'LAUNCH_EOF'
 #!/bin/bash
 # Launch script for Skip the Podcast Desktop
+# Guaranteed NOT to modify user's global Python environment
+
+set -e  # Exit on any error
 
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-# Put venv in user Library to avoid permission issues
 VENV_DIR="$HOME/Library/Application Support/SkipThePodcast/venv"
 SETUP_MARKER="$VENV_DIR/.setup_complete"
+LOG_FILE="$HOME/Library/Application Support/SkipThePodcast/launch.log"
 
-# Set up environment
-export PYTHONPATH="$APP_DIR/Resources/src:${PYTHONPATH}"
-export MODELS_BUNDLED="true"
-export FFMPEG_PATH="$APP_DIR/MacOS/ffmpeg"
-export FFPROBE_PATH="$APP_DIR/MacOS/ffprobe"
-export PATH="$APP_DIR/MacOS:${PATH}"
+# Create log directory
+mkdir -p "$(dirname "$LOG_FILE")"
 
-# Check if setup is needed
-if [ ! -f "$SETUP_MARKER" ]; then
-    echo "First run setup needed..."
+# Logging function (writes to log file and stderr, NOT stdout to avoid capture)
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_FILE"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >&2
+}
 
-    # Show setup dialog
-    osascript -e 'display dialog "Setting up Skip the Podcast Desktop...\n\nThis will take a few minutes on first run." buttons {"Continue"} default button "Continue" with title "First Run Setup"'
+log "=== Skip the Podcast Desktop Launch ==="
 
-    # Create virtual environment
-    echo "Creating Python environment..."
+# Function to find suitable Python (waterfall approach)
+find_python() {
+    local python_cmd=""
+    local python_version=""
+    
+    log "Searching for Python 3.10+ using waterfall approach..."
+    
+    # 1. Check if marker file indicates specific Python should be used
+    if [ -f "$APP_DIR/Resources/.use_system_python" ]; then
+        local marked_python=$(cat "$APP_DIR/Resources/.use_system_python")
+        if command -v "$marked_python" >/dev/null 2>&1; then
+            python_version=$("$marked_python" --version 2>&1 | awk '{print $2}')
+            log "✅ Found marked Python: $marked_python ($python_version)"
+            echo "$marked_python"
+            return 0
+        fi
+    fi
+    
+    # 2. Check for bundled Python framework
+    if [ -f "$APP_DIR/Frameworks/Python.framework/Versions/3.13/bin/python3" ]; then
+        local bundled_py="$APP_DIR/Frameworks/Python.framework/Versions/3.13/bin/python3"
+        if "$bundled_py" --version >/dev/null 2>&1; then
+            python_version=$("$bundled_py" --version 2>&1 | awk '{print $2}')
+            log "✅ Found bundled Python framework ($python_version)"
+            echo "$bundled_py"
+            return 0
+        fi
+    fi
+    
+    # 3. Check for Homebrew Python
+    for brew_py in /opt/homebrew/bin/python3.13 /opt/homebrew/bin/python3.12 /opt/homebrew/bin/python3.11 /opt/homebrew/bin/python3.10 /usr/local/bin/python3.13 /usr/local/bin/python3.12 /usr/local/bin/python3.11 /usr/local/bin/python3.10; do
+        if [ -f "$brew_py" ]; then
+            python_version=$("$brew_py" --version 2>&1 | awk '{print $2}')
+            local py_major=$(echo $python_version | cut -d. -f1)
+            local py_minor=$(echo $python_version | cut -d. -f2)
+            if [ "$py_major" -eq 3 ] && [ "$py_minor" -ge 10 ]; then
+                log "✅ Found Homebrew Python: $brew_py ($python_version)"
+                echo "$brew_py"
+                return 0
+            fi
+        fi
+    done
+    
+    # 4. Check system Python versions
+    for py in python3.13 python3.12 python3.11 python3.10 python3; do
+        if command -v "$py" >/dev/null 2>&1; then
+            python_version=$("$py" --version 2>&1 | awk '{print $2}')
+            local py_major=$(echo $python_version | cut -d. -f1)
+            local py_minor=$(echo $python_version | cut -d. -f2)
+            if [ "$py_major" -eq 3 ] && [ "$py_minor" -ge 10 ]; then
+                log "✅ Found system Python: $py ($python_version)"
+                echo "$py"
+                return 0
+            fi
+        fi
+    done
+    
+    log "❌ No suitable Python 3.10+ found"
+    return 1
+}
+
+# Function to safely create isolated venv
+create_safe_venv() {
+    local python_cmd="$1"
+    
+    log "Creating isolated Python environment (will NOT modify system Python)..."
+    
+    # Remove old venv if it exists and is broken
+    if [ -d "$VENV_DIR" ] && [ ! -f "$VENV_DIR/bin/python" ]; then
+        log "Removing broken virtual environment..."
+        rm -rf "$VENV_DIR"
+    fi
+    
+    # Create parent directory
     mkdir -p "$(dirname "$VENV_DIR")"
-    /usr/bin/python3 -m venv "$VENV_DIR"
+    
+    # Create fresh venv with explicit isolation (allow stderr, check exit code)
+    log "Running: $python_cmd -m venv --clear $VENV_DIR"
+    set +e  # Temporarily disable exit on error
+    "$python_cmd" -m venv --clear "$VENV_DIR" 2>&1 | tee -a "$LOG_FILE"
+    local venv_exit_code=$?
+    set -e  # Re-enable exit on error
+    
+    if [ $venv_exit_code -ne 0 ]; then
+        log "❌ Failed to create virtual environment (exit code: $venv_exit_code)"
+        return 1
+    fi
+    
+    # Verify venv was created correctly
+    if [ ! -f "$VENV_DIR/bin/python" ]; then
+        log "❌ Virtual environment creation failed - python not found in venv"
+        log "   Checked: $VENV_DIR/bin/python"
+        return 1
+    fi
+    
+    # Ensure pip is available
+    log "Ensuring pip is available in venv..."
+    set +e
+    "$VENV_DIR/bin/python" -m ensurepip --upgrade 2>&1 | tee -a "$LOG_FILE"
+    set -e
+    
+    # Verify isolation - venv Python should point to venv directory
+    local venv_python_path=$("$VENV_DIR/bin/python" -c "import sys; print(sys.prefix)" 2>/dev/null)
+    if [[ "$venv_python_path" != *"SkipThePodcast"* ]]; then
+        log "⚠️  Warning: Virtual environment may not be properly isolated"
+        log "   Expected path containing 'SkipThePodcast', got: $venv_python_path"
+    else
+        log "✅ Venv isolation verified: $venv_python_path"
+    fi
+    
+    log "✅ Isolated environment created successfully at: $VENV_DIR"
+    return 0
+}
 
-    # Install dependencies
-    echo "Installing dependencies..."
-    "$VENV_DIR/bin/python" -m pip install --upgrade pip
-    "$VENV_DIR/bin/python" -m pip install -r "$APP_DIR/Resources/requirements.txt"
+# Function to install dependencies safely
+install_dependencies() {
+    log "Installing dependencies (isolated, won't affect global Python)..."
+    
+    # Unset any global Python environment variables to ensure isolation
+    unset PYTHONPATH
+    unset PYTHONHOME
+    unset VIRTUAL_ENV
+    
+    # Use absolute paths only
+    local venv_python="$VENV_DIR/bin/python"
+    local venv_pip="$VENV_DIR/bin/pip"
+    
+    # Upgrade pip first
+    log "Upgrading pip..."
+    set +e
+    "$venv_python" -m pip install --upgrade pip 2>&1 | tee -a "$LOG_FILE"
+    set -e
+    
+    # Install with explicit isolation flags (use minimal daemon requirements)
+    log "Installing requirements from: $APP_DIR/Resources/requirements-daemon.txt"
+    set +e
+    "$venv_pip" install \
+        --no-warn-script-location \
+        --isolated \
+        -r "$APP_DIR/Resources/requirements-daemon.txt" 2>&1 | tee -a "$LOG_FILE"
+    local install_exit_code=$?
+    set -e
+    
+    if [ $install_exit_code -eq 0 ]; then
+        log "✅ All dependencies installed successfully"
+        return 0
+    else
+        log "⚠️  Some packages failed (exit code: $install_exit_code), installing core dependencies only..."
+        # Install critical packages only
+        set +e
+        "$venv_pip" install --isolated pyyaml pydantic click loguru rich PyQt6 2>&1 | tee -a "$LOG_FILE"
+        set -e
+        log "✅ Core dependencies installed"
+        return 0  # Don't fail - core deps are enough to try
+    fi
+}
 
-    # Mark setup as complete
-    touch "$SETUP_MARKER"
+# Main execution
+main() {
+    # Find Python using waterfall approach
+    PYTHON_CMD=$(find_python)
+    
+    if [ -z "$PYTHON_CMD" ]; then
+        osascript -e 'display dialog "Python 3.10+ is required but not found.\n\nPlease install Python from:\n• python.org\n• Homebrew: brew install python3\n\nOr reinstall the application." buttons {"OK"} default button "OK" with icon stop with title "Python Not Found"'
+        exit 1
+    fi
+    
+    # Check if setup is needed
+    if [ ! -f "$SETUP_MARKER" ]; then
+        log "First run setup needed..."
+        
+        # Show setup dialog (non-blocking)
+        osascript -e 'display dialog "Setting up Skip the Podcast Desktop...\n\nThis will take a few minutes on first run.\n(Creating isolated environment - will NOT modify your system Python)" buttons {"Continue"} default button "Continue" with title "First Run Setup"' >/dev/null 2>&1 &
+        
+        # Create safe venv
+        if ! create_safe_venv "$PYTHON_CMD"; then
+            osascript -e 'display dialog "Failed to create Python environment.\n\nPlease check the log at:\n~/Library/Application Support/SkipThePodcast/launch.log" buttons {"OK"} default button "OK" with icon stop'
+            exit 1
+        fi
+        
+        # Install dependencies
+        install_dependencies
+        
+        # Mark setup as complete
+        touch "$SETUP_MARKER"
+        log "✅ Setup complete!"
+    fi
+    
+    # Final verification that venv is valid
+    if [ ! -f "$VENV_DIR/bin/python" ]; then
+        log "❌ Virtual environment is invalid"
+        rm -f "$SETUP_MARKER"  # Force re-setup next time
+        exit 1
+    fi
+    
+    # Set up minimal, safe environment for app execution
+    export PYTHONPATH="$APP_DIR/Resources/src"
+    export MODELS_BUNDLED="true"
+    export FFMPEG_PATH="$APP_DIR/MacOS/ffmpeg"
+    export FFPROBE_PATH="$APP_DIR/MacOS/ffprobe"
+    
+    # Set minimal PATH (no global Python pollution)
+    export PATH="$VENV_DIR/bin:$APP_DIR/MacOS:/usr/bin:/bin:/usr/sbin:/sbin"
+    
+    # Launch the daemon (background server for web interface)
+    log "Starting Skip the Podcast Daemon..."
+    export PYTHONPATH="$APP_DIR/Resources/src:$APP_DIR/Resources"
+    cd "$APP_DIR/Resources"
+    exec "$VENV_DIR/bin/python" -m daemon.main
+}
 
-    echo "Setup complete!"
+# Check if being called with a URL (custom URL scheme handler)
+if [ "$1" != "" ] && [[ "$1" == skipthepodcast://* ]]; then
+    # Delegate to URL handler
+    exec "$APP_DIR/MacOS/url-handler" "$1"
+else
+    # Normal launch - run main function
+    main
 fi
-
-# Launch the application
-exec "$VENV_DIR/bin/python" -m knowledge_system.gui
 LAUNCH_EOF
 
 chmod +x "$APP_BUNDLE/Contents/MacOS/launch"
@@ -1584,10 +1996,123 @@ if [ -f "/tmp/hardware_specs.json" ]; then
     # This would configure settings based on detected hardware
 fi
 
+report_progress 95 "Setting up auto-start daemon..."
+
+# Set up LaunchAgent for auto-start
+# Find the actual user (postinstall runs as root)
+ACTUAL_USER=$(stat -f '%Su' /dev/console)
+USER_HOME=$(eval echo ~$ACTUAL_USER)
+
+echo "Setting up daemon auto-start for user: $ACTUAL_USER"
+
+# Create LaunchAgent plist
+mkdir -p "$USER_HOME/Library/LaunchAgents"
+
+cat > "$USER_HOME/Library/LaunchAgents/org.skipthepodcast.daemon.plist" << 'PLIST_EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>org.skipthepodcast.daemon</string>
+    
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Applications/Skip the Podcast Desktop.app/Contents/MacOS/launch</string>
+    </array>
+    
+    <!-- Do NOT auto-start on login - only start when explicitly triggered -->
+    <key>RunAtLoad</key>
+    <false/>
+    
+    <!-- Keep alive ONLY if actively being used (check network activity) -->
+    <key>KeepAlive</key>
+    <dict>
+        <key>NetworkState</key>
+        <true/>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+    
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+    
+    <key>StandardOutPath</key>
+    <string>/tmp/skipthepodcast-daemon.stdout.log</string>
+    
+    <key>StandardErrorPath</key>
+    <string>/tmp/skipthepodcast-daemon.stderr.log</string>
+    
+    <key>ProcessType</key>
+    <string>Background</string>
+    
+    <key>Nice</key>
+    <integer>5</integer>
+</dict>
+</plist>
+PLIST_EOF
+
+# Set proper ownership
+chown "$ACTUAL_USER:staff" "$USER_HOME/Library/LaunchAgents/org.skipthepodcast.daemon.plist"
+chmod 644 "$USER_HOME/Library/LaunchAgents/org.skipthepodcast.daemon.plist"
+
+# Load the LaunchAgent but don't start it automatically
+sudo -u "$ACTUAL_USER" launchctl load "$USER_HOME/Library/LaunchAgents/org.skipthepodcast.daemon.plist" 2>/dev/null || true
+
+# Start it ONCE after installation (for initial setup)
+sudo -u "$ACTUAL_USER" launchctl start org.skipthepodcast.daemon 2>/dev/null || true
+
+# Create convenience scripts for user control
+mkdir -p "/Applications/Skip the Podcast Desktop.app/Contents/Resources/bin"
+
+# Start daemon script
+cat > "/Applications/Skip the Podcast Desktop.app/Contents/Resources/bin/start-daemon.sh" << 'START_EOF'
+#!/bin/bash
+# Start the Skip the Podcast daemon
+launchctl start org.skipthepodcast.daemon 2>/dev/null && echo "✅ Daemon started" || echo "⚠️  Already running or failed to start"
+START_EOF
+
+# Stop daemon script
+cat > "/Applications/Skip the Podcast Desktop.app/Contents/Resources/bin/stop-daemon.sh" << 'STOP_EOF'
+#!/bin/bash
+# Stop the Skip the Podcast daemon
+launchctl stop org.skipthepodcast.daemon 2>/dev/null && echo "✅ Daemon stopped" || echo "⚠️  Already stopped or failed to stop"
+STOP_EOF
+
+# Status check script
+cat > "/Applications/Skip the Podcast Desktop.app/Contents/Resources/bin/daemon-status.sh" << 'STATUS_EOF'
+#!/bin/bash
+# Check daemon status
+if curl -s http://localhost:8765/health > /dev/null 2>&1; then
+    echo "✅ Daemon is running on port 8765"
+    exit 0
+else
+    echo "❌ Daemon is not running"
+    echo "To start: launchctl start org.skipthepodcast.daemon"
+    exit 1
+fi
+STATUS_EOF
+
+chmod +x "/Applications/Skip the Podcast Desktop.app/Contents/Resources/bin/"*.sh
+chown -R "$ACTUAL_USER:staff" "/Applications/Skip the Podcast Desktop.app/Contents/Resources/bin"
+
+echo "Daemon configured (will not auto-start on reboot)"
+echo "Control scripts installed at: /Applications/Skip the Podcast Desktop.app/Contents/Resources/bin/"
+
+# Register URL scheme handler with macOS Launch Services
+echo "Registering custom URL scheme handler..."
+# Force LaunchServices to recognize the new app and its URL scheme
+/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "/Applications/Skip the Podcast Desktop.app"
+
+# Also run as the user to ensure their LaunchServices database is updated
+sudo -u "$ACTUAL_USER" /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "/Applications/Skip the Podcast Desktop.app" 2>/dev/null || true
+
+echo "URL scheme 'skipthepodcast://' registered"
+
 report_progress 100 "Installation complete"
 
 echo "Post-install completed: $(date)"
-echo "You can now launch Skip the Podcast Desktop from Applications"
+echo "Skip the Podcast daemon will start automatically in the background"
 EOF
 
 chmod +x "$SCRIPTS_DIR/postinstall"
@@ -1730,8 +2255,10 @@ if [ $NEED_SETUP -eq 1 ]; then
     echo "Setup complete!"
 fi
 
-# Launch the application
-exec $ARCH_PREFIX "$VENV_DIR/bin/python" -m knowledge_system.gui
+# Launch the daemon (background server for web interface)
+export PYTHONPATH="$APP_DIR/Resources/src:$APP_DIR/Resources"
+cd "$APP_DIR/Resources"
+exec $ARCH_PREFIX "$VENV_DIR/bin/python" -m daemon.main
 LAUNCH_EOF
 
 chmod +x "$APP_BUNDLE/Contents/MacOS/launch"

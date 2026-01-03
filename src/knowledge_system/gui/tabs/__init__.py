@@ -30,6 +30,8 @@ from .monitor_tab import MonitorTab
 from .question_review_tab import QuestionReviewTab
 from .transcription_tab import TranscriptionTab
 from .import_transcripts_tab import ImportTranscriptsTab
+from .health_claims_tab import HealthClaimsTab
+from .predictions_tab import PredictionsTab
 
 # YouTube tab removed - use Transcription tab for YouTube URLs
 
@@ -50,4 +52,6 @@ __all__ = [
     "APIKeysTab",
     "PromptsTab",
     "QuestionReviewTab",
+    "HealthClaimsTab",  # Health Claims tab
+    "PredictionsTab",  # Predictions tab
 ]

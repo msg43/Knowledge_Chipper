@@ -22,6 +22,9 @@ from .models import (
     EvidenceSpan,
     ExportDestination,
     GeneratedFile,
+    HealthIntervention,
+    HealthIssue,
+    HealthMetric,
     JargonEvidence,
     JargonTerm,
     MediaSource,
@@ -81,6 +84,10 @@ __all__ = [
     # Review workflow
     "ReviewQueueItem",
     "ReviewQueueService",
+    # Health tracking
+    "HealthIntervention",
+    "HealthMetric",
+    "HealthIssue",
 ]
 
 # Add System 2 models to exports if available

@@ -34,7 +34,7 @@ You are an expert knowledge synthesizer creating a world-class long summary from
 
 # SYNTHESIS INSTRUCTIONS
 
-Generate a 3-5 paragraph long summary that synthesizes all this information into a sophisticated analytical narrative.
+Generate a {synthesis_length} long summary that synthesizes all this information into a sophisticated analytical narrative. Adjust the depth and breadth of your analysis to match the content's complexity and claim density.
 
 ## Structure Guidelines
 
@@ -120,7 +120,7 @@ Return a JSON object with this structure:
 
 ```json
 {
-  "long_summary": "Your 3-5 paragraph synthesis here. Each paragraph should be substantial (4-8 sentences). Use proper paragraph breaks.\n\nSecond paragraph...\n\nThird paragraph...",
+  "long_summary": "Your synthesis here following the recommended length ({synthesis_length}). Each paragraph should be substantial (4-8 sentences). Use proper paragraph breaks to create a flowing narrative.\n\nSecond paragraph...\n\nThird paragraph...",
   "key_themes": [
     "Theme 1",
     "Theme 2",

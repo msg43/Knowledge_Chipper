@@ -2214,6 +2214,168 @@ class ReviewQueueItem(Base):
     )
 
 
+# ============================================================================
+# PREDICTIONS: User forecasting system
+# ============================================================================
+
+
+class Prediction(Base):
+    """User-made predictions about future events with confidence tracking."""
+
+    __tablename__ = "predictions"
+
+    # Primary key
+    prediction_id = Column(String, primary_key=True)
+
+    # Core prediction content
+    title = Column(String, nullable=False)
+    description = Column(Text)
+
+    # Current values (tracked over time in prediction_history)
+    confidence = Column(Float, nullable=False)
+    deadline = Column(String, nullable=False)  # Stored as DATE string
+
+    # Resolution tracking
+    resolution_status = Column(String, default="pending")
+    resolution_notes = Column(Text)
+    resolved_at = Column(DateTime)
+
+    # User's reasoning
+    user_notes = Column(Text)
+
+    # Privacy (follows same pattern as claims)
+    privacy_status = Column(String, default="private")
+
+    # Sync tracking (for future GetReceipts integration)
+    uploaded = Column(Boolean, default=False)
+    uploaded_at = Column(DateTime)
+    hidden = Column(Boolean, default=False)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    history = relationship(
+        "PredictionHistory",
+        back_populates="prediction",
+        cascade="all, delete-orphan",
+        order_by="PredictionHistory.timestamp.desc()",
+    )
+    evidence = relationship(
+        "PredictionEvidence",
+        back_populates="prediction",
+        cascade="all, delete-orphan",
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "confidence BETWEEN 0.0 AND 1.0",
+            name="ck_prediction_confidence",
+        ),
+        CheckConstraint(
+            "resolution_status IN ('pending', 'correct', 'incorrect', 'ambiguous', 'cancelled')",
+            name="ck_resolution_status",
+        ),
+        CheckConstraint(
+            "privacy_status IN ('public', 'private')",
+            name="ck_privacy_status",
+        ),
+        Index("idx_predictions_deadline", "deadline"),
+        Index("idx_predictions_status", "resolution_status"),
+        Index("idx_predictions_privacy", "privacy_status"),
+        Index("idx_predictions_created", "created_at"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<Prediction(id='{self.prediction_id}', title='{self.title[:50]}', confidence={self.confidence:.2f}, deadline='{self.deadline}')>"
+
+
+class PredictionHistory(Base):
+    """Track confidence and deadline changes over time for predictions."""
+
+    __tablename__ = "prediction_history"
+
+    # Primary key
+    history_id = Column(Integer, primary_key=True, autoincrement=True)
+    prediction_id = Column(
+        String, ForeignKey("predictions.prediction_id", ondelete="CASCADE"), nullable=False
+    )
+
+    # Values at this point in time
+    timestamp = Column(DateTime, default=datetime.utcnow, nullable=False)
+    confidence = Column(Float, nullable=False)
+    deadline = Column(String, nullable=False)  # Stored as DATE string
+
+    # Why did the user update?
+    change_reason = Column(Text)
+
+    # Relationship
+    prediction = relationship("Prediction", back_populates="history")
+
+    __table_args__ = (
+        CheckConstraint(
+            "confidence BETWEEN 0.0 AND 1.0",
+            name="ck_history_confidence",
+        ),
+        Index("idx_prediction_history_prediction", "prediction_id"),
+        Index("idx_prediction_history_timestamp", "timestamp"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<PredictionHistory(prediction_id='{self.prediction_id}', timestamp='{self.timestamp}', confidence={self.confidence:.2f})>"
+
+
+class PredictionEvidence(Base):
+    """Link predictions to claims, jargon, people, concepts with Pro/Con/Neutral stance."""
+
+    __tablename__ = "prediction_evidence"
+
+    # Primary key
+    evidence_id = Column(Integer, primary_key=True, autoincrement=True)
+    prediction_id = Column(
+        String, ForeignKey("predictions.prediction_id", ondelete="CASCADE"), nullable=False
+    )
+
+    # What entity is this evidence from?
+    evidence_type = Column(String, nullable=False)
+    entity_id = Column(String, nullable=False)
+
+    # User's classification of this evidence
+    stance = Column(String, default="neutral")
+
+    # User's notes about why this evidence matters
+    user_notes = Column(Text)
+
+    # Timestamp
+    added_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationship
+    prediction = relationship("Prediction", back_populates="evidence")
+
+    __table_args__ = (
+        CheckConstraint(
+            "evidence_type IN ('claim', 'jargon', 'concept', 'person')",
+            name="ck_evidence_type",
+        ),
+        CheckConstraint(
+            "stance IN ('pro', 'con', 'neutral')",
+            name="ck_stance",
+        ),
+        UniqueConstraint(
+            "prediction_id", "evidence_type", "entity_id",
+            name="uq_prediction_evidence",
+        ),
+        Index("idx_prediction_evidence_prediction", "prediction_id"),
+        Index("idx_prediction_evidence_type", "evidence_type"),
+        Index("idx_prediction_evidence_entity", "entity_id"),
+        Index("idx_prediction_evidence_stance", "stance"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<PredictionEvidence(prediction_id='{self.prediction_id}', type='{self.evidence_type}', entity_id='{self.entity_id}', stance='{self.stance}')>"
+
+
 # Database initialization functions
 def create_database_engine(database_url: str = "sqlite:///knowledge_system.db"):
     """Create SQLAlchemy engine for the database with foreign key enforcement."""
@@ -2232,6 +2394,150 @@ def create_database_engine(database_url: str = "sqlite:///knowledge_system.db"):
             cursor.close()
 
     return engine
+
+
+# ============================================================================
+# HEALTH TRACKING: Personal health interventions, metrics, and issues
+# ============================================================================
+
+
+class HealthIntervention(Base):
+    """Personal health interventions (supplements, therapies, exercises)."""
+
+    __tablename__ = "health_interventions"
+
+    # Primary key
+    intervention_id = Column(String, primary_key=True)
+
+    # Privacy (web-canonical)
+    privacy_status = Column(String, default="private")  # private, public
+
+    # Status
+    active = Column(Boolean, default=True)
+
+    # Core fields
+    name = Column(String, nullable=False)
+    body_system = Column(String)  # Skeletal, Muscular, Respiratory, etc.
+    organs = Column(String)  # Brain, Heart, Lungs, etc.
+    author = Column(String)
+    frequency = Column(String)
+    metric = Column(String)
+
+    # Peter Attia categorization
+    pete_attia_category = Column(String)
+    pa_subcategory = Column(String)
+
+    # Sources
+    source_1 = Column(String)
+    source_2 = Column(String)
+    source_3 = Column(String)
+
+    # Notes
+    matt_notes = Column(Text)
+
+    # Sync tracking (web-canonical)
+    synced_to_web = Column(Boolean, default=False)
+    web_id = Column(String)  # UUID from Supabase
+    last_synced_at = Column(DateTime)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def __repr__(self) -> str:
+        status = "Active" if self.active else "Inactive"
+        return f"<HealthIntervention(name='{self.name}', status='{status}')>"
+
+
+class HealthMetric(Base):
+    """Personal health metrics and measurements."""
+
+    __tablename__ = "health_metrics"
+
+    # Primary key
+    metric_id = Column(String, primary_key=True)
+
+    # Privacy (web-canonical)
+    privacy_status = Column(String, default="private")  # private, public
+
+    # Status
+    active = Column(Boolean, default=True)
+
+    # Core fields
+    name = Column(String, nullable=False)
+    body_system = Column(String)
+    organs = Column(String)
+    author = Column(String)
+    frequency = Column(String)
+    metric = Column(String)
+
+    # Peter Attia categorization
+    pete_attia_category = Column(String)
+    pa_subcategory = Column(String)
+
+    # Sources
+    source_1 = Column(String)
+    source_2 = Column(String)
+
+    # Sync tracking (web-canonical)
+    synced_to_web = Column(Boolean, default=False)
+    web_id = Column(String)  # UUID from Supabase
+    last_synced_at = Column(DateTime)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def __repr__(self) -> str:
+        status = "Active" if self.active else "Inactive"
+        return f"<HealthMetric(name='{self.name}', status='{status}')>"
+
+
+class HealthIssue(Base):
+    """Personal health issues and conditions being tracked."""
+
+    __tablename__ = "health_issues"
+
+    # Primary key
+    issue_id = Column(String, primary_key=True)
+
+    # Privacy (web-canonical)
+    privacy_status = Column(String, default="private")  # private, public
+
+    # Status
+    active = Column(Boolean, default=True)
+
+    # Core fields
+    name = Column(String, nullable=False)
+    body_system = Column(String)
+    organs = Column(String)
+    author = Column(String)
+    frequency = Column(String)
+    metric = Column(String)
+
+    # Peter Attia categorization
+    pete_attia_category = Column(String)
+    pa_subcategory = Column(String)
+
+    # Sources
+    source_1 = Column(String)
+    source_2 = Column(String)
+
+    # Notes
+    matt_notes = Column(Text)
+
+    # Sync tracking (web-canonical)
+    synced_to_web = Column(Boolean, default=False)
+    web_id = Column(String)  # UUID from Supabase
+    last_synced_at = Column(DateTime)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def __repr__(self) -> str:
+        status = "Active" if self.active else "Inactive"
+        return f"<HealthIssue(name='{self.name}', status='{status}')>"
 
 
 def create_all_tables(engine):

@@ -32,6 +32,9 @@ from .models import (
     Person,
     PlatformCategory,
     PlatformTag,
+    Prediction,
+    PredictionEvidence,
+    PredictionHistory,
     ProcessingJob,
     QualityMetrics,
     Question,
@@ -3741,3 +3744,344 @@ class DatabaseService:
         except Exception as e:
             logger.error(f"Failed to update checkpoint status: {e}")
             return False
+
+    # =========================================================================
+    # PREDICTION SYSTEM METHODS
+    # =========================================================================
+
+    def create_prediction(
+        self,
+        title: str,
+        description: str = None,
+        confidence: float = 0.5,
+        deadline: str = None,
+        privacy_status: str = "private",
+        user_notes: str = None,
+    ) -> str:
+        """
+        Create a new prediction.
+        
+        Args:
+            title: Short prediction title
+            description: Detailed prediction statement
+            confidence: Initial confidence (0.0-1.0)
+            deadline: Deadline date (YYYY-MM-DD)
+            privacy_status: 'public' or 'private'
+            user_notes: User's reasoning
+        
+        Returns:
+            prediction_id: ID of created prediction
+        """
+        try:
+            prediction_id = f"pred_{uuid.uuid4().hex[:12]}"
+            
+            with self.get_session() as session:
+                prediction = Prediction(
+                    prediction_id=prediction_id,
+                    title=title,
+                    description=description,
+                    confidence=confidence,
+                    deadline=deadline,
+                    privacy_status=privacy_status,
+                    user_notes=user_notes,
+                )
+                session.add(prediction)
+                session.commit()
+                
+                logger.info(f"Created prediction: {prediction_id}")
+                return prediction_id
+                
+        except Exception as e:
+            logger.error(f"Failed to create prediction: {e}")
+            raise
+
+    def get_prediction(self, prediction_id: str) -> Prediction | None:
+        """Get prediction by ID."""
+        try:
+            with self.get_session() as session:
+                return session.query(Prediction).filter_by(prediction_id=prediction_id).first()
+        except Exception as e:
+            logger.error(f"Failed to get prediction {prediction_id}: {e}")
+            return None
+
+    def get_all_predictions(
+        self,
+        privacy_status: str = None,
+        resolution_status: str = None,
+        include_hidden: bool = False,
+    ) -> list[Prediction]:
+        """
+        Get all predictions with optional filters.
+        
+        Args:
+            privacy_status: Filter by 'public' or 'private'
+            resolution_status: Filter by resolution status
+            include_hidden: Include hidden (uploaded) predictions
+        
+        Returns:
+            List of Prediction objects
+        """
+        try:
+            with self.get_session() as session:
+                query = session.query(Prediction)
+                
+                if not include_hidden:
+                    query = query.filter_by(hidden=False)
+                
+                if privacy_status:
+                    query = query.filter_by(privacy_status=privacy_status)
+                
+                if resolution_status:
+                    query = query.filter_by(resolution_status=resolution_status)
+                
+                return query.order_by(Prediction.created_at.desc()).all()
+                
+        except Exception as e:
+            logger.error(f"Failed to get predictions: {e}")
+            return []
+
+    def update_prediction(
+        self,
+        prediction_id: str,
+        confidence: float = None,
+        deadline: str = None,
+        change_reason: str = None,
+        **other_updates,
+    ) -> bool:
+        """
+        Update prediction. If confidence or deadline changes, creates history entry.
+        
+        Args:
+            prediction_id: Prediction ID
+            confidence: New confidence (0.0-1.0)
+            deadline: New deadline (YYYY-MM-DD)
+            change_reason: Reason for change
+            **other_updates: Other fields to update (title, description, user_notes, etc.)
+        
+        Returns:
+            True if successful
+        """
+        try:
+            with self.get_session() as session:
+                prediction = session.query(Prediction).filter_by(prediction_id=prediction_id).first()
+                if not prediction:
+                    logger.warning(f"Prediction {prediction_id} not found")
+                    return False
+                
+                # Track if we need to create history entry
+                history_needed = False
+                
+                if confidence is not None and confidence != prediction.confidence:
+                    prediction.confidence = confidence
+                    history_needed = True
+                
+                if deadline is not None and deadline != prediction.deadline:
+                    prediction.deadline = deadline
+                    history_needed = True
+                
+                # Update other fields
+                for key, value in other_updates.items():
+                    if hasattr(prediction, key):
+                        setattr(prediction, key, value)
+                
+                # Create history entry if confidence or deadline changed
+                if history_needed:
+                    history = PredictionHistory(
+                        prediction_id=prediction_id,
+                        confidence=prediction.confidence,
+                        deadline=prediction.deadline,
+                        change_reason=change_reason or "Updated by user",
+                    )
+                    session.add(history)
+                
+                session.commit()
+                logger.info(f"Updated prediction: {prediction_id}")
+                return True
+                
+        except Exception as e:
+            logger.error(f"Failed to update prediction {prediction_id}: {e}")
+            return False
+
+    def resolve_prediction(
+        self,
+        prediction_id: str,
+        resolution_status: str,
+        resolution_notes: str = None,
+    ) -> bool:
+        """
+        Mark prediction as resolved.
+        
+        Args:
+            prediction_id: Prediction ID
+            resolution_status: 'correct', 'incorrect', 'ambiguous', or 'cancelled'
+            resolution_notes: Explanation of resolution
+        
+        Returns:
+            True if successful
+        """
+        try:
+            with self.get_session() as session:
+                prediction = session.query(Prediction).filter_by(prediction_id=prediction_id).first()
+                if not prediction:
+                    logger.warning(f"Prediction {prediction_id} not found")
+                    return False
+                
+                prediction.resolution_status = resolution_status
+                prediction.resolution_notes = resolution_notes
+                prediction.resolved_at = datetime.utcnow()
+                
+                session.commit()
+                logger.info(f"Resolved prediction {prediction_id}: {resolution_status}")
+                return True
+                
+        except Exception as e:
+            logger.error(f"Failed to resolve prediction {prediction_id}: {e}")
+            return False
+
+    def delete_prediction(self, prediction_id: str) -> bool:
+        """Delete prediction and all associated data (cascades to history and evidence)."""
+        try:
+            with self.get_session() as session:
+                prediction = session.query(Prediction).filter_by(prediction_id=prediction_id).first()
+                if not prediction:
+                    logger.warning(f"Prediction {prediction_id} not found")
+                    return False
+                
+                session.delete(prediction)
+                session.commit()
+                logger.info(f"Deleted prediction: {prediction_id}")
+                return True
+                
+        except Exception as e:
+            logger.error(f"Failed to delete prediction {prediction_id}: {e}")
+            return False
+
+    def add_prediction_evidence(
+        self,
+        prediction_id: str,
+        evidence_type: str,
+        entity_id: str,
+        stance: str = "neutral",
+        user_notes: str = None,
+    ) -> int | None:
+        """
+        Add evidence to prediction.
+        
+        Args:
+            prediction_id: Prediction ID
+            evidence_type: 'claim', 'jargon', 'concept', or 'person'
+            entity_id: ID of the entity
+            stance: 'pro', 'con', or 'neutral'
+            user_notes: User's notes about this evidence
+        
+        Returns:
+            evidence_id if successful, None otherwise
+        """
+        try:
+            with self.get_session() as session:
+                evidence = PredictionEvidence(
+                    prediction_id=prediction_id,
+                    evidence_type=evidence_type,
+                    entity_id=entity_id,
+                    stance=stance,
+                    user_notes=user_notes,
+                )
+                session.add(evidence)
+                session.commit()
+                
+                logger.info(f"Added {evidence_type} evidence to prediction {prediction_id}")
+                return evidence.evidence_id
+                
+        except Exception as e:
+            logger.error(f"Failed to add evidence to prediction {prediction_id}: {e}")
+            return None
+
+    def get_prediction_evidence(self, prediction_id: str) -> list[PredictionEvidence]:
+        """Get all evidence for a prediction."""
+        try:
+            with self.get_session() as session:
+                return (
+                    session.query(PredictionEvidence)
+                    .filter_by(prediction_id=prediction_id)
+                    .order_by(PredictionEvidence.added_at)
+                    .all()
+                )
+        except Exception as e:
+            logger.error(f"Failed to get evidence for prediction {prediction_id}: {e}")
+            return []
+
+    def update_evidence_stance(self, evidence_id: int, stance: str) -> bool:
+        """Update the stance of an evidence item."""
+        try:
+            with self.get_session() as session:
+                evidence = session.query(PredictionEvidence).filter_by(evidence_id=evidence_id).first()
+                if not evidence:
+                    logger.warning(f"Evidence {evidence_id} not found")
+                    return False
+                
+                evidence.stance = stance
+                session.commit()
+                logger.info(f"Updated evidence {evidence_id} stance to {stance}")
+                return True
+                
+        except Exception as e:
+            logger.error(f"Failed to update evidence {evidence_id}: {e}")
+            return False
+
+    def remove_prediction_evidence(self, evidence_id: int) -> bool:
+        """Remove evidence from prediction."""
+        try:
+            with self.get_session() as session:
+                evidence = session.query(PredictionEvidence).filter_by(evidence_id=evidence_id).first()
+                if not evidence:
+                    logger.warning(f"Evidence {evidence_id} not found")
+                    return False
+                
+                session.delete(evidence)
+                session.commit()
+                logger.info(f"Removed evidence: {evidence_id}")
+                return True
+                
+        except Exception as e:
+            logger.error(f"Failed to remove evidence {evidence_id}: {e}")
+            return False
+
+    def get_prediction_history(self, prediction_id: str) -> list[PredictionHistory]:
+        """Get confidence/deadline history for a prediction (for graphing)."""
+        try:
+            with self.get_session() as session:
+                return (
+                    session.query(PredictionHistory)
+                    .filter_by(prediction_id=prediction_id)
+                    .order_by(PredictionHistory.timestamp)
+                    .all()
+                )
+        except Exception as e:
+            logger.error(f"Failed to get history for prediction {prediction_id}: {e}")
+            return []
+
+    def get_prediction_with_details(self, prediction_id: str) -> dict | None:
+        """
+        Get prediction with all associated data (evidence and history).
+        
+        Returns:
+            Dictionary with prediction, evidence, and history
+        """
+        try:
+            with self.get_session() as session:
+                prediction = session.query(Prediction).filter_by(prediction_id=prediction_id).first()
+                if not prediction:
+                    return None
+                
+                evidence = self.get_prediction_evidence(prediction_id)
+                history = self.get_prediction_history(prediction_id)
+                
+                return {
+                    "prediction": prediction,
+                    "evidence": evidence,
+                    "history": history,
+                }
+                
+        except Exception as e:
+            logger.error(f"Failed to get prediction details for {prediction_id}: {e}")
+            return None

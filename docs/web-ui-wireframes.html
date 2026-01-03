@@ -1,0 +1,1342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GetReceipts Web UI Wireframes</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #333;
+        }
+        
+        .nav {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        
+        .nav button {
+            padding: 10px 20px;
+            border: 2px solid #007bff;
+            background: white;
+            color: #007bff;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        
+        .nav button:hover {
+            background: #007bff;
+            color: white;
+        }
+        
+        .nav button.active {
+            background: #007bff;
+            color: white;
+        }
+        
+        .wireframe {
+            display: none;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .wireframe.active {
+            display: block;
+        }
+        
+        .browser-chrome {
+            background: #e8e8e8;
+            padding: 10px 15px;
+            border-bottom: 1px solid #ccc;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .browser-dots {
+            display: flex;
+            gap: 6px;
+        }
+        
+        .browser-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+        
+        .dot-red { background: #ff5f56; }
+        .dot-yellow { background: #ffbd2e; }
+        .dot-green { background: #27c93f; }
+        
+        .url-bar {
+            flex: 1;
+            background: white;
+            padding: 5px 15px;
+            border-radius: 6px;
+            font-size: 12px;
+            color: #666;
+            border: 1px solid #ccc;
+        }
+        
+        .page-content {
+            padding: 30px;
+            min-height: 600px;
+        }
+        
+        .header {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        
+        .back-btn {
+            padding: 8px 16px;
+            background: #f0f0f0;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        .header-text h2 {
+            color: #333;
+            margin-bottom: 5px;
+        }
+        
+        .header-text p {
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            border-radius: 6px;
+            font-size: 12px;
+            color: #155724;
+            margin-top: 10px;
+        }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background: #28a745;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .card {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .card-header {
+            margin-bottom: 15px;
+        }
+        
+        .card-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 5px;
+        }
+        
+        .card-description {
+            font-size: 14px;
+            color: #666;
+        }
+        
+        .input-box {
+            width: 100%;
+            min-height: 120px;
+            padding: 15px;
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            background: #fafafa;
+            font-size: 14px;
+            color: #999;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+        }
+        
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 10px;
+            background: #e7f3ff;
+            color: #0366d6;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .badge.youtube { background: #ffebee; color: #c62828; }
+        .badge.success { background: #d4edda; color: #155724; }
+        .badge.error { background: #f8d7da; color: #721c24; }
+        
+        .processing-options {
+            display: grid;
+            gap: 15px;
+            margin: 20px 0;
+        }
+        
+        .option-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .option-row label {
+            font-size: 14px;
+            color: #333;
+            min-width: 120px;
+        }
+        
+        .option-row select, .option-row input {
+            flex: 1;
+            padding: 8px 12px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        
+        .checkbox-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: #333;
+        }
+        
+        .checkbox-row input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+        
+        .button-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 20px;
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .btn-primary {
+            background: #007bff;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #0056b3;
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .btn-link {
+            background: none;
+            color: #007bff;
+            text-decoration: underline;
+        }
+        
+        .job-card {
+            background: #f9f9f9;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 10px;
+        }
+        
+        .job-card.processing {
+            border-left: 4px solid #007bff;
+        }
+        
+        .job-card.complete {
+            border-left: 4px solid #28a745;
+            background: #f0f8f4;
+        }
+        
+        .job-card.failed {
+            border-left: 4px solid #dc3545;
+            background: #fef5f5;
+        }
+        
+        .job-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        
+        .job-icon {
+            font-size: 20px;
+        }
+        
+        .job-title {
+            flex: 1;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .job-progress {
+            font-size: 12px;
+            color: #666;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: #e0e0e0;
+            border-radius: 3px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: #007bff;
+            transition: width 0.3s;
+        }
+        
+        .job-stages {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        
+        .stage {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        
+        .stage.complete {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .stage.pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .split-view {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        
+        .list-item {
+            padding: 15px;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .list-item:hover {
+            background: #f5f5f5;
+            border-color: #007bff;
+        }
+        
+        .list-item.selected {
+            background: #e7f3ff;
+            border-color: #007bff;
+        }
+        
+        .detail-panel {
+            background: #f9f9f9;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 20px;
+            min-height: 400px;
+        }
+        
+        .empty-state {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 300px;
+            color: #999;
+            font-size: 14px;
+        }
+        
+        .feature-list {
+            list-style: none;
+            padding-left: 0;
+        }
+        
+        .feature-list li {
+            padding: 8px 0;
+            border-bottom: 1px solid #e0e0e0;
+            font-size: 14px;
+            color: #333;
+        }
+        
+        .feature-list li:last-child {
+            border-bottom: none;
+        }
+        
+        .feature-list .checkmark {
+            color: #28a745;
+            margin-right: 8px;
+        }
+        
+        .feature-list .cross {
+            color: #dc3545;
+            margin-right: 8px;
+        }
+        
+        .summary-box {
+            background: #fff9e6;
+            border: 2px solid #ffd700;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 30px 0;
+        }
+        
+        .summary-box h3 {
+            color: #856404;
+            margin-bottom: 15px;
+        }
+        
+        .summary-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        
+        .summary-table th,
+        .summary-table td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        .summary-table th {
+            background: #f5f5f5;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .summary-table td {
+            font-size: 14px;
+            color: #666;
+        }
+        
+        .icon {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌐 GetReceipts Web UI Wireframes</h1>
+        
+        <div class="nav">
+            <button class="active" onclick="showWireframe('contribute')">🎬 Process Content</button>
+            <button onclick="showWireframe('jobs')">📋 Job Queue</button>
+            <button onclick="showWireframe('settings')">⚙️ Settings</button>
+            <button onclick="showWireframe('monitor')">📁 Folder Monitor</button>
+            <button onclick="showWireframe('help')">❓ Help</button>
+            <button onclick="showWireframe('summary')">📊 Summary</button>
+        </div>
+        
+        <!-- PAGE 1: Process Content -->
+        <div class="wireframe active" id="contribute">
+            <div class="browser-chrome">
+                <div class="browser-dots">
+                    <div class="browser-dot dot-red"></div>
+                    <div class="browser-dot dot-yellow"></div>
+                    <div class="browser-dot dot-green"></div>
+                </div>
+                <div class="url-bar">https://getreceipts.org/contribute</div>
+            </div>
+            
+            <div class="page-content">
+                <div style="text-align: center; margin-bottom: 30px;">
+                    <h2 style="font-size: 28px; margin-bottom: 10px;">⭐ Process Content</h2>
+                    <p style="color: #666;">Extract claims from videos, audio, and transcripts</p>
+                    <div class="status-indicator">
+                        <span class="status-dot"></span>
+                        Daemon v1.0.0 • 2 active jobs
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Add Content</div>
+                        <div class="card-description">Paste YouTube URLs, drag files, or enter file paths</div>
+                    </div>
+                    
+                    <div class="input-box">
+                        📎 Drag files here or paste YouTube URLs<br>
+                        <small>One per line for batch processing</small>
+                    </div>
+                    
+                    <div class="badge youtube">
+                        🎬 YouTube Video
+                    </div>
+                    
+                    <hr style="margin: 20px 0; border: none; border-top: 1px solid #e0e0e0;">
+                    
+                    <div class="processing-options">
+                        <div class="option-row">
+                            <label>Whisper Model:</label>
+                            <select>
+                                <option>Medium</option>
+                                <option>Tiny</option>
+                                <option>Small</option>
+                                <option>Large-v3</option>
+                            </select>
+                        </div>
+                        
+                        <div class="option-row">
+                            <label>LLM Provider:</label>
+                            <select style="flex: 0.5; margin-right: 10px;">
+                                <option>OpenAI</option>
+                                <option>Anthropic</option>
+                            </select>
+                            <label style="min-width: 60px;">Model:</label>
+                            <select style="flex: 0.5;">
+                                <option>gpt-4o</option>
+                                <option>gpt-4o-mini</option>
+                            </select>
+                        </div>
+                        
+                        <div class="checkbox-row">
+                            <input type="checkbox" checked>
+                            <label>Process Full Pipeline (transcribe + extract)</label>
+                        </div>
+                        
+                        <div class="checkbox-row">
+                            <input type="checkbox" checked>
+                            <label>Auto-upload to GetReceipts</label>
+                        </div>
+                    </div>
+                    
+                    <div class="button-row">
+                        <a href="#" class="btn-link">📋 View all jobs</a>
+                        <button class="btn btn-primary">▶️ Process 1 item</button>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 30px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <h3 style="font-size: 18px;">Recent Jobs</h3>
+                        <button class="btn-link" style="font-size: 12px;">Clear</button>
+                    </div>
+                    
+                    <div class="job-card processing">
+                        <div class="job-header">
+                            <span class="job-icon">⏳</span>
+                            <span class="job-title">Joe Rogan #2045 - Neil deGrasse Tyson</span>
+                            <span class="job-progress">42%</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: 42%;"></div>
+                        </div>
+                        <div class="job-stages">
+                            <span class="stage complete">✓ Download</span>
+                            <span class="stage complete">✓ Transcribe</span>
+                            <span class="stage pending">⏳ Extract</span>
+                            <span class="stage pending">Upload</span>
+                        </div>
+                        <div style="margin-top: 8px; font-size: 12px; color: #666;">
+                            Currently: Extracting claims...
+                        </div>
+                    </div>
+                    
+                    <div class="job-card complete">
+                        <div class="job-header">
+                            <span class="job-icon">✅</span>
+                            <span class="job-title">Lex Fridman #370 - Sam Altman</span>
+                        </div>
+                        <div class="job-stages">
+                            <span class="stage complete">✓ Download</span>
+                            <span class="stage complete">✓ Transcribe</span>
+                            <span class="stage complete">✓ Extract</span>
+                            <span class="stage complete">✓ Upload</span>
+                        </div>
+                        <div style="margin-top: 8px; font-size: 12px; color: #666; display: flex; justify-content: space-between;">
+                            <span><strong>47 claims</strong> extracted</span>
+                            <a href="#" style="color: #007bff;">View Episode →</a>
+                        </div>
+                    </div>
+                    
+                    <div class="job-card failed">
+                        <div class="job-header">
+                            <span class="job-icon">❌</span>
+                            <span class="job-title">Huberman Lab #45 - Sleep Science</span>
+                            <button class="btn btn-secondary" style="padding: 5px 12px; font-size: 12px;">🔄 Retry</button>
+                        </div>
+                        <div style="margin-top: 8px; font-size: 12px; color: #dc3545;">
+                            Error: YouTube video unavailable
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- PAGE 2: Job Queue -->
+        <div class="wireframe" id="jobs">
+            <div class="browser-chrome">
+                <div class="browser-dots">
+                    <div class="browser-dot dot-red"></div>
+                    <div class="browser-dot dot-yellow"></div>
+                    <div class="browser-dot dot-green"></div>
+                </div>
+                <div class="url-bar">https://getreceipts.org/contribute/jobs</div>
+            </div>
+            
+            <div class="page-content">
+                <div class="header">
+                    <button class="back-btn">← Back</button>
+                    <div class="header-text">
+                        <h2>Job Queue</h2>
+                        <p>Monitor and manage processing jobs</p>
+                    </div>
+                </div>
+                
+                <div class="split-view">
+                    <div>
+                        <div style="margin-bottom: 15px; display: flex; gap: 10px;">
+                            <select style="padding: 8px; border-radius: 6px; border: 1px solid #ccc;">
+                                <option>All Jobs</option>
+                                <option>Active</option>
+                                <option>Completed</option>
+                                <option>Failed</option>
+                            </select>
+                            <input type="text" placeholder="Search..." style="flex: 1; padding: 8px; border-radius: 6px; border: 1px solid #ccc;">
+                        </div>
+                        
+                        <div class="list-item selected">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <div style="font-weight: 600; margin-bottom: 4px;">⏳ Joe Rogan #2045</div>
+                                    <div style="font-size: 12px; color: #666;">42% • Extracting</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="list-item">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <div style="font-weight: 600; margin-bottom: 4px;">✅ Lex Fridman #370</div>
+                                    <div style="font-size: 12px; color: #666;">47 claims • Complete</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="list-item">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <div style="font-weight: 600; margin-bottom: 4px;">✅ Huberman Lab #44</div>
+                                    <div style="font-size: 12px; color: #666;">31 claims • Complete</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="list-item">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <div style="font-weight: 600; margin-bottom: 4px;">❌ Huberman Lab #45</div>
+                                    <div style="font-size: 12px; color: #666;">Failed • Video unavailable</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div style="text-align: center; margin-top: 15px; font-size: 12px; color: #666;">
+                            Showing 4 of 12 jobs
+                        </div>
+                        
+                        <div style="margin-top: 15px; display: flex; gap: 10px;">
+                            <button class="btn btn-secondary">🔄 Retry</button>
+                            <button class="btn btn-secondary">❌ Delete</button>
+                        </div>
+                    </div>
+                    
+                    <div class="detail-panel">
+                        <h3 style="margin-bottom: 15px;">Joe Rogan #2045 - Neil deGrasse Tyson</h3>
+                        
+                        <div style="margin-bottom: 20px;">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                                <span style="font-size: 14px; color: #666;">Status: Extracting</span>
+                                <span style="font-size: 14px; font-weight: 600;">42%</span>
+                            </div>
+                            <div class="progress-bar">
+                                <div class="progress-fill" style="width: 42%;"></div>
+                            </div>
+                        </div>
+                        
+                        <div style="margin-bottom: 20px;">
+                            <h4 style="font-size: 14px; margin-bottom: 10px; color: #666;">Stages:</h4>
+                            <div style="display: flex; flex-direction: column; gap: 8px;">
+                                <div style="display: flex; justify-content: space-between; font-size: 14px;">
+                                    <span>✓ Download</span>
+                                    <span style="color: #666;">1m 23s</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; font-size: 14px;">
+                                    <span>✓ Transcribe</span>
+                                    <span style="color: #666;">8m 15s</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; font-size: 14px;">
+                                    <span>⏳ Extract Claims</span>
+                                    <span style="color: #666;">3m elapsed</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; font-size: 14px; opacity: 0.5;">
+                                    <span>⭕ Upload</span>
+                                    <span style="color: #666;">—</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div style="margin-bottom: 20px;">
+                            <h4 style="font-size: 14px; margin-bottom: 10px; color: #666;">Input:</h4>
+                            <div style="font-size: 12px; color: #666; word-break: break-all;">
+                                youtube.com/watch?v=abc123...
+                            </div>
+                        </div>
+                        
+                        <div style="margin-bottom: 20px;">
+                            <h4 style="font-size: 14px; margin-bottom: 10px; color: #666;">Transcript:</h4>
+                            <div style="font-size: 14px;">24,583 words</div>
+                        </div>
+                        
+                        <div style="display: flex; gap: 10px;">
+                            <button class="btn btn-secondary">Cancel</button>
+                            <button class="btn btn-primary">View Details</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- PAGE 3: Settings -->
+        <div class="wireframe" id="settings">
+            <div class="browser-chrome">
+                <div class="browser-dots">
+                    <div class="browser-dot dot-red"></div>
+                    <div class="browser-dot dot-yellow"></div>
+                    <div class="browser-dot dot-green"></div>
+                </div>
+                <div class="url-bar">https://getreceipts.org/contribute/settings</div>
+            </div>
+            
+            <div class="page-content">
+                <div class="header">
+                    <button class="back-btn">← Back</button>
+                    <div class="header-text">
+                        <h2>Settings</h2>
+                        <p>Configure API keys and processing defaults</p>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">API Keys</div>
+                    </div>
+                    
+                    <div style="margin-bottom: 20px;">
+                        <label style="display: block; margin-bottom: 8px; font-size: 14px; font-weight: 600;">OpenAI API Key:</label>
+                        <div style="display: flex; gap: 10px;">
+                            <input type="password" value="sk-proj-••••••••••••••••••••" style="flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-family: monospace;">
+                            <button class="btn btn-secondary">Test</button>
+                        </div>
+                        <div style="margin-top: 5px; font-size: 12px; color: #28a745;">
+                            ✅ Status: Configured
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label style="display: block; margin-bottom: 8px; font-size: 14px; font-weight: 600;">Anthropic API Key:</label>
+                        <div style="display: flex; gap: 10px;">
+                            <input type="password" value="sk-ant-••••••••••••••••••••" style="flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-family: monospace;">
+                            <button class="btn btn-secondary">Test</button>
+                        </div>
+                        <div style="margin-top: 5px; font-size: 12px; color: #28a745;">
+                            ✅ Status: Configured
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Processing Defaults</div>
+                    </div>
+                    
+                    <div style="display: flex; flex-direction: column; gap: 15px;">
+                        <div class="option-row">
+                            <label>Whisper Model:</label>
+                            <select>
+                                <option>Medium</option>
+                                <option>Tiny</option>
+                                <option>Small</option>
+                                <option>Large-v3</option>
+                            </select>
+                        </div>
+                        
+                        <div class="option-row">
+                            <label>LLM Provider:</label>
+                            <select>
+                                <option>OpenAI</option>
+                                <option>Anthropic</option>
+                            </select>
+                        </div>
+                        
+                        <div class="option-row">
+                            <label>LLM Model:</label>
+                            <select>
+                                <option>gpt-4o</option>
+                                <option>gpt-4o-mini</option>
+                                <option>claude-3.5-sonnet</option>
+                            </select>
+                        </div>
+                        
+                        <div class="checkbox-row">
+                            <input type="checkbox" checked>
+                            <label>Auto-upload to GetReceipts by default</label>
+                        </div>
+                        
+                        <div class="checkbox-row">
+                            <input type="checkbox" checked>
+                            <label>Process full pipeline by default</label>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Device Linking</div>
+                    </div>
+                    
+                    <div style="font-size: 14px;">
+                        <div style="margin-bottom: 10px;">
+                            <strong>Device ID:</strong> <code>daemon-a3f7c9</code>
+                        </div>
+                        <div style="margin-bottom: 15px;">
+                            <strong>Status:</strong> <span style="color: #28a745;">✅ Linked to GetReceipts account</span>
+                        </div>
+                        <p style="color: #666; margin-bottom: 15px;">
+                            This device can upload directly to your account.
+                        </p>
+                        <button class="btn btn-secondary">Unlink Device</button>
+                    </div>
+                </div>
+                
+                <div style="text-align: right; margin-top: 20px;">
+                    <button class="btn btn-primary">Save Settings</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- PAGE 4: Folder Monitor -->
+        <div class="wireframe" id="monitor">
+            <div class="browser-chrome">
+                <div class="browser-dots">
+                    <div class="browser-dot dot-red"></div>
+                    <div class="browser-dot dot-yellow"></div>
+                    <div class="browser-dot dot-green"></div>
+                </div>
+                <div class="url-bar">https://getreceipts.org/contribute/monitor</div>
+            </div>
+            
+            <div class="page-content">
+                <div class="header">
+                    <button class="back-btn">← Back</button>
+                    <div class="header-text">
+                        <h2>Folder Monitor</h2>
+                        <p>Automatically process files added to a folder</p>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Monitor Status</div>
+                    </div>
+                    
+                    <div style="padding: 20px; background: #f9f9f9; border-radius: 8px; text-align: center;">
+                        <div style="font-size: 18px; margin-bottom: 15px;">⏸️ Not Watching</div>
+                        <button class="btn btn-primary">▶️ Start Watching</button>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Configuration</div>
+                    </div>
+                    
+                    <div style="display: flex; flex-direction: column; gap: 20px;">
+                        <div>
+                            <label style="display: block; margin-bottom: 8px; font-size: 14px; font-weight: 600;">Watch Folder:</label>
+                            <div style="display: flex; gap: 10px;">
+                                <input type="text" value="/Users/you/Podcast Downloads" style="flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 6px;">
+                                <button class="btn btn-secondary">Browse</button>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label style="display: block; margin-bottom: 8px; font-size: 14px; font-weight: 600;">File Patterns: <small>(one per line)</small></label>
+                            <textarea style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-family: monospace; font-size: 12px;" rows="5">*.mp3
+*.mp4
+*.wav
+*.m4a
+*.pdf</textarea>
+                        </div>
+                        
+                        <div class="checkbox-row">
+                            <input type="checkbox" checked>
+                            <label>Watch subfolders recursively</label>
+                        </div>
+                        
+                        <div class="checkbox-row">
+                            <input type="checkbox" checked>
+                            <label>Auto-process new files</label>
+                        </div>
+                        
+                        <div class="option-row">
+                            <label>Debounce:</label>
+                            <input type="number" value="5" style="width: 80px;">
+                            <span style="margin-left: 10px; color: #666;">seconds (wait before processing)</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Recent Activity</div>
+                    </div>
+                    
+                    <div class="empty-state">
+                        No recent activity
+                    </div>
+                </div>
+                
+                <div style="text-align: right; margin-top: 20px;">
+                    <button class="btn btn-primary">Save Configuration</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- PAGE 5: Help -->
+        <div class="wireframe" id="help">
+            <div class="browser-chrome">
+                <div class="browser-dots">
+                    <div class="browser-dot dot-red"></div>
+                    <div class="browser-dot dot-yellow"></div>
+                    <div class="browser-dot dot-green"></div>
+                </div>
+                <div class="url-bar">https://getreceipts.org/contribute/help</div>
+            </div>
+            
+            <div class="page-content">
+                <div class="header">
+                    <button class="back-btn">← Back</button>
+                    <div class="header-text">
+                        <h2>Getting Started</h2>
+                        <p>Learn how to use GetReceipts to extract knowledge from content</p>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">What is GetReceipts?</div>
+                    </div>
+                    
+                    <p style="color: #666; line-height: 1.8;">
+                        GetReceipts helps you extract, organize, and share knowledge from podcasts, videos, and documents. 
+                        The system automatically:
+                    </p>
+                    <ul style="margin: 15px 0; padding-left: 20px; color: #666; line-height: 1.8;">
+                        <li>Downloads and transcribes audio/video content</li>
+                        <li>Extracts claims, insights, and key information using AI</li>
+                        <li>Organizes everything into a searchable knowledge base</li>
+                        <li>Uploads to GetReceipts.org for web-based review and sharing</li>
+                    </ul>
+                    <p style="color: #666; line-height: 1.8;">
+                        The local daemon runs on your computer to handle processing, while the web interface provides 
+                        a seamless experience for submitting content and reviewing results.
+                    </p>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">✅ Quick Start Guide</div>
+                        <div class="card-description">Get up and running in 3 simple steps</div>
+                    </div>
+                    
+                    <div style="display: flex; flex-direction: column; gap: 20px;">
+                        <div style="display: flex; gap: 15px;">
+                            <div style="flex-shrink: 0; width: 32px; height: 32px; background: #007bff; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600;">1</div>
+                            <div style="flex: 1;">
+                                <h3 style="margin-bottom: 8px;">Configure Your AI Provider</h3>
+                                <p style="color: #666; font-size: 14px; margin-bottom: 10px;">
+                                    Go to <a href="#" style="color: #007bff;">Settings</a> and add your API key. You can use:
+                                </p>
+                                <ul style="font-size: 14px; color: #666; padding-left: 20px;">
+                                    <li><strong>OpenAI</strong> - GPT-4o for high-quality extraction</li>
+                                    <li><strong>Anthropic</strong> - Claude for excellent reasoning</li>
+                                </ul>
+                                <button class="btn btn-secondary" style="margin-top: 10px; font-size: 12px;">Test API Keys</button>
+                            </div>
+                        </div>
+                        
+                        <div style="display: flex; gap: 15px;">
+                            <div style="flex-shrink: 0; width: 32px; height: 32px; background: #007bff; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600;">2</div>
+                            <div style="flex: 1;">
+                                <h3 style="margin-bottom: 8px;">Process Your First Content</h3>
+                                <p style="color: #666; font-size: 14px; margin-bottom: 10px;">
+                                    Go to the <a href="#" style="color: #007bff;">main Contribute page</a> and:
+                                </p>
+                                <ul style="font-size: 14px; color: #666; padding-left: 20px;">
+                                    <li>Paste a YouTube URL (or multiple URLs)</li>
+                                    <li>Ensure "Full Pipeline" and "Auto-upload" are enabled</li>
+                                    <li>Click "Process" and wait for completion</li>
+                                </ul>
+                            </div>
+                        </div>
+                        
+                        <div style="display: flex; gap: 15px;">
+                            <div style="flex-shrink: 0; width: 32px; height: 32px; background: #007bff; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600;">3</div>
+                            <div style="flex: 1;">
+                                <h3 style="margin-bottom: 8px;">Review on the Web</h3>
+                                <p style="color: #666; font-size: 14px; margin-bottom: 10px;">
+                                    Once processing completes, your claims are uploaded to GetReceipts.org. 
+                                    Visit your <a href="#" style="color: #007bff;">Dashboard</a> to:
+                                </p>
+                                <ul style="font-size: 14px; color: #666; padding-left: 20px;">
+                                    <li>Search and filter extracted claims</li>
+                                    <li>Edit or remove inaccurate claims</li>
+                                    <li>Organize claims into collections</li>
+                                    <li>Share insights with others</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Feature Guide</div>
+                    </div>
+                    
+                    <details style="margin-bottom: 10px; border: 1px solid #e0e0e0; border-radius: 6px; padding: 15px;">
+                        <summary style="cursor: pointer; font-weight: 600;">🎬 Process Content</summary>
+                        <ul style="margin-top: 10px; padding-left: 20px; font-size: 14px; color: #666;">
+                            <li><strong>YouTube URLs:</strong> Paste any YouTube video or playlist URL</li>
+                            <li><strong>Local Files:</strong> Drag and drop audio/video files</li>
+                            <li><strong>PDF Transcripts:</strong> Import high-quality transcripts</li>
+                            <li><strong>Batch Processing:</strong> Multiple URLs (one per line)</li>
+                        </ul>
+                    </details>
+                    
+                    <details style="margin-bottom: 10px; border: 1px solid #e0e0e0; border-radius: 6px; padding: 15px;">
+                        <summary style="cursor: pointer; font-weight: 600;">📋 Job Queue</summary>
+                        <ul style="margin-top: 10px; padding-left: 20px; font-size: 14px; color: #666;">
+                            <li>View all active, completed, and failed jobs</li>
+                            <li>Retry failed jobs with one click</li>
+                            <li>Cancel running jobs if needed</li>
+                            <li>Search and filter job history</li>
+                        </ul>
+                    </details>
+                    
+                    <details style="margin-bottom: 10px; border: 1px solid #e0e0e0; border-radius: 6px; padding: 15px;">
+                        <summary style="cursor: pointer; font-weight: 600;">⚙️ Settings</summary>
+                        <ul style="margin-top: 10px; padding-left: 20px; font-size: 14px; color: #666;">
+                            <li><strong>API Keys:</strong> Configure OpenAI or Anthropic credentials</li>
+                            <li><strong>Whisper Model:</strong> Choose transcription quality</li>
+                            <li><strong>Auto-upload:</strong> Toggle automatic upload to GetReceipts</li>
+                            <li><strong>Device Linking:</strong> Link this device to your account</li>
+                        </ul>
+                    </details>
+                    
+                    <details style="border: 1px solid #e0e0e0; border-radius: 6px; padding: 15px;">
+                        <summary style="cursor: pointer; font-weight: 600;">📁 Folder Monitor</summary>
+                        <ul style="margin-top: 10px; padding-left: 20px; font-size: 14px; color: #666;">
+                            <li>Watch a folder for new files (e.g., podcast downloads)</li>
+                            <li>Automatically process new audio/video files</li>
+                            <li>Configure file patterns and processing options</li>
+                            <li>Perfect for RSS feeds or meeting recordings</li>
+                        </ul>
+                    </details>
+                </div>
+                
+                <div class="card" style="background: #d4edda; border-color: #c3e6cb;">
+                    <div style="display: flex; align-items: center; gap: 15px;">
+                        <span style="font-size: 32px;">✅</span>
+                        <div>
+                            <div style="font-weight: 600; color: #155724; margin-bottom: 5px;">Local Daemon Running</div>
+                            <div style="font-size: 14px; color: #155724;">Version 1.0.0 • 2 active jobs</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- SUMMARY PAGE -->
+        <div class="wireframe" id="summary">
+            <div class="browser-chrome">
+                <div class="browser-dots">
+                    <div class="browser-dot dot-red"></div>
+                    <div class="browser-dot dot-yellow"></div>
+                    <div class="browser-dot dot-green"></div>
+                </div>
+                <div class="url-bar">Feature Distribution Summary</div>
+            </div>
+            
+            <div class="page-content">
+                <h2 style="margin-bottom: 20px;">📊 Feature Distribution Summary</h2>
+                
+                <div class="summary-box">
+                    <h3>✅ Confirmation: Standard Processing Features</h3>
+                    <p style="color: #666; line-height: 1.8;">
+                        Yes, <strong>"standard YouTube processing"</strong> and <strong>"standard audio processing"</strong> refer to the 
+                        <strong>existing desktop app features</strong> that have been <strong>fully re-implemented in the web UI</strong>.
+                    </p>
+                    <ul style="margin: 15px 0; padding-left: 20px; color: #666; line-height: 1.8;">
+                        <li><strong>Standard YouTube Processing:</strong> User pastes YouTube URL → Downloads audio → Transcribes with Whisper → Extracts claims with LLM → Uploads to GetReceipts</li>
+                        <li><strong>Standard Audio Processing:</strong> User drops local audio/video file → Transcribes with Whisper → Extracts claims with LLM → Uploads to GetReceipts</li>
+                    </ul>
+                    <p style="color: #666; line-height: 1.8;">
+                        <strong>The web UI reuses 100% of the backend processing code</strong> from the desktop app via the FastAPI daemon. 
+                        The only difference is the UI layer (web forms instead of PyQt6 GUI).
+                    </p>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Feature Availability Matrix</div>
+                    </div>
+                    
+                    <table class="summary-table">
+                        <thead>
+                            <tr>
+                                <th>Feature</th>
+                                <th>Desktop App</th>
+                                <th>Web UI Page</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>Content Ingestion</strong></td>
+                                <td colspan="3" style="background: #f5f5f5; font-weight: 600;"></td>
+                            </tr>
+                            <tr>
+                                <td>YouTube URL Processing</td>
+                                <td>✅</td>
+                                <td>/contribute</td>
+                                <td><span class="badge success">✅ Re-implemented</span></td>
+                            </tr>
+                            <tr>
+                                <td>Local Audio/Video Processing</td>
+                                <td>✅</td>
+                                <td>/contribute</td>
+                                <td><span class="badge success">✅ Re-implemented</span></td>
+                            </tr>
+                            <tr>
+                                <td>PDF Transcript Import</td>
+                                <td>✅</td>
+                                <td>/contribute</td>
+                                <td><span class="badge success">✅ Re-implemented</span></td>
+                            </tr>
+                            <tr>
+                                <td>Batch Processing</td>
+                                <td>✅</td>
+                                <td>/contribute</td>
+                                <td><span class="badge success">✅ Re-implemented</span></td>
+                            </tr>
+                            <tr>
+                                <td>YouTube Playlists/Channels</td>
+                                <td>✅</td>
+                                <td>—</td>
+                                <td><span class="badge error">❌ Desktop only</span></td>
+                            </tr>
+                            <tr>
+                                <td>RSS/Podcast Feeds</td>
+                                <td>✅</td>
+                                <td>—</td>
+                                <td><span class="badge error">❌ Desktop only</span></td>
+                            </tr>
+                            
+                            <tr>
+                                <td><strong>Processing Configuration</strong></td>
+                                <td colspan="3" style="background: #f5f5f5; font-weight: 600;"></td>
+                            </tr>
+                            <tr>
+                                <td>Whisper Model Selection</td>
+                                <td>✅</td>
+                                <td>/contribute/settings</td>
+                                <td><span class="badge success">✅ Re-implemented</span></td>
+                            </tr>
+                            <tr>
+                                <td>LLM Provider Selection</td>
+                                <td>✅</td>
+                                <td>/contribute/settings</td>
+                                <td><span class="badge success">✅ Re-implemented</span></td>
+                            </tr>
+                            <tr>
+                                <td>API Key Configuration</td>
+                                <td>✅</td>
+                                <td>/contribute/settings</td>
+                                <td><span class="badge success">✅ Re-implemented</span></td>
+                            </tr>
+                            <tr>
+                                <td>Local Ollama LLM</td>
+                                <td>✅</td>
+                                <td>—</td>
+                                <td><span class="badge error">❌ Omitted per plan</span></td>
+                            </tr>
+                            <tr>
+                                <td>Custom Prompt Editing</td>
+                                <td>✅</td>
+                                <td>—</td>
+                                <td><span class="badge error">❌ Desktop only</span></td>
+                            </tr>
+                            
+                            <tr>
+                                <td><strong>Job Management</strong></td>
+                                <td colspan="3" style="background: #f5f5f5; font-weight: 600;"></td>
+                            </tr>
+                            <tr>
+                                <td>Job Queue with Filters</td>
+                                <td>✅</td>
+                                <td>/contribute/jobs</td>
+                                <td><span class="badge success">✅ Re-implemented</span></td>
+                            </tr>
+                            <tr>
+                                <td>Retry Failed Jobs</td>
+                                <td>✅</td>
+                                <td>/contribute/jobs</td>
+                                <td><span class="badge success">✅ Re-implemented</span></td>
+                            </tr>
+                            <tr>
+                                <td>Cancel Running Jobs</td>
+                                <td>✅</td>
+                                <td>/contribute/jobs</td>
+                                <td><span class="badge success">✅ Re-implemented</span></td>
+                            </tr>
+                            <tr>
+                                <td>Delete Completed Jobs</td>
+                                <td>✅</td>
+                                <td>/contribute/jobs</td>
+                                <td><span class="badge success">✅ Re-implemented</span></td>
+                            </tr>
+                            
+                            <tr>
+                                <td><strong>Automation</strong></td>
+                                <td colspan="3" style="background: #f5f5f5; font-weight: 600;"></td>
+                            </tr>
+                            <tr>
+                                <td>Folder Watching</td>
+                                <td>✅</td>
+                                <td>/contribute/monitor</td>
+                                <td><span class="badge success">✅ Re-implemented</span></td>
+                            </tr>
+                            <tr>
+                                <td>Auto-process New Files</td>
+                                <td>✅</td>
+                                <td>/contribute/monitor</td>
+                                <td><span class="badge success">✅ Re-implemented</span></td>
+                            </tr>
+                            <tr>
+                                <td>Device Linking</td>
+                                <td>✅</td>
+                                <td>/contribute/settings</td>
+                                <td><span class="badge success">✅ Re-implemented</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div class="card" style="background: #e7f3ff; border-color: #b3d9ff;">
+                    <h3 style="color: #004085; margin-bottom: 15px;">📋 Page Navigation Map</h3>
+                    <ul class="feature-list">
+                        <li><strong>/contribute</strong> - Main processing page (YouTube URLs, local files, drag-drop, batch processing, real-time progress)</li>
+                        <li><strong>/contribute/jobs</strong> - Job queue management (list, detail view, retry, cancel, delete, filters)</li>
+                        <li><strong>/contribute/settings</strong> - Configuration (API keys, Whisper model, LLM provider, auto-upload, device linking)</li>
+                        <li><strong>/contribute/monitor</strong> - Folder watching (auto-process new files, file patterns, recursive watching)</li>
+                        <li><strong>/contribute/help</strong> - Getting started guide (quick start, feature explanations, daemon status)</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        function showWireframe(id) {
+            // Hide all wireframes
+            document.querySelectorAll('.wireframe').forEach(w => w.classList.remove('active'));
+            
+            // Show selected wireframe
+            document.getElementById(id).classList.add('active');
+            
+            // Update nav buttons
+            document.querySelectorAll('.nav button').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+        }
+    </script>
+</body>
+</html>
+

@@ -2,7 +2,7 @@
 
 Complete inventory of all files in the Knowledge Chipper codebase with descriptions of actual functionality.
 
-**Last Updated:** December 27, 2025
+**Last Updated:** January 1, 2026
 
 ---
 
@@ -51,7 +51,7 @@ Complete inventory of all files in the Knowledge Chipper codebase with descripti
 - `CODE_DUPLICATION_ELIMINATION.md` - Refactoring to eliminate 70+ lines of duplicated code in summarization tab by extracting helper methods for settings building and worker creation
 - `COLOR_CODED_AND_THUMBNAIL_FIX.md` - Fix for color coding and thumbnail display issues
 - `CONTRIBUTING.md` - Guidelines for contributing to the project (code style, PR process, testing)
-- `CURRENT_ACTIVE_PROMPTS.md` - Full text and documentation of the 2 prompts used in the active two-pass architecture: Pass 1 (extraction_pass.txt - whole-document extraction & scoring) and Pass 2 (synthesis_pass.txt - long summary synthesis). Includes system integration diagram and usage examples. Both prompts are fully wired up and functional.
+- `CURRENT_ACTIVE_PROMPTS.md` - Full text and documentation of the 2 prompts used in the active two-pass architecture: Pass 1 (extraction_pass.txt - whole-document extraction & scoring with refinement injection) and Pass 2 (synthesis_pass.txt - long summary synthesis with dynamic length). Includes system integration diagram and usage examples. Both prompts are fully wired up and functional.
 - `DEPLOYMENT_READY.txt` - Deployment readiness checklist and status
 - `FINAL_INTEGRATION_STATUS.md` - Status of final system integration across all components
 - `FLAGSHIP_EVALUATOR_MODEL_DEFAULT_FIX.md` - Fix for Flagship Evaluator Model dropdown appearing empty on launch due to mismatch between stored model names and displayed names with "(Installed)" suffix
@@ -71,6 +71,8 @@ Complete inventory of all files in the Knowledge Chipper codebase with descripti
 - `OUTPUT_DIRECTORY_BUG_FIX.md` - Fix for bug where Summarize tab displayed user-selected output directory but saved files to default location
 - `LICENSE` - MIT License for the project
 - `README.md` - Main project documentation with installation, usage, and feature overview
+- `SYSTEM_LIMITS.md` - **NEW (Dec 29, 2025):** Central configuration documentation for all system limits: RSS episodes (9999), upload records (99999), rate limiting (99999/hour), search results (50), with rationale and recommendations for each limit
+- `HEALTH_TRACKING_WEB_CANONICAL_IMPLEMENTATION.md` - **NEW (Jan 2, 2026):** Complete implementation documentation for converting health tracking from local-only to web-canonical architecture: database schema updates (privacy + sync fields), auto-sync service, Supabase migration (025_health_tracking.sql), desktop integration, testing procedures, and future web dashboard plans
 - `TESTING_CHECKLIST.md` - Comprehensive checklist for testing all system features
 - `TIMER_REDUNDANCY_AUDIT.md` - Detailed audit of suspicious timer patterns, confirming both are legitimate (sequential initialization and immediate+periodic refresh patterns)
 
@@ -132,7 +134,7 @@ Complete inventory of all files in the Knowledge Chipper codebase with descripti
 
 - `docs/FILE_ORGANIZATION.md` - Comprehensive guide to output file organization: explains directory structure (transcripts/, summaries/, moc/, exports/), file naming conventions, relationship between transcript and summary files, database as source of truth, and how to find/regenerate files. Addresses common confusion about where files are saved and why they don't overwrite each other.
 - `ARCHITECTURE_WEB_CANONICAL.md` - Complete architecture documentation for web-canonical implementation where GetReceipts Supabase is single source of truth and Knowledge_Chipper acts as ephemeral processor. Documents philosophy, workflows, database schemas, user experience, API endpoints, and rollback instructions.
-- `PROMPT_INVENTORY.md` - Complete catalog of all prompts in the system: ACTIVE two-pass architecture uses 2 core prompts (extraction_pass.txt + synthesis_pass.txt) plus 3 optional question mapper prompts; documents 15 deprecated HCE segment-based prompts; explains architecture comparison, system integration, and migration status. Both active prompts are fully wired up and functional.
+- `PROMPT_INVENTORY.md` - Complete catalog of all prompts in the system: ACTIVE two-pass architecture uses 2 core prompts (extraction_pass.txt with refinement injection + synthesis_pass.txt with dynamic length) plus 3 optional question mapper prompts; documents 15 deprecated HCE segment-based prompts; explains architecture comparison, system integration, and migration status. Both active prompts are fully wired up and functional.
 - `VESTIGIAL_CODE_ANALYSIS.md` - Comprehensive analysis of unused/vestigial code from pre-unified-pipeline architecture, including old extraction modules (people.py, glossary.py, concepts.py, skim.py), unused prompt files (judge_high/low variants), and unimplemented features (relations, contradictions). Documents architecture evolution and provides removal recommendations.
 - `VESTIGIAL_CODE_REMOVAL_COMPLETE.md` - Completion documentation for vestigial code cleanup: moved 4 old extraction modules and 12 unused prompt files to _deprecated/, updated __init__.py, verified all imports still work. Includes before/after architecture comparison, verification tests, and rollback plan.
 - `VESTIGIAL_PROMPT_PICKER_REMOVED.md` - Documentation of removal of non-functional prompt file picker from Summarization tab
@@ -317,6 +319,12 @@ Data storage directory.
 
 Comprehensive project documentation (128+ files).
 
+### Feature Flowcharts
+
+- `feature-flowchart.md` - Mermaid source for feature availability flowchart (web vs desktop)
+- `feature-flowchart.html` - Interactive HTML version with rendered Mermaid diagrams
+- `web-ui-wireframes.html` - Interactive wireframes showing all 5 GetReceipts web UI pages with feature distribution summary
+
 ### Architecture Documentation
 
 - `ARCHITECTURE_UNIFIED.md` - High-level system architecture overview (unified view)
@@ -339,6 +347,7 @@ Comprehensive project documentation (128+ files).
 - `DEDUPLICATION_SYSTEM.md` - URL and source deduplication system documentation
 - `EPISODE_FIRST_MIGRATION.md` - Migration to episode-first data model
 - `ERROR_HANDLING_IMPROVEMENTS.md` - Enhanced error handling and user feedback
+- `MODEL_ACCESS_UX.md` - **NEW (Jan 1, 2026):** Model access validation system with status badges (✅ Public, 🔒 Gated, 🧪 Experimental, ⭐ Tier Required), test access API endpoint, graceful error handling with actionable messages, and curated metadata database for 50+ popular models across providers
 - `PODCAST_AD_FILTERING.md` - Advertisement detection and filtering for podcasts
 - `PROXY_MODE_CONSOLIDATION.md` - Proxy mode configuration consolidation
 - `RSS_DISCOVERY_ARCHITECTURE_ISSUE.md` - Issues with RSS feed discovery architecture
@@ -418,22 +427,24 @@ Comprehensive project documentation (128+ files).
 ### config/
 
 - `__init__.py` - Config module init
-- `settings.py` - Pydantic-based settings with environment variable support (KC_ prefix)
+- `settings.py` - **ENHANCED (Dec 27, 2025):** Pydantic-based settings with environment variable support (KC_ prefix); includes processing defaults (whisper_model, llm_provider, auto_upload), config file persistence (save_config/load_config), and device linking status methods (get_device_id, is_device_linked)
 
 ### api/
 
 - `__init__.py` - API module init
-- `routes.py` - REST endpoints: /health, /process, /jobs/{id}, /jobs
+- `routes.py` - **ENHANCED (Dec 28, 2025):** REST endpoints: /health, /process, /process/batch, /jobs (with filters), /jobs/{id}, /jobs/{id}/retry, /jobs/{id}/cancel, /jobs/bulk/retry, /jobs/bulk/delete, /config, /config/api-keys, /config/whisper-models, /config/device-status, /monitor/status, /monitor/start, /monitor/stop, /monitor/config, /monitor/events, /monitor/browse, /admin/database (viewer), /admin/database/summary, /admin/database/table/{name}
+- `database_viewer.py` - **NEW (Dec 28, 2025):** Read-only SQLite database viewer service for admin page; provides table browsing, pagination (100 records per load), smart sorting by most recent, and database summary stats
 
 ### models/
 
 - `__init__.py` - Models module init
-- `schemas.py` - Pydantic request/response schemas (HealthResponse, ProcessRequest, JobStatus, etc.)
+- `schemas.py` - **ENHANCED (Dec 27, 2025):** Pydantic schemas for all API operations including batch processing (ProcessRequest with urls/local_paths, BatchProcessResponse), job management (JobStatus with retry_count/original_request, JobFilterParams), configuration (DaemonConfig, ConfigUpdateRequest, WhisperModelsResponse), and folder monitoring (MonitorConfig, MonitorStatus, MonitorStartRequest, MonitorEvent, MonitorEventsResponse)
 
 ### services/
 
 - `__init__.py` - Services module init
-- `processing_service.py` - Wraps existing processors (YouTubeDownloadProcessor, AudioProcessor, TwoPassPipeline, GetReceiptsUploader) for REST API
+- `processing_service.py` - Wraps existing processors (YouTubeDownloadProcessor, AudioProcessor, TwoPassPipeline, GetReceiptsUploader) for REST API; supports batch processing, job retry, cancel, and delete operations
+- `monitor_service.py` - **NEW (Dec 27, 2025):** Folder monitoring service wrapping FileWatcher for API access; provides start/stop/configure operations and event tracking
 
 ---
 
@@ -585,8 +596,8 @@ Core orchestration and processing coordination.
 Database models, migrations, and service layer.
 
 - `__init__.py` - Database module initialization
-- `models.py` - SQLAlchemy models for all database tables, defining the comprehensive schema including Question* models and ReviewQueueItem; **UPDATED (Dec 22, 2025):** Added speaker attribution fields (Claim.speaker, JargonTerm.introduced_by, Concept.advocated_by), added web-based claim merging fields (Claim.cluster_id, Claim.is_canonical_instance), removed Segment.speaker (deprecated)
-- `service.py` - Database service layer with high-level operations including question management methods; includes extraction checkpoint methods (Dec 2025) for auth failure recovery persistence
+- `models.py` - SQLAlchemy models for all database tables, defining the comprehensive schema including Question* models and ReviewQueueItem; **UPDATED (Jan 2, 2026):** Added Prediction, PredictionHistory, and PredictionEvidence models for personal forecasting system; **UPDATED (Dec 22, 2025):** Added speaker attribution fields (Claim.speaker, JargonTerm.introduced_by, Concept.advocated_by), added web-based claim merging fields (Claim.cluster_id, Claim.is_canonical_instance), removed Segment.speaker (deprecated)
+- `service.py` - Database service layer with high-level operations including question management methods and prediction CRUD methods (Jan 2, 2026); includes extraction checkpoint methods (Dec 2025) for auth failure recovery persistence
 - `review_queue_service.py` - Service for managing review queue items: load/save/update pending items for bulk review workflow persistence across sessions
 - `claim_store.py` - Claim-centric storage operations for the HCE system; **UPDATED (Dec 22, 2025):** Added _extract_speaker_from_claim_data() method to populate claims.speaker from Pass 1 LLM inference (priority) or segments.speaker (fallback)
 - `speaker_models.py` - Speaker and voice fingerprint models, re-exported from the unified models.py for backward compatibility
@@ -608,6 +619,7 @@ SQL migration files for database schema changes.
 - `__init__.py` - Migrations module initialization
 - `unified_schema.sql` - Unified database schema (current production schema)
 - `claim_centric_schema.sql` - Claim-centric schema definition
+- `add_predictions_system.sql` - **NEW (Jan 2, 2026):** Prediction system schema: predictions table with confidence/deadline tracking, prediction_history for graphing changes over time, prediction_evidence for linking claims/jargon/people/concepts with Pro/Con/Neutral stance
 - `add_source_aliases.sql` - Add source_id_aliases table for URL deduplication
 - `add_subtitle_column.sql` - Add subtitle column to media sources
 - `2025_01_15_claim_tier_validation.sql` - Claim tier validation rules
@@ -634,6 +646,7 @@ SQL migration files for database schema changes.
 - `2025_12_21_add_youtube_ai_summary.sql` - **NEW (Dec 2025):** YouTube AI summary integration: adds youtube_ai_summary, youtube_ai_summary_fetched_at, youtube_ai_summary_method columns to media_sources for storing YouTube's AI-generated summaries alongside Knowledge_Chipper summaries
 - `2025_12_22_multi_profile_scoring.sql` - Multi-profile scoring system: dimensions JSON, profile_scores JSON, best_profile TEXT, temporal_stability REAL, scope REAL columns with indexes
 - `2025_12_22_review_queue.sql` - Review queue table for bulk review workflow persistence: stores pending/accepted/rejected items across sessions until synced to GetReceipts
+- `add_health_tracking.sql` - **NEW (Jan 2, 2026):** Health tracking system tables (web-canonical pattern): health_interventions, health_metrics, and health_issues tables with privacy_status, sync tracking (synced_to_web, web_id, last_synced_at), Peter Attia categorization framework; local is ephemeral, web is source of truth
 - `add_pdf_transcript_support.sql` - **NEW (Dec 25, 2025):** PDF transcript support: adds quality_score, has_speaker_labels, has_timestamps, source_file_path, extraction_metadata to transcripts table; adds preferred_transcript_id to media_sources for multi-transcript management
 
 ### EXAMPLES/
@@ -719,7 +732,12 @@ Core GUI infrastructure.
 Dialog windows for various operations.
 
 - `__init__.py` - Dialogs module initialization
+- `add_evidence_dialog.py` - **NEW (Jan 2, 2026):** Search and add evidence to predictions: entity type selector (Claim/Jargon/Person/Concept), live search with results list, stance selector (Pro/Con/Neutral), notes field, validates entity exists before adding
 - `batch_speaker_dialog.py` - Batch speaker assignment dialog
+- `health_dashboard_window.py` - **NEW (Jan 2, 2026):** Personal Health Dashboard standalone window (web-canonical) with 3 vertically stacked sections for tracking interventions, metrics, and health issues; uses QSplitter for resizing, inline editing, active/inactive toggle; auto-syncs to GetReceipts on save
+- `health_intervention_dialog.py` - **NEW (Jan 2, 2026):** Add/edit health interventions with all fields (body system, organs, author, frequency, Pete Attia category, sources, notes) and dropdown options
+- `health_issue_dialog.py` - **NEW (Jan 2, 2026):** Add/edit health issues dialog with fields for tracking conditions being monitored or treated; auto-syncs to GetReceipts on save (web-canonical pattern)
+- `health_metric_dialog.py` - **NEW (Jan 2, 2026):** Add/edit health metrics dialog for tracking measurements (VO2 Max, BMI, blood tests); auto-syncs to GetReceipts on save (web-canonical pattern)
 - `claim_validation_dialog.py` - Claim validation review dialog
 - `comprehensive_first_run_dialog.py` - Comprehensive first-run setup wizard
 - `crash_recovery_dialog.py` - Crash recovery dialog
@@ -730,6 +748,8 @@ Dialog windows for various operations.
 - `first_run_setup_dialog.py` - First run setup dialog
 - `hce_update_dialog.py` - HCE system update dialog
 - `model_tier_selection_dialog.py` - Model tier selection for evaluators
+- `prediction_creation_dialog.py` - **NEW (Jan 2, 2026):** Create new prediction: title, description, initial confidence (0-100%), deadline (calendar picker), privacy (Public/Private), user notes, validates required fields
+- `prediction_update_dialog.py` - **NEW (Jan 2, 2026):** Update prediction confidence and/or deadline with change reason field, shows current values, creates history entry automatically
 - `queue_detail_dialog.py` - Queue item detail viewer
 - `sign_up_dialog.py` - User sign-up dialog
 - `speaker_assignment_dialog.py` - Speaker assignment dialog
@@ -742,7 +762,7 @@ GUI mixins for shared functionality.
 
 #### GUI/TABS/
 
-Main application tabs (19 total).
+Main application tabs (21 total).
 
 - `__init__.py` - Tabs module initialization
 - `api_keys_tab.py` - API key management tab
@@ -750,9 +770,12 @@ Main application tabs (19 total).
 - `claim_search_tab.py` - Claim search and filtering tab
 - `cloud_uploads_tab.py` - Cloud upload status and management tab
 - `extract_tab.py` - **NEW (Dec 2025):** Claims-first extraction tab with two-pane editor, LLM selection per stage, 6-stage progress display, quality assessment panel, rejected claims with promote button
+- `health_claims_tab.py` - **NEW (Jan 2, 2026):** Health Claims tab showing filtered view of health-related claims, people, jargon, and concepts; filters by domain (health, medicine, longevity, nutrition); 4 sub-tabs with tier filtering and search
 - `import_transcripts_tab.py` - **NEW (Dec 25, 2025):** PDF transcript import tab with drag-drop upload, automatic YouTube video matching, batch folder scanning, confidence-based matching, and real-time progress tracking
 - `introduction_tab.py` - Introduction and welcome tab with feature overview
 - `monitor_tab.py` - System monitoring and diagnostics tab
+- `prediction_detail_page.py` - **NEW (Jan 2, 2026):** Individual prediction detail view with header (title/confidence/deadline/status), matplotlib graph showing confidence/deadline history, evidence tabs (Claims/Jargon/People/Concepts) with Pro/Con/Neutral badges and double-click to edit stance, user notes section, and action buttons (Update/Add Evidence/Resolve/Delete)
+- `predictions_tab.py` - **NEW (Jan 2, 2026):** Predictions list view with sortable table (Title/Confidence/Deadline/Status columns), filter bar (Privacy/Status/Search), color-coded confidence (green/orange/red), deadline highlighting (red for overdue), double-click to open detail page, New Prediction button
 - `process_tab.py` - Processing pipeline control tab
 - `prompts_tab.py` - Prompt template management tab with dynamic prompt selection display for Unified Miner (shows content-type-specific, selectivity-based, and fallback prompts) and standard assignment for Flagship Evaluator and Skimmer
 - `question_review_tab.py` - Question mapping review and approval tab (NEW: Nov 2025)
@@ -897,15 +920,15 @@ Prompt templates for legacy HCE system (15 prompt files - DEPRECATED).
 
 - `__init__.py` - Two-pass module initialization and public API exports
 - `pipeline.py` - TwoPassPipeline orchestrator: coordinates extraction → synthesis passes
-- `extraction_pass.py` - Pass 1: Extract and score all entities from complete document in one API call
-- `synthesis_pass.py` - Pass 2: Generate world-class long summary from Pass 1 results
+- `extraction_pass.py` - Pass 1: Extract and score all entities from complete document in one API call; **ENHANCED (Jan 2026):** automatically injects synced refinements from GetReceipts.org into extraction prompts to prevent previously-identified mistakes (e.g., extracting "US President" as a person instead of actual names)
+- `synthesis_pass.py` - Pass 2: Generate world-class long summary from Pass 1 results; **ENHANCED (Jan 2026):** dynamically calculates synthesis length (5 paragraphs to 2 pages) based on content duration and claim density
 
 ##### PROCESSORS/TWO_PASS/PROMPTS/
 
 **ACTIVE PROMPTS (2 prompts - this is the current system):**
 
 - `extraction_pass.txt` - **ACTIVE:** Pass 1 extraction prompt; processes entire transcripts in one API call; extracts and scores all entities (claims, jargon, people, mental models); includes 6-dimension scoring with weighted formula, speaker inference with confidence, rejection proposals, evidence spans for all entities, and 5 worked examples; replaces 11 old segment-based prompts; enhanced December 2025
-- `synthesis_pass.txt` - **ACTIVE:** Pass 2 synthesis prompt; generates world-class 3-5 paragraph summary from high-importance claims (≥7.0); integrates all entity types thematically; uses YouTube AI summary as reference; sophisticated analytical prose with thematic organization
+- `synthesis_pass.txt` - **ACTIVE:** Pass 2 synthesis prompt; generates world-class summary from high-importance claims (≥7.0) with flexible length (5 paragraphs to 2 pages based on content complexity); integrates all entity types thematically; uses YouTube AI summary as reference; sophisticated analytical prose with thematic organization; **ENHANCED (Jan 2026):** uses `{synthesis_length}` variable for dynamic length adjustment
 
 #### PROCESSORS/QUESTION_MAPPER/
 
@@ -948,6 +971,7 @@ High-level service layer.
 - `browser_cookie_manager.py` - **NEW (Dec 2025):** Loads YouTube authentication cookies from system browsers (Chrome/Safari/Firefox) and converts to Playwright format; reuses yt-dlp cookie infrastructure for seamless integration
 - `claims_upload_service.py` - Upload claims to cloud storage
 - `device_auth.py` - Device authentication for GetReceipts.org integration (Happy-style auto-auth)
+- `prediction_service.py` - **NEW (Jan 2, 2026):** Business logic for personal forecasting system: create/update/resolve predictions, track confidence/deadline changes with history, link evidence (claims/jargon/people/concepts) with Pro/Con/Neutral stance, search and export predictions, upcoming deadline tracking
 - `download_base.py` - Base download service class
 - `download_scheduler.py` - Schedule and manage downloads
 - `file_generation.py` - Generate output files from database
@@ -956,7 +980,8 @@ High-level service layer.
 - `playwright_youtube_scraper.py` - **NEW (Dec 2025):** Playwright-based YouTube AI summary scraper; automates clicking "Ask" → "Summarize", waits 12-60 seconds for generation, scrapes complete multi-paragraph summaries with fuzzy timestamp matching
 - `podcast_episode_searcher.py` - Search for podcast episodes
 - `podcast_rss_downloader.py` - Download podcast episodes from RSS feeds
-- `prompt_sync.py` - **NEW:** Syncs approved prompt refinements from GetReceipts.org to local files; refinements are bad_example entries that prevent previously-identified extraction mistakes
+- `prompt_sync.py` - **NEW (Dec 2025):** Syncs approved prompt refinements from GetReceipts.org to local files; refinements are bad_example entries that prevent previously-identified extraction mistakes; **ACTIVE (Jan 2026):** now automatically injected into extraction prompts by extraction_pass.py
+- `entity_sync.py` - **NEW (Jan 2, 2026):** UNIFIED sync service for ALL entity types (NO REDUNDANCY); handles batch sync (extraction: claims/jargon/people/concepts) and individual sync (predictions, health tracking); uses existing GetReceiptsUploader infrastructure; web-canonical pattern with device authentication; convenience methods for health entities (sync_health_intervention, sync_health_metric, sync_health_issue)
 - `queue_snapshot_service.py` - Queue snapshot service for pipeline status
 - `session_based_scheduler.py` - Session-based download scheduler for anti-bot; includes authentication failure checkpoint methods (Dec 2025) for save/resume on 401/403/bot detection
 - `speaker_learning_service.py` - Speaker learning and adaptation service
@@ -1004,13 +1029,16 @@ SuperChunk system for advanced document processing (experimental).
 
 ### UTILS/
 
-Utility functions and helpers (92+ utility files).
+Utility functions and helpers (94+ utility files).
 
 - `__init__.py` - Utils module initialization
 - `ad_detector.py` - Advertisement detection in podcast transcripts
 - `deduplication.py` - URL and source deduplication
 - `llm_speaker_suggester.py` - LLM-based speaker name suggestion
 - `llm_speaker_validator.py` - LLM-based speaker name validation
+- `model_metadata.py` - **NEW (Jan 1, 2026):** Model access metadata database with status badges (✅ Public, 🔒 Gated, 🧪 Experimental, ⭐ Tier Required, ⚠️ Deprecated) for 50+ popular LLM models; tracks access requirements, usage tiers, and display names
+- `model_registry.py` - Dynamic LLM model registry with multi-tier fetching (OpenRouter, provider APIs, cache, hardcoded fallbacks)
+- `model_registry_api.py` - Model registry API implementation with OpenRouter integration, Google Gemini API, Anthropic Models API, and intelligent fallback system
 - `rss_feed_extractor.py` - Extract RSS feeds from Apple Podcasts/RSS.com URLs
 - `warning_suppressions.py` - Centralized warning suppression configuration
 - `youtube_metadata_validator.py` - **NEW (Dec 25, 2025):** Universal metadata validator for both YouTube Data API and yt-dlp responses; handles format conversion, type validation, string sanitization, and provides defaults for missing fields
@@ -1062,6 +1090,7 @@ Comprehensive test suite with 70+ test files including:
 Key test files:
 - `test_multi_profile_scorer.py` - Multi-profile scoring system unit tests (6-dimension validation, profile weights, max-scoring)
 - `test_flagship_evaluator_v2.py` - Flagship evaluator V2 integration tests (dimension processing, backward compatibility)
+- `test_health_tracking.py` - **NEW (Jan 2, 2026):** Health tracking system unit tests: creating interventions/metrics/issues, active toggle, querying by category, filtering active items
 - `test_question_mapper.py` - Question mapper system tests (14 tests, all passing)
 - `test_database_imports.py` - Database export validation
 - `test_basic.py` - Basic functionality tests

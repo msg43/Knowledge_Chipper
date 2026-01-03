@@ -1,0 +1,77 @@
+# Minimal daemon requirements (no GUI, no diarization, no optional ML)
+# For GetReceipts.org web integration
+
+# Core dependencies
+click>=8.1.0
+pydantic>=2.5.0
+pyyaml>=6.0
+loguru>=0.7.0
+rich>=13.0.0
+
+# File watching
+watchdog>=3.0.0
+
+# PDF processing
+pypdf2>=3.0.0
+pdfplumber>=0.9.0
+
+# Audio/Video processing
+pydub>=0.25.1
+
+# ML and transcription (core only)
+pywhispercpp>=1.2.0  # Lightweight whisper.cpp binding
+pyannote-whisper @ git+https://github.com/yinruiqing/pyannote-whisper.git
+
+# YouTube processing
+yt-dlp==2025.11.12
+pytube>=15.0.0
+
+# FastAPI daemon (REQUIRED)
+fastapi>=0.108.0
+uvicorn[standard]>=0.25.0
+python-multipart>=0.0.6
+pydantic-settings>=2.0.0
+
+# HTTP requests
+requests>=2.31.0
+aiohttp>=3.8.0
+
+# Database (REQUIRED)
+sqlalchemy>=2.0.0
+alembic>=1.12.0
+
+# OAuth integration for GetReceipts.org
+supabase>=2.0.0
+
+# System monitoring
+psutil>=6.0.0
+
+# Web scraping
+beautifulsoup4>=4.12.0
+youtube-transcript-api>=1.2.0
+feedparser>=6.0.0
+
+# AI/ML APIs (REQUIRED for claim extraction)
+openai>=1.0.0
+anthropic>=0.7.0
+google-genai>=1.0.0
+
+# Utilities
+python-dotenv>=0.19.0
+tqdm>=4.65.0
+colorama>=0.4.6
+
+# Fuzzy matching (lightweight)
+python-Levenshtein>=0.21.0
+fuzzywuzzy>=0.18.0
+
+# REMOVED (not needed for daemon):
+# - PyQt6 (GUI only)
+# - streamlit (GUI only)
+# - playwright (web scraping - optional)
+# - hdbscan, scipy (HCE - optional)
+# - sentence-transformers (heavy ML - optional)
+# - pandas, numpy (data processing - can add if needed)
+# - huggingface_hub (model bundling - not needed at runtime)
+# - pyannote.audio, torch, transformers (diarization - not using)
+

@@ -59,6 +59,16 @@ async def lifespan(app: FastAPI):
     logger.info(f"CORS enabled for: {settings.cors_origins}")
     logger.info("=" * 60)
     
+    # Check for auto-linking token from installation
+    try:
+        from daemon.services.link_token_handler import get_link_token_handler
+        handler = get_link_token_handler()
+        # Don't block startup - run in background
+        import asyncio
+        asyncio.create_task(asyncio.to_thread(handler.check_and_link))
+    except Exception as e:
+        logger.warning(f"Link token check failed (non-critical): {e}")
+    
     yield
     
     # Shutdown

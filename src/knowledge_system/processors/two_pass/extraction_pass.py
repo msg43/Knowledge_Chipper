@@ -160,7 +160,7 @@ class ExtractionPass:
         else:
             tags_text = "No tags available"
         
-        # Build prompt
+        # Build base prompt
         prompt = self.prompt_template.format(
             title=metadata.get('title', 'Unknown Title'),
             channel=metadata.get('channel', metadata.get('uploader', 'Unknown Channel')),
@@ -171,6 +171,84 @@ class ExtractionPass:
             chapters=chapters_text,
             transcript=transcript,
         )
+        
+        # Inject synced refinements from GetReceipts.org
+        prompt = self._inject_refinements(prompt)
+        
+        return prompt
+    
+    def _inject_refinements(self, prompt: str) -> str:
+        """
+        Inject synced refinements from GetReceipts.org into the prompt.
+        
+        Refinements are bad_example XML patterns that teach the LLM to avoid
+        previously-identified extraction mistakes (e.g., extracting "US President" 
+        as a person instead of "Joe Biden").
+        
+        Args:
+            prompt: The base extraction prompt
+            
+        Returns:
+            Prompt with refinements injected (if available)
+        """
+        try:
+            from knowledge_system.services.prompt_sync import get_prompt_sync_service
+            
+            sync_service = get_prompt_sync_service()
+            refinements = sync_service.get_all_refinements()
+            
+            # Check if we have any refinements
+            has_refinements = any(refinements.values())
+            
+            if not has_refinements:
+                logger.debug("No refinements available - using base prompt")
+                return prompt
+            
+            # Build refinements section
+            refinements_section = "\n\n# 🔄 LEARNED PATTERNS - AVOID THESE MISTAKES\n\n"
+            refinements_section += "## Patterns to Avoid (From Previous Web Corrections)\n\n"
+            refinements_section += "The following patterns were identified as mistakes in previous extractions.\n"
+            refinements_section += "Learn from these examples and avoid making similar errors.\n\n"
+            
+            refinement_count = 0
+            
+            if refinements['person']:
+                refinements_section += "### ❌ People Extraction Mistakes:\n\n"
+                refinements_section += refinements['person'] + "\n\n"
+                refinement_count += 1
+            
+            if refinements['jargon']:
+                refinements_section += "### ❌ Jargon Extraction Mistakes:\n\n"
+                refinements_section += refinements['jargon'] + "\n\n"
+                refinement_count += 1
+            
+            if refinements['concept']:
+                refinements_section += "### ❌ Concept Extraction Mistakes:\n\n"
+                refinements_section += refinements['concept'] + "\n\n"
+                refinement_count += 1
+            
+            # Insert before EXTRACTION INSTRUCTIONS section
+            if "# EXTRACTION INSTRUCTIONS" in prompt:
+                prompt = prompt.replace(
+                    "# EXTRACTION INSTRUCTIONS",
+                    refinements_section + "# EXTRACTION INSTRUCTIONS"
+                )
+                logger.info(f"✅ Injected {refinement_count} refinement type(s) into extraction prompt")
+            else:
+                # Fallback: append before OUTPUT FORMAT
+                if "# OUTPUT FORMAT" in prompt:
+                    prompt = prompt.replace(
+                        "# OUTPUT FORMAT",
+                        refinements_section + "# OUTPUT FORMAT"
+                    )
+                    logger.info(f"✅ Injected {refinement_count} refinement type(s) into extraction prompt (fallback position)")
+                else:
+                    logger.warning("Could not find insertion point for refinements")
+        
+        except ImportError:
+            logger.debug("Prompt sync service not available - using base prompt")
+        except Exception as e:
+            logger.warning(f"Could not load refinements: {e} - continuing with base prompt")
         
         return prompt
     

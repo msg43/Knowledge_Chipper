@@ -42,6 +42,7 @@ from .core.settings_manager import get_gui_settings_manager  # noqa: E402
 
 # Import dialogs
 from .dialogs.first_run_setup_dialog import FirstRunSetupDialog  # noqa: E402
+from .dialogs.health_dashboard_window import HealthDashboardWindow  # noqa: E402
 
 # Import modular tabs for System 2
 from .tabs import APIKeysTab  # Settings tab  # noqa: E402
@@ -52,7 +53,9 @@ from .tabs import QueueTab  # Queue tab  # noqa: E402
 from .tabs import SummarizationTab  # Summarize tab  # noqa: E402
 from .tabs import TranscriptionTab  # Transcribe tab  # noqa: E402
 from .tabs.extract_tab import ExtractTab  # Extract tab (claims-first)  # noqa: E402
+from .tabs.health_claims_tab import HealthClaimsTab  # Health Claims tab  # noqa: E402
 from .tabs.import_transcripts_tab import ImportTranscriptsTab  # Import PDF transcripts  # noqa: E402
+from .tabs.predictions_tab import PredictionsTab  # Predictions tab  # noqa: E402
 
 logger = get_logger(__name__)
 
@@ -160,6 +163,9 @@ class MainWindow(QMainWindow):
 
             # First-run model setup (if needed)
             self._check_first_run_model_setup()
+            
+            # Check device linking status and trigger OAuth if needed
+            self._check_device_linking()
         except Exception as e:
             logger.warning(f"Delayed first-run setup failed: {e}")
 
@@ -247,6 +253,9 @@ class MainWindow(QMainWindow):
             1030, 1800
         )  # Starting width increased by 30% from 792 (30% increase = 1030)
         self.setMinimumSize(600, 700)  # Minimum width kept at 600
+
+        # Create menu bar
+        self._create_menu_bar()
 
         # Create central widget and main layout
         central_widget = QWidget()
@@ -361,6 +370,14 @@ class MainWindow(QMainWindow):
         self.queue_tab = QueueTab(self)
         self.tabs.addTab(self.queue_tab, "Queue")
 
+        # 6.5. Predictions tab - personal forecasting system
+        predictions_tab = PredictionsTab(self)
+        self.tabs.addTab(predictions_tab, "Predictions")
+
+        # 6.6. Health Claims tab - filtered view of health-related knowledge
+        health_claims_tab = HealthClaimsTab(self)
+        self.tabs.addTab(health_claims_tab, "Health")
+
         # WEB-CANONICAL MODE: Review and Questions tabs hidden
         # These features are now available on getreceipts.org/dashboard
         # Desktop focuses on processing; web handles review/curation
@@ -391,6 +408,27 @@ class MainWindow(QMainWindow):
         # 8. Settings tab (includes web authentication)
         self.api_keys_tab = APIKeysTab(self)
         self.tabs.addTab(self.api_keys_tab, "Settings")
+
+    def _create_menu_bar(self) -> None:
+        """Create the menu bar with Tools menu."""
+        menubar = self.menuBar()
+        
+        # Tools menu
+        tools_menu = menubar.addMenu("&Tools")
+        
+        # Personal Health Dashboard action
+        health_dashboard_action = tools_menu.addAction("Personal Health Dashboard")
+        health_dashboard_action.triggered.connect(self._open_health_dashboard)
+        health_dashboard_action.setStatusTip("Open Personal Health Dashboard for tracking interventions, metrics, and health issues")
+
+    def _open_health_dashboard(self) -> None:
+        """Open the Personal Health Dashboard window."""
+        try:
+            # Create and show the dashboard window
+            dashboard = HealthDashboardWindow(parent=self)
+            dashboard.show()
+        except Exception as e:
+            logger.error(f"Failed to open Health Dashboard: {e}")
 
     def _navigate_to_tab(self, tab_name: str) -> None:
         """Navigate to a specific tab by name."""
@@ -1057,6 +1095,144 @@ class MainWindow(QMainWindow):
 
         except (ImportError, AttributeError) as e:
             logger.warning(f"Model validation failed: {e}")
+    
+    def _check_device_linking(self) -> None:
+        """Check if device is linked to user account and trigger OAuth if not."""
+        try:
+            # Skip during testing
+            if os.environ.get("KNOWLEDGE_CHIPPER_TESTING_MODE"):
+                logger.info("🧪 Testing mode: Skipping device linking check")
+                return
+            
+            from ..services.device_auth import get_device_auth
+            
+            device_auth = get_device_auth()
+            
+            # Check if already linked
+            if device_auth.is_linked():
+                logger.info("✅ Device already linked to user account")
+                return
+            
+            # Check if this is truly first launch (no previous linking attempts)
+            from .core.settings_manager import get_gui_settings_manager
+            gui = get_gui_settings_manager()
+            
+            link_attempted = gui.get_value("⚙️ Settings", "device_link_attempted", False)
+            
+            if link_attempted:
+                # User previously saw the linking flow, don't bother them again
+                logger.info("Device linking was previously attempted, not showing again")
+                return
+            
+            # Mark that we're attempting linking (don't show again if they decline)
+            gui.set_value("⚙️ Settings", "device_link_attempted", True)
+            gui.save()
+            
+            # Check if device is linked on server (may have been linked from web)
+            logger.info("🔍 Checking device linking status with server...")
+            link_status = device_auth.check_if_claimed()
+            
+            if link_status.get("linked"):
+                # Device was already linked on server, update local state
+                user_id = link_status.get("user_id")
+                device_auth.set_user_id(user_id)
+                logger.info(f"✅ Device was already linked on server to user: {user_id[:8]}...")
+                return
+            
+            # Device not linked - trigger OAuth flow
+            logger.info("🔗 Device not linked - opening browser for authentication...")
+            self._trigger_device_linking_flow()
+            
+        except Exception as e:
+            logger.warning(f"Device linking check failed: {e}")
+    
+    def _trigger_device_linking_flow(self) -> None:
+        """Open browser for user to sign in and link device."""
+        try:
+            import webbrowser
+            from ..services.device_auth import get_device_auth
+            from knowledge_chipper_oauth.getreceipts_config import get_config, set_production
+            
+            # Use production config
+            set_production()
+            config = get_config()
+            
+            device_auth = get_device_auth()
+            credentials = device_auth.get_credentials()
+            device_id = credentials["device_id"]
+            
+            # Build OAuth URL with device_id parameter
+            auth_url = f"{config['base_url']}/auth/signin?device_id={device_id}&source=desktop"
+            
+            logger.info(f"Opening browser to: {auth_url}")
+            webbrowser.open(auth_url)
+            
+            # Show a notification to user
+            from PyQt6.QtWidgets import QMessageBox
+            msg = QMessageBox(self)
+            msg.setIcon(QMessageBox.Icon.Information)
+            msg.setWindowTitle("Link Your Device")
+            msg.setText("Please sign in or create an account to link this device.")
+            msg.setInformativeText(
+                "A browser window has been opened. After signing in, "
+                "your device will be automatically linked to your account."
+            )
+            msg.setStandardButtons(QMessageBox.StandardButton.Ok)
+            msg.show()
+            
+            # Start polling for link status
+            self._start_link_polling()
+            
+        except Exception as e:
+            logger.error(f"Failed to trigger device linking flow: {e}")
+    
+    def _start_link_polling(self) -> None:
+        """Start polling to detect when device gets linked."""
+        try:
+            from PyQt6.QtCore import QTimer
+            from ..services.device_auth import get_device_auth
+            
+            device_auth = get_device_auth()
+            poll_count = 0
+            max_polls = 60  # Poll for up to 5 minutes (60 * 5 seconds)
+            
+            def check_link_status():
+                nonlocal poll_count
+                poll_count += 1
+                
+                if poll_count > max_polls:
+                    logger.info("Device linking poll timeout - user may link later")
+                    return
+                
+                link_status = device_auth.check_if_claimed()
+                
+                if link_status.get("linked"):
+                    # Device is now linked!
+                    user_id = link_status.get("user_id")
+                    device_auth.set_user_id(user_id)
+                    logger.info(f"🎉 Device successfully linked to user: {user_id[:8]}...")
+                    
+                    # Show success notification
+                    from PyQt6.QtWidgets import QMessageBox
+                    msg = QMessageBox(self)
+                    msg.setIcon(QMessageBox.Icon.Information)
+                    msg.setWindowTitle("Device Linked!")
+                    msg.setText("Your device has been successfully linked to your account.")
+                    msg.setInformativeText("You can now upload content to GetReceipts.org!")
+                    msg.setStandardButtons(QMessageBox.StandardButton.Ok)
+                    msg.show()
+                    
+                    return  # Stop polling
+                
+                # Not linked yet, schedule next check
+                QTimer.singleShot(5000, check_link_status)  # Check every 5 seconds
+            
+            # Start the polling chain
+            QTimer.singleShot(5000, check_link_status)
+            logger.info("Started device linking poll (checking every 5 seconds)")
+            
+        except Exception as e:
+            logger.error(f"Failed to start link polling: {e}")
 
     def _show_first_run_model_dialog(self) -> None:
         """Show the first-run model setup dialog."""

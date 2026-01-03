@@ -1,0 +1,1178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Knowledge System Feature Flowchart</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <style>
+        :root {
+            --bg-dark: #1a1a2e;
+            --bg-card: #16213e;
+            --accent: #0f3460;
+            --text: #e8e8e8;
+            --highlight: #e94560;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text);
+            line-height: 1.6;
+            padding: 2rem;
+        }
+        
+        h1 {
+            text-align: center;
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(135deg, #e94560, #0f3460);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: #888;
+            margin-bottom: 0.5rem;
+        }
+        
+        .update-date {
+            text-align: center;
+            color: #4CAF50;
+            font-size: 0.9rem;
+            margin-bottom: 2rem;
+        }
+        
+        .legend {
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: var(--bg-card);
+            border-radius: 8px;
+        }
+        
+        .legend-dot {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+        }
+        
+        .legend-dot.web { background: #4CAF50; }
+        .legend-dot.desktop { background: #2196F3; }
+        .legend-dot.both { background: #9C27B0; }
+        
+        .diagram-section {
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+        
+        .diagram-section h2 {
+            color: var(--highlight);
+            margin-bottom: 1.5rem;
+            font-size: 1.5rem;
+            border-bottom: 2px solid var(--accent);
+            padding-bottom: 0.5rem;
+        }
+        
+        .mermaid {
+            display: flex;
+            justify-content: center;
+            background: #fff;
+            border-radius: 12px;
+            padding: 1.5rem;
+            overflow-x: auto;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+        
+        th, td {
+            padding: 0.75rem 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--accent);
+        }
+        
+        th {
+            background: var(--accent);
+            color: #fff;
+        }
+        
+        tr:hover {
+            background: rgba(255,255,255,0.05);
+        }
+        
+        .check { color: #4CAF50; font-weight: bold; }
+        .cross { color: #f44336; }
+        .new-badge { 
+            background: #e94560; 
+            color: white; 
+            font-size: 0.7rem; 
+            padding: 0.1rem 0.4rem; 
+            border-radius: 4px; 
+            margin-left: 0.5rem;
+            vertical-align: middle;
+        }
+        .planned-badge {
+            background: #FF9800;
+            color: white;
+            font-size: 0.7rem;
+            padding: 0.1rem 0.4rem;
+            border-radius: 4px;
+            margin-left: 0.5rem;
+            vertical-align: middle;
+        }
+        
+        @media (max-width: 768px) {
+            body { padding: 1rem; }
+            h1 { font-size: 1.8rem; }
+            .legend { flex-direction: column; align-items: center; }
+        }
+    </style>
+</head>
+<body>
+    <h1>🧠 Knowledge System Feature Flowchart</h1>
+    <p class="subtitle">GetReceipts.org + Knowledge_Chipper Integration</p>
+    <p class="update-date">Updated: January 02, 2026 22:18:41 EST - Fixed Questions & People API routes for migration 100 schema</p>
+    
+    <div class="legend">
+        <div class="legend-item">
+            <div class="legend-dot web"></div>
+            <span>🌐 Web Only (GetReceipts.org)</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-dot desktop"></div>
+            <span>💻 Desktop Only (Knowledge_Chipper)</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-dot both"></div>
+            <span>🌐💻 Web + Local Daemon</span>
+        </div>
+    </div>
+
+    <div class="diagram-section">
+        <h2>🔄 Complete User Journey Flow</h2>
+        <p style="margin-bottom: 1rem; color: #888;">This comprehensive flowchart shows the entire processing pipeline from initial daemon detection through all content ingestion workflows to final upload.</p>
+        <div class="mermaid">
+flowchart TD
+    START[👤 User visits getreceipts.org/contribute]
+    
+    START --> CHECK_DAEMON{🔍 Check localhost:8765}
+    
+    CHECK_DAEMON -->|❌ Not Running| SHOW_INSTALLER[📦 Show Installer Prompt]
+    CHECK_DAEMON -->|✅ Running| SHOW_UI[🎯 Show Smart Input UI]
+    
+    SHOW_INSTALLER --> DOWNLOAD[💾 Download .dmg]
+    DOWNLOAD --> INSTALL[⚙️ Install Daemon]
+    INSTALL --> AUTO_START[🚀 LaunchAgent Auto-Start]
+    AUTO_START --> FIRST_LAUNCH[🎯 First Launch Detection]
+    FIRST_LAUNCH --> LINK_CHECK{🔗 Device Linked?}
+    LINK_CHECK -->|❌ No| OPEN_AUTH[🌐 Opens Browser<br/>getreceipts.org/auth/signin?device_id=xxx]
+    OPEN_AUTH --> USER_AUTH[🔐 User Signs In/Up]
+    USER_AUTH --> AUTO_LINK_DEVICE[🔗 Auto-Link Device to User<br/>💾 Save to devices table]
+    AUTO_LINK_DEVICE --> POLL_SUCCESS[✅ App Polls & Detects Link]
+    POLL_SUCCESS --> SHOW_SUCCESS[🎉 Show Success Notification]
+    LINK_CHECK -->|✅ Yes| REFRESH[🔄 Refresh Page]
+    SHOW_SUCCESS --> REFRESH
+    REFRESH --> CHECK_DAEMON
+    
+    SHOW_UI --> INPUT[📝 User enters content]
+    INPUT --> DETECT_TYPE{🔎 Detect Input Type}
+    
+    %% YouTube Single/Batch URLs
+    DETECT_TYPE -->|🎬 YouTube URL| YT_SINGLE[📋 Fetch YouTube Metadata<br/>💾 Save to SQLite]
+    YT_SINGLE --> YT_TRANSCRIPT_TRY{🎤 YouTube Transcript Available?}
+    YT_TRANSCRIPT_TRY -->|✅ Yes| YT_TRANSCRIPT[Get YouTube Transcript<br/>💾 Save to SQLite]
+    YT_TRANSCRIPT_TRY -->|❌ No| YT_DOWNLOAD[📥 yt-dlp: Download Audio]
+    YT_DOWNLOAD --> WHISPER_FALLBACK[🎤 Whisper Transcription<br/>💾 Save to SQLite]
+    YT_TRANSCRIPT --> PROCESS_CONTENT
+    WHISPER_FALLBACK --> PROCESS_CONTENT
+    
+    %% YouTube Playlist/Channel
+    DETECT_TYPE -->|📺 Playlist/Channel URL| YT_PLAYLIST[Expand Playlist URLs]
+    YT_PLAYLIST --> BATCH_JOBS[🔢 Create Batch Jobs]
+    BATCH_JOBS --> YT_SINGLE
+    
+    %% RSS/Podcast Feeds
+    DETECT_TYPE -->|📡 RSS Feed URL| RSS_FEED[Fetch RSS Feed]
+    RSS_FEED --> RSS_EPISODES[📻 Extract Episodes Max 9999]
+    RSS_EPISODES --> BATCH_JOBS
+    
+    %% Local Audio/Video Files
+    DETECT_TYPE -->|🎵 Audio/Video File| LOCAL_FILE[Upload Local File<br/>💾 Save metadata to SQLite]
+    LOCAL_FILE --> LOCAL_SEARCH_Q{🔍 Search YouTube?}
+    LOCAL_SEARCH_Q -->|✅ Yes| LOCAL_YT_SEARCH[🔎 Search YouTube API]
+    LOCAL_SEARCH_Q -->|❌ No| LOCAL_MANUAL[Manual Metadata Entry]
+    
+    LOCAL_YT_SEARCH --> LOCAL_MATCHES_Q{🎯 Found Matches?}
+    LOCAL_MATCHES_Q -->|✅ Yes| LOCAL_SHOW_MATCHES[🖼️ Show Match Dialog]
+    LOCAL_MATCHES_Q -->|❌ No| LOCAL_MANUAL
+    
+    LOCAL_SHOW_MATCHES --> LOCAL_USER_SELECT{👆 User Selection}
+    LOCAL_USER_SELECT -->|✅ Select Match| LOCAL_FETCH_META[📋 Fetch YouTube Metadata<br/>💾 Save to SQLite]
+    LOCAL_USER_SELECT -->|❌ None Match| LOCAL_MANUAL
+    
+    LOCAL_FETCH_META --> TRANSCRIBE
+    LOCAL_MANUAL --> TRANSCRIBE[🎤 Whisper Transcription<br/>💾 Save to SQLite]
+    
+    %% Text/DOCX/PDF Documents
+    DETECT_TYPE -->|📄 Text/DOCX/PDF| DOC_UPLOAD[Read File Content]
+    DOC_UPLOAD --> TRANSCRIPT_Q{📝 Is this a transcript?}
+    
+    TRANSCRIPT_Q -->|✅ Yes| SEARCH_Q{🔍 Search YouTube?}
+    TRANSCRIPT_Q -->|❌ No| SKIP_TO_MANUAL[Manual Metadata Entry]
+    
+    SEARCH_Q -->|✅ Yes checked| YT_SEARCH[🔎 Search YouTube API]
+    SEARCH_Q -->|❌ No default| SKIP_TO_MANUAL
+    
+    YT_SEARCH --> MATCHES_Q{🎯 Found Matches?}
+    MATCHES_Q -->|✅ Yes| SHOW_MATCHES[🖼️ Show Match Dialog]
+    MATCHES_Q -->|❌ No| NO_MATCH[No YouTube match]
+    
+    SHOW_MATCHES --> USER_SELECT{👆 User Selection}
+    USER_SELECT -->|✅ Select Match| FETCH_YT_META[📋 Fetch YouTube Metadata<br/>💾 Save to SQLite]
+    USER_SELECT -->|❌ None Match| NO_MATCH
+    
+    NO_MATCH --> MANUAL_META
+    SKIP_TO_MANUAL --> MANUAL_META[📝 Manual Metadata Form]
+    
+    MANUAL_META --> TITLE_INPUT[✏️ Enter Title]
+    TITLE_INPUT --> AUTHOR_SELECT{👤 Select Author}
+    
+    AUTHOR_SELECT -->|📚 Existing| CHOOSE_AUTHOR[Choose from List<br/>💾 Save to SQLite]
+    AUTHOR_SELECT -->|➕ Create New| CREATE_AUTHOR[Create New Author<br/>💾 Save to SQLite]
+    
+    CHOOSE_AUTHOR --> PROCESS_CONTENT
+    CREATE_AUTHOR --> PROCESS_CONTENT
+    FETCH_YT_META --> PROCESS_CONTENT
+    
+    %% Processing Pipeline - Two-Pass Detailed
+    TRANSCRIBE --> PROCESS_CONTENT[⚙️ Two-Pass Pipeline]
+    
+    %% Pass 1: Extraction
+    PROCESS_CONTENT --> PASS1_START[📋 Pass 1: Extraction]
+    PASS1_START --> PASS1_LOAD[Load extraction_pass.txt prompt]
+    PASS1_LOAD --> PASS1_BUILD[Build prompt with<br/>complete transcript + metadata]
+    PASS1_BUILD --> PASS1_INJECT[🔄 Inject Refinements<br/>from GetReceipts.org]
+    PASS1_INJECT --> PASS1_CALL[🔄 Call LLM once]
+    PASS1_CALL --> PASS1_PARSE[Parse JSON response]
+    PASS1_PARSE --> PASS1_VALIDATE[Validate & repair]
+    PASS1_VALIDATE --> PASS1_EXTRACT[Extract all entities:<br/>• Claims with 6D scoring<br/>• Jargon with definitions<br/>• People/organizations<br/>• Mental models<br/>• Speaker inference<br/>• Importance scores 0-10<br/>💾 Save to SQLite]
+    
+    %% Pass 2: Synthesis
+    PASS1_EXTRACT --> PASS2_START[📊 Pass 2: Synthesis]
+    PASS2_START --> PASS2_FILTER[Filter high-importance claims ≥7.0]
+    PASS2_FILTER --> PASS2_LOAD[Load synthesis_pass.txt prompt]
+    PASS2_LOAD --> PASS2_BUILD[Build prompt with all entities<br/>+ YouTube AI summary]
+    PASS2_BUILD --> PASS2_CALL[🔄 Call LLM once]
+    PASS2_CALL --> PASS2_PARSE[Parse response]
+    PASS2_PARSE --> PASS2_SYNTH[Generate synthesis:<br/>• Flexible length 5¶ to 2 pages<br/>• Based on duration + claim density<br/>• Thematic organization<br/>• Key themes + quality metrics<br/>💾 Save to SQLite]
+    
+    PASS2_SYNTH --> PROCESSING_COMPLETE[✅ Processing Complete<br/>Total: 2 API calls]
+    
+    %% Upload Flow - Device Already Linked
+    PROCESSING_COMPLETE --> CHECK_SETTING{☁️ Auto-Upload<br/>Enabled?}
+    CHECK_SETTING -->|✅ Yes default| UPLOAD_GR[🚀 Upload to GetReceipts<br/>Device already linked]
+    CHECK_SETTING -->|❌ No disabled| COMPLETE_LOCAL[✅ Saved Locally Only]
+    
+    UPLOAD_GR --> GR_API[🌐 GetReceipts API<br/>Rate limited 99999/hour]
+    GR_API --> AUDIT_LOG[📝 Create Audit Log Entry]
+    AUDIT_LOG --> SUPABASE[🗄️ Supabase Database]
+    SUPABASE --> SUCCESS[🎉 Upload Successful]
+    
+    SUCCESS --> VIEW_LINK[🔗 View on GetReceipts.org]
+    COMPLETE_LOCAL --> CAN_UPLOAD_LATER[Can upload manually later]
+    
+    %% Styling
+    classDef userAction fill:#4CAF50,stroke:#2E7D32,color:white
+    classDef daemon fill:#9C27B0,stroke:#6A1B9A,color:white
+    classDef decision fill:#FF9800,stroke:#E65100,color:white
+    classDef process fill:#2196F3,stroke:#1565C0,color:white
+    classDef success fill:#4CAF50,stroke:#2E7D32,color:white
+    classDef warning fill:#f44336,stroke:#c62828,color:white
+    
+    class START,INPUT,USER_SELECT,LOCAL_USER_SELECT userAction
+    class CHECK_DAEMON,DETECT_TYPE,YT_TRANSCRIPT_TRY,TRANSCRIPT_Q,SEARCH_Q,MATCHES_Q,AUTHOR_SELECT,CHECK_SETTING,CHECK_DEVICE_LINK,LOCAL_SEARCH_Q,LOCAL_MATCHES_Q decision
+    class YT_DOWNLOAD,YT_META,TRANSCRIBE,PROCESS_CONTENT,EXTRACT,SYNTHESIZE,UPLOAD_GR,WHISPER_FALLBACK process
+    class SUCCESS,COMPLETE_LOCAL,YT_TRANSCRIPT,LOCAL_FETCH_META,FETCH_YT_META success
+    class SHOW_INSTALLER,NO_MATCH,TRIGGER_LINK warning
+        </div>
+    </div>
+
+    <div class="diagram-section">
+        <h2>🚀 User Journey Overview</h2>
+        <div class="mermaid">
+flowchart TB
+    subgraph START["🚀 User Entry Points"]
+        WEB["🌐 GetReceipts.org"]
+        DESKTOP["💻 Knowledge_Chipper App"]
+        DAEMON["🌐💻 Local Daemon + Web UI"]
+    end
+
+    subgraph WEB_UI["🌐💻 Web UI Pages"]
+        CONTRIBUTE["/contribute - Smart Input"]
+        JOBS["/contribute/jobs - Queue"]
+        SETTINGS["/contribute/settings"]
+        MONITOR["/contribute/monitor"]
+        HELP["/contribute/help"]
+    end
+
+    subgraph INGEST["📥 Content Ingestion"]
+        YT_SINGLE["YouTube Single/Batch"]
+        YT_PLAYLIST["Playlists/Channels"]
+        LOCAL["Local Files"]
+        PDF["PDF Transcripts"]
+        RSS["RSS/Podcast Feeds"]
+        FOLDER["Folder Watch"]
+    end
+
+    subgraph PROCESS["⚙️ Processing"]
+        TRANSCRIBE["🎤 Transcription"]
+        EXTRACT["🧠 Claim Extraction"]
+    end
+
+    subgraph OUTPUT["☁️ Output"]
+        UPLOAD["Upload to GetReceipts"]
+        WEB_VIEW["🌐 View & Manage"]
+    end
+
+    WEB --> CONTRIBUTE
+    CONTRIBUTE --> JOBS
+    CONTRIBUTE --> SETTINGS
+    CONTRIBUTE --> MONITOR
+    CONTRIBUTE --> HELP
+    
+    DESKTOP --> INGEST
+    DAEMON --> YT_SINGLE
+    DAEMON --> YT_PLAYLIST
+    DAEMON --> LOCAL
+    DAEMON --> PDF
+    DAEMON --> RSS
+    DAEMON --> FOLDER
+    
+    INGEST --> PROCESS
+    PROCESS --> OUTPUT
+    OUTPUT --> WEB_VIEW
+
+    classDef web fill:#4CAF50,stroke:#2E7D32,color:white
+    classDef desktop fill:#2196F3,stroke:#1565C0,color:white
+    classDef both fill:#9C27B0,stroke:#6A1B9A,color:white
+    
+    class WEB,WEB_VIEW web
+    class DESKTOP desktop
+    class DAEMON,CONTRIBUTE,JOBS,SETTINGS,MONITOR,HELP,YT_SINGLE,YT_PLAYLIST,LOCAL,PDF,RSS,FOLDER,TRANSCRIBE,EXTRACT,UPLOAD both
+        </div>
+    </div>
+
+    <div class="diagram-section">
+        <h2>📥 Content Ingestion Options</h2>
+        <div class="mermaid">
+flowchart LR
+    subgraph WEB_DAEMON["🌐💻 Web + Daemon"]
+        YT_URL["YouTube URL via /contribute"]
+        YT_BATCH["Batch YouTube URLs"]
+        YT_PLAYLIST["YouTube Playlist/Channel"]
+        RSS["RSS/Podcast Feeds"]
+        AUDIO["Local Audio Files"]
+        VIDEO["Local Video Files"]
+        PDF_TRANS["PDF Transcripts"]
+        TEXT_DOC["Text/Docx/PDF Documents"]
+        FOLDER["Folder Watching"]
+    end
+    
+    subgraph DESKTOP_ONLY["💻 Desktop Only"]
+        COOKIES["Multi-Account Downloads"]
+    end
+    
+    subgraph WORKFLOW["📝 Content Workflows"]
+        TRANS_CHECK["Is this a transcript?"]
+        YT_MATCH["Try YouTube matching"]
+        MANUAL_META["Manual metadata entry"]
+        AUTHOR_SELECT["Author/Channel selection"]
+    end
+    
+    classDef both fill:#9C27B0,stroke:#6A1B9A,color:white
+    classDef desktop fill:#2196F3,stroke:#1565C0,color:white
+    classDef workflow fill:#FF9800,stroke:#E65100,color:white
+    
+    class YT_URL,YT_BATCH,YT_PLAYLIST,RSS,AUDIO,VIDEO,PDF_TRANS,TEXT_DOC,FOLDER both
+    class COOKIES desktop
+    class TRANS_CHECK,YT_MATCH,MANUAL_META,AUTHOR_SELECT workflow
+        </div>
+    </div>
+
+    <div class="diagram-section">
+        <h2>🎤 Transcription Options</h2>
+        <div class="mermaid">
+flowchart TB
+    subgraph WHISPER["Whisper.cpp Engine"]
+        DAEMON_W["🌐💻 Via Web UI<br/>Model Selection"]
+        DESKTOP_W["💻 Via Desktop<br/>Full Model Control"]
+    end
+    
+    subgraph MODELS["Model Options"]
+        TINY["tiny (75MB)"]
+        BASE["base (142MB)"]
+        SMALL["small (466MB)"]
+        MEDIUM["medium (1.5GB)"]
+        LARGE["large-v3 (3GB)"]
+    end
+    
+    subgraph OTHER["Other Transcript Sources"]
+        YT_AUTO["YouTube Auto-Transcript"]
+        PDF_IMP["PDF Import"]
+    end
+    
+    DAEMON_W --> MODELS
+    DESKTOP_W --> MODELS
+    
+    classDef both fill:#9C27B0,stroke:#6A1B9A,color:white
+    classDef desktop fill:#2196F3,stroke:#1565C0,color:white
+    
+    class DAEMON_W,TINY,BASE,SMALL,MEDIUM,LARGE,YT_AUTO,PDF_IMP both
+    class DESKTOP_W desktop
+        </div>
+    </div>
+
+    <div class="diagram-section">
+        <h2>🧠 Claim Extraction</h2>
+        <div class="mermaid">
+flowchart TB
+    subgraph PIPELINE["Two-Pass Pipeline"]
+        PASS1["Pass 1: Extract Raw Claims"]
+        PASS2["Pass 2: Synthesize & Score"]
+    end
+    
+    subgraph LLM["LLM Options"]
+        subgraph CLOUD["🌐💻 Cloud LLMs"]
+            OPENAI["OpenAI GPT-4o"]
+            ANTHROPIC["Anthropic Claude"]
+            GEMINI["Google Gemini"]
+        end
+        subgraph LOCAL["💻 Local LLMs"]
+            OLLAMA["Ollama"]
+        end
+    end
+    
+    subgraph OUTPUTS["Extracted Entities"]
+        CLAIMS["Claims + Importance"]
+        TIERS["Tier Classification"]
+        PEOPLE["People Mentioned"]
+        JARGON["Technical Jargon"]
+        CONCEPTS["Mental Models"]
+    end
+    
+    PASS1 --> PASS2
+    PASS2 --> LLM
+    LLM --> OUTPUTS
+    
+    classDef both fill:#9C27B0,stroke:#6A1B9A,color:white
+    classDef desktop fill:#2196F3,stroke:#1565C0,color:white
+    
+    class OPENAI,ANTHROPIC,GEMINI both
+    class OLLAMA desktop
+        </div>
+    </div>
+
+    <div class="diagram-section">
+        <h2>🌐💻 Web UI Feature Pages (NEW)</h2>
+        <div class="mermaid">
+flowchart TB
+    subgraph CONTRIBUTE["Main Processing Page"]
+        SMART["Smart Input<br/>Auto-detects type"]
+        OPTIONS["Processing Options<br/>Whisper, LLM, Auto-upload"]
+        PROGRESS["Real-time Progress"]
+    end
+    
+    subgraph JOBS_PAGE["Job Queue Page"]
+        LIST["Filterable Job List"]
+        SEARCH["Search by title/URL"]
+        BULK["Bulk Retry/Delete"]
+        DETAIL["Job Detail View"]
+    end
+    
+    subgraph SETTINGS_PAGE["Settings Page"]
+        API["API Key Config"]
+        DEFAULTS["Processing Defaults"]
+        DEVICE["Device Linking"]
+        STATUS["Daemon Status"]
+    end
+    
+    subgraph MONITOR_PAGE["Folder Monitor Page"]
+        WATCH["Watch Folder Config"]
+        PATTERNS["File Patterns"]
+        EVENTS["Event Timeline"]
+        STATS["Statistics"]
+    end
+    
+    subgraph HELP_PAGE["Help Page"]
+        GUIDE["Quick Start Guide"]
+        FEATURES["Feature Explanations"]
+        TEST["Test API Keys"]
+        LINKS["Dashboard Links"]
+    end
+    
+    classDef both fill:#9C27B0,stroke:#6A1B9A,color:white
+    class SMART,OPTIONS,PROGRESS,LIST,SEARCH,BULK,DETAIL,API,DEFAULTS,DEVICE,STATUS,WATCH,PATTERNS,EVENTS,STATS,GUIDE,FEATURES,TEST,LINKS both
+        </div>
+    </div>
+
+    <div class="diagram-section">
+        <h2>🔄 Learning Loop - Web Corrections Improve Future Extractions</h2>
+        <p style="margin-bottom: 1rem; color: #888;">This flowchart shows how your corrections on GetReceipts.org automatically improve all future extractions through the refinement injection system.</p>
+        <div class="mermaid">
+flowchart TD
+    subgraph WEB["🌐 GetReceipts.org"]
+        REVIEW[Review Entities<br/>/dashboard/entities]
+        REJECT[Reject Incorrect Entity<br/>e.g., "US President"]
+        CATEGORY[Select Category<br/>title_not_name]
+        SAVE_CORR[💾 Save to<br/>entity_corrections]
+        
+        SYNTH_BTN[Click "Synthesize Patterns"]
+        AI_SYNTH[🤖 OpenAI Analyzes<br/>Rejections]
+        GEN_XML[Generate bad_example XML]
+        SAVE_SUGG[💾 Save to<br/>prompt_improvement_suggestions]
+        
+        APPROVE_UI[Review Suggestions<br/>/dashboard/patterns]
+        APPROVE[Approve Suggestion]
+        SAVE_REF[💾 Save to<br/>prompt_refinements active=true]
+    end
+    
+    subgraph DESKTOP["💻 Knowledge_Chipper"]
+        STARTUP[App Startup]
+        SYNC[Sync Refinements<br/>GET /api/prompt-refinements]
+        WRITE_LOCAL[💾 Write to Local Files<br/>~/Library/.../refinements/]
+        
+        NEW_VIDEO[Process New Video]
+        BUILD_PROMPT[Build Extraction Prompt]
+        INJECT[✅ Inject Refinements<br/>_inject_refinements]
+        LLM_CALL[🔄 Call LLM]
+        IMPROVED[✨ Improved Extraction<br/>Avoids Previous Mistakes!]
+    end
+    
+    REVIEW --> REJECT
+    REJECT --> CATEGORY
+    CATEGORY --> SAVE_CORR
+    
+    SAVE_CORR --> SYNTH_BTN
+    SYNTH_BTN --> AI_SYNTH
+    AI_SYNTH --> GEN_XML
+    GEN_XML --> SAVE_SUGG
+    
+    SAVE_SUGG --> APPROVE_UI
+    APPROVE_UI --> APPROVE
+    APPROVE --> SAVE_REF
+    
+    SAVE_REF -.->|API Endpoint| SYNC
+    
+    STARTUP --> SYNC
+    SYNC --> WRITE_LOCAL
+    
+    WRITE_LOCAL --> NEW_VIDEO
+    NEW_VIDEO --> BUILD_PROMPT
+    BUILD_PROMPT --> INJECT
+    INJECT --> LLM_CALL
+    LLM_CALL --> IMPROVED
+    
+    IMPROVED -.->|Future corrections| REVIEW
+    
+    classDef web fill:#4CAF50,stroke:#2E7D32,color:white
+    classDef desktop fill:#2196F3,stroke:#1565C0,color:white
+    classDef ai fill:#9C27B0,stroke:#6A1B9A,color:white
+    classDef success fill:#FFD700,stroke:#FFA500,color:black
+    
+    class REVIEW,REJECT,CATEGORY,SAVE_CORR,SYNTH_BTN,APPROVE_UI,APPROVE,SAVE_REF web
+    class STARTUP,SYNC,WRITE_LOCAL,NEW_VIDEO,BUILD_PROMPT,INJECT,LLM_CALL desktop
+    class AI_SYNTH,GEN_XML,SAVE_SUGG ai
+    class IMPROVED success
+        </div>
+    </div>
+
+    <div class="diagram-section">
+        <h2>🌐 GetReceipts.org Web Features</h2>
+        <div class="mermaid">
+flowchart TB
+    subgraph EXPLORE["Knowledge Exploration"]
+        GRAPH["3D Knowledge Graph"]
+        DEBATE["Debate Arena"]
+        PORTRAITS["Intellectual Portraits"]
+        LANDSCAPE["Domain Landscape"]
+        COLLECTIONS["User Collections"]
+    end
+    
+    subgraph MANAGE["Claim Management"]
+        VIEW["View Claims"]
+        EDIT["Edit Claims"]
+        TIER["Change Tier"]
+        DELETE["Soft Delete"]
+        EMBED["Embeddable Cards"]
+        BADGE["Consensus Badges"]
+    end
+    
+    subgraph COMMUNITY["Community Features"]
+        VOTE["Upvote/Downvote"]
+        CRED["Mark Credible/Disputed"]
+        COMMENT["Nested Comments"]
+        BOOKMARK["Bookmarks"]
+        REP["Reputation Scores"]
+    end
+    
+    subgraph MOD["Moderation"]
+        PROPOSALS["Edit Proposals"]
+        MERGES["Merge Proposals"]
+        REVIEW["Review Queue"]
+        TRUST["Trust Levels"]
+    end
+    
+    subgraph ENTITIES["Entity System"]
+        CODES["Entity Code Lookup"]
+        CORRECT["Speaker Corrections"]
+        ANNOT["Annotations"]
+    end
+    
+    classDef web fill:#4CAF50,stroke:#2E7D32,color:white
+    class GRAPH,DEBATE,PORTRAITS,LANDSCAPE,COLLECTIONS,VIEW,EDIT,TIER,DELETE,EMBED,BADGE,VOTE,CRED,COMMENT,BOOKMARK,REP,PROPOSALS,MERGES,REVIEW,TRUST,CODES,CORRECT,ANNOT web
+        </div>
+    </div>
+
+    <div class="diagram-section">
+        <h2>⏱️ Processing Sequence (Web + Daemon)</h2>
+        <div class="mermaid">
+sequenceDiagram
+    participant U as User
+    participant W as GetReceipts.org
+    participant D as Local Daemon
+    participant Y as YouTube
+    participant Wh as Whisper
+    participant L as Cloud LLM
+    participant DB as Supabase
+
+    U->>W: Visit /contribute
+    W->>D: Check health localhost:8765
+    
+    alt Daemon Not Running
+        W->>U: Show installer prompt
+        U->>U: Download and install DMG
+        U->>W: Refresh page
+    end
+    
+    D-->>W: Health OK
+    U->>W: Enter YouTube URL or drag files
+    U->>W: Configure options in Settings
+    W->>D: POST /api/process
+    
+    Note over D: Stage 1: Download
+    D->>Y: Download audio
+    Y-->>D: Audio file
+    
+    Note over D: Stage 2: Transcribe
+    D->>Wh: Process with selected model
+    Wh-->>D: Transcript
+    
+    Note over D: Stage 3: Extract
+    D->>L: Two-Pass extraction
+    L-->>D: Claims and entities
+    
+    Note over D: Stage 4: Upload
+    D->>DB: Upload via device auth
+    DB-->>D: Episode code
+    
+    D-->>W: Complete with link
+    W->>U: Success View episode
+        </div>
+    </div>
+
+    <div class="diagram-section">
+        <h2>📊 Feature Availability Matrix</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Feature</th>
+                    <th>🌐 Web</th>
+                    <th>💻 Desktop</th>
+                    <th>🌐💻 Web+Daemon</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>Content Ingestion</strong></td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                </tr>
+                <tr>
+                    <td>→ YouTube Single URL</td>
+                    <td class="cross">❌</td>
+                    <td class="check">✅</td>
+                    <td class="check">✅</td>
+                </tr>
+                <tr>
+                    <td>→ YouTube Batch URLs <span class="new-badge">NEW</span></td>
+                    <td class="cross">❌</td>
+                    <td class="check">✅</td>
+                    <td class="check">✅</td>
+                </tr>
+                <tr>
+                    <td>→ YouTube Playlist/Channel <span class="new-badge">NEW</span></td>
+                    <td class="cross">❌</td>
+                    <td class="check">✅</td>
+                    <td class="check">✅</td>
+                </tr>
+                <tr>
+                    <td>→ Local Audio/Video Files <span class="new-badge">NEW</span></td>
+                    <td class="cross">❌</td>
+                    <td class="check">✅</td>
+                    <td class="check">✅</td>
+                </tr>
+                <tr>
+                    <td>→ PDF Transcripts <span class="new-badge">NEW</span></td>
+                    <td class="cross">❌</td>
+                    <td class="check">✅</td>
+                    <td class="check">✅</td>
+                </tr>
+                <tr>
+                    <td>→ Text/Docx/PDF Documents <span class="new-badge">NEW</span></td>
+                    <td class="cross">❌</td>
+                    <td class="check">✅</td>
+                    <td class="check">✅</td>
+                </tr>
+                <tr>
+                    <td>→ RSS/Podcast Feeds <span class="new-badge">NEW</span></td>
+                    <td class="cross">❌</td>
+                    <td class="check">✅</td>
+                    <td class="check">✅</td>
+                </tr>
+                <tr>
+                    <td>→ Folder Watching <span class="new-badge">NEW</span></td>
+                    <td class="cross">❌</td>
+                    <td class="check">✅</td>
+                    <td class="check">✅</td>
+                </tr>
+                <tr>
+                    <td><strong>Content Workflows</strong></td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                </tr>
+                <tr>
+                    <td>→ Transcript Detection <span class="new-badge">NEW</span></td>
+                    <td class="cross">❌</td>
+                    <td class="check">✅</td>
+                    <td class="check">✅</td>
+                </tr>
+                <tr>
+                    <td>→ YouTube Video Matching <span class="new-badge">NEW</span></td>
+                    <td class="cross">❌</td>
+                    <td class="check">✅</td>
+                    <td class="check">✅</td>
+                </tr>
+                <tr>
+                    <td>→ Manual Metadata Entry <span class="new-badge">NEW</span></td>
+                    <td class="cross">❌</td>
+                    <td class="check">✅</td>
+                    <td class="check">✅</td>
+                </tr>
+                <tr>
+                    <td>→ Author/Channel Selection <span class="new-badge">NEW</span></td>
+                    <td class="cross">❌</td>
+                    <td class="check">✅</td>
+                    <td class="check">✅</td>
+                </tr>
+                <tr>
+                    <td><strong>Transcription</strong></td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                </tr>
+                <tr>
+                    <td>→ Whisper Transcription</td>
+                    <td class="cross">❌</td>
+                    <td class="check">✅</td>
+                    <td class="check">✅</td>
+                </tr>
+                <tr>
+                    <td>→ Model Selection (tiny→large) <span class="new-badge">NEW</span></td>
+                    <td class="cross">❌</td>
+                    <td class="check">✅</td>
+                    <td class="check">✅</td>
+                </tr>
+                <tr>
+                    <td><strong>Claim Extraction</strong></td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                </tr>
+                <tr>
+                    <td>→ Refinement Injection (Learning Loop) <span class="new-badge">NEW</span></td>
+                    <td class="cross">❌</td>
+                    <td class="check">✅</td>
+                    <td class="check">✅</td>
+                </tr>
+                <tr>
+                    <td>→ Cloud LLM (OpenAI, Anthropic)</td>
+                    <td class="cross">❌</td>
+                    <td class="check">✅</td>
+                    <td class="check">✅</td>
+                </tr>
+                <tr>
+                    <td>→ LLM Provider Selection <span class="new-badge">NEW</span></td>
+                    <td class="cross">❌</td>
+                    <td class="check">✅</td>
+                    <td class="check">✅</td>
+                </tr>
+                <tr>
+                    <td>→ Local LLM (Ollama)</td>
+                    <td class="cross">❌</td>
+                    <td class="check">✅</td>
+                    <td class="cross">❌</td>
+                </tr>
+                <tr>
+                    <td>→ Custom Prompt Editing</td>
+                    <td class="cross">❌</td>
+                    <td class="check">✅</td>
+                    <td class="cross">❌</td>
+                </tr>
+                <tr>
+                    <td><strong>Job Management</strong> <span class="new-badge">NEW</span></td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                </tr>
+                <tr>
+                    <td>→ Job Queue with Filters</td>
+                    <td class="cross">❌</td>
+                    <td class="check">✅</td>
+                    <td class="check">✅</td>
+                </tr>
+                <tr>
+                    <td>→ Retry Failed Jobs</td>
+                    <td class="cross">❌</td>
+                    <td class="check">✅</td>
+                    <td class="check">✅</td>
+                </tr>
+                <tr>
+                    <td>→ Cancel Running Jobs</td>
+                    <td class="cross">❌</td>
+                    <td class="check">✅</td>
+                    <td class="check">✅</td>
+                </tr>
+                <tr>
+                    <td>→ Bulk Actions</td>
+                    <td class="cross">❌</td>
+                    <td class="check">✅</td>
+                    <td class="check">✅</td>
+                </tr>
+                <tr>
+                    <td><strong>Configuration</strong> <span class="new-badge">NEW</span></td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                </tr>
+                <tr>
+                    <td>→ API Key Management</td>
+                    <td class="cross">❌</td>
+                    <td class="check">✅</td>
+                    <td class="check">✅</td>
+                </tr>
+                <tr>
+                    <td>→ Processing Defaults</td>
+                    <td class="cross">❌</td>
+                    <td class="check">✅</td>
+                    <td class="check">✅</td>
+                </tr>
+                <tr>
+                    <td>→ Device Linking Status</td>
+                    <td class="check">✅</td>
+                    <td class="check">✅</td>
+                    <td class="check">✅</td>
+                </tr>
+                <tr>
+                    <td><strong>Upload & Sync</strong></td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                </tr>
+                <tr>
+                    <td>→ Auto-Upload to GetReceipts</td>
+                    <td class="cross">❌</td>
+                    <td class="check">✅</td>
+                    <td class="check">✅</td>
+                </tr>
+                <tr>
+                    <td>→ Auto-Upload Toggle <span class="new-badge">NEW</span></td>
+                    <td class="cross">❌</td>
+                    <td class="check">✅</td>
+                    <td class="check">✅</td>
+                </tr>
+                <tr>
+                    <td>→ Device Authentication</td>
+                    <td class="check">✅</td>
+                    <td class="check">✅</td>
+                    <td class="check">✅</td>
+                </tr>
+                <tr>
+                    <td><strong>Knowledge Exploration</strong></td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                </tr>
+                <tr>
+                    <td>→ 3D Knowledge Graph</td>
+                    <td class="check">✅</td>
+                    <td class="cross">❌</td>
+                    <td class="cross">❌</td>
+                </tr>
+                <tr>
+                    <td>→ Debate Arena</td>
+                    <td class="check">✅</td>
+                    <td class="cross">❌</td>
+                    <td class="cross">❌</td>
+                </tr>
+                <tr>
+                    <td>→ Intellectual Portraits</td>
+                    <td class="check">✅</td>
+                    <td class="cross">❌</td>
+                    <td class="cross">❌</td>
+                </tr>
+                <tr>
+                    <td>→ Collections</td>
+                    <td class="check">✅</td>
+                    <td class="cross">❌</td>
+                    <td class="cross">❌</td>
+                </tr>
+                <tr>
+                    <td><strong>Claim Management</strong></td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                </tr>
+                <tr>
+                    <td>→ View/Edit Claims</td>
+                    <td class="check">✅</td>
+                    <td class="cross">❌</td>
+                    <td class="cross">❌</td>
+                </tr>
+                <tr>
+                    <td>→ Change Tier (A/B/C)</td>
+                    <td class="check">✅</td>
+                    <td class="cross">❌</td>
+                    <td class="cross">❌</td>
+                </tr>
+                <tr>
+                    <td>→ Embeddable Cards</td>
+                    <td class="check">✅</td>
+                    <td class="cross">❌</td>
+                    <td class="cross">❌</td>
+                </tr>
+                <tr>
+                    <td><strong>Community</strong></td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                </tr>
+                <tr>
+                    <td>→ Voting (Upvote/Downvote)</td>
+                    <td class="check">✅</td>
+                    <td class="cross">❌</td>
+                    <td class="cross">❌</td>
+                </tr>
+                <tr>
+                    <td>→ Comments</td>
+                    <td class="check">✅</td>
+                    <td class="cross">❌</td>
+                    <td class="cross">❌</td>
+                </tr>
+                <tr>
+                    <td>→ Bookmarks</td>
+                    <td class="check">✅</td>
+                    <td class="cross">❌</td>
+                    <td class="cross">❌</td>
+                </tr>
+                <tr>
+                    <td><strong>Moderation</strong></td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                </tr>
+                <tr>
+                    <td>→ Edit Proposals</td>
+                    <td class="check">✅</td>
+                    <td class="cross">❌</td>
+                    <td class="cross">❌</td>
+                </tr>
+                <tr>
+                    <td>→ Merge Proposals</td>
+                    <td class="check">✅</td>
+                    <td class="cross">❌</td>
+                    <td class="cross">❌</td>
+                </tr>
+                <tr>
+                    <td>→ Trust Levels</td>
+                    <td class="check">✅</td>
+                    <td class="cross">❌</td>
+                    <td class="cross">❌</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="diagram-section">
+        <h2>✅ Recently Completed Features</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Feature</th>
+                    <th>Description</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>Refinement Injection (Learning Loop)</strong></td>
+                    <td>Web corrections automatically injected into extraction prompts to prevent repeated mistakes</td>
+                    <td class="check">✅ Jan 1, 2026</td>
+                </tr>
+                <tr>
+                    <td><strong>YouTube Playlists/Channels</strong></td>
+                    <td>Auto-expand playlist URLs to individual videos for batch processing</td>
+                    <td class="check">✅ Dec 29, 2025</td>
+                </tr>
+                <tr>
+                    <td><strong>RSS/Podcast Feeds</strong></td>
+                    <td>Process RSS feed URLs to download latest episodes automatically</td>
+                    <td class="check">✅ Completed</td>
+                </tr>
+                <tr>
+                    <td><strong>Document Upload Workflow</strong></td>
+                    <td>Upload text/docx/PDF documents (not just transcripts) for direct claim extraction</td>
+                    <td class="check">✅ Completed</td>
+                </tr>
+                <tr>
+                    <td><strong>Transcript Detection</strong></td>
+                    <td>Toggle to mark uploaded content as transcripts for YouTube matching</td>
+                    <td class="check">✅ Completed</td>
+                </tr>
+                <tr>
+                    <td><strong>YouTube Video Matching</strong></td>
+                    <td>Search YouTube API for matching videos when processing transcripts (opt-in)</td>
+                    <td class="check">✅ Completed</td>
+                </tr>
+                <tr>
+                    <td><strong>Manual Metadata Entry</strong></td>
+                    <td>Manual entry of title, author, date when no YouTube match found</td>
+                    <td class="check">✅ Completed</td>
+                </tr>
+                <tr>
+                    <td><strong>Author/Channel Management</strong></td>
+                    <td>Searchable dropdown of existing authors with create-new option</td>
+                    <td class="check">✅ Completed</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="diagram-section">
+        <h2>📋 Planned Features (Roadmap)</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Feature</th>
+                    <th>Description</th>
+                    <th>Priority</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>Local Ollama LLM</strong></td>
+                    <td>Support for local LLM processing via Ollama in web UI</td>
+                    <td class="cross">Medium</td>
+                </tr>
+                <tr>
+                    <td><strong>Windows Support</strong></td>
+                    <td>Windows version of the local daemon</td>
+                    <td class="cross">Medium</td>
+                </tr>
+                <tr>
+                    <td><strong>Custom Prompt Editing</strong></td>
+                    <td>Web UI for editing extraction prompts (currently desktop only)</td>
+                    <td class="cross">Low</td>
+                </tr>
+                <tr>
+                    <td><strong>Batch YouTube Search Control</strong></td>
+                    <td>Advanced controls for bulk transcript YouTube matching</td>
+                    <td class="cross">Low</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="diagram-section">
+        <h2>🔧 Excluded Features (Per Requirements)</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Feature</th>
+                    <th>Status</th>
+                    <th>Reason</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Speaker Diarization</td>
+                    <td class="cross">Permanently Excluded</td>
+                    <td>No longer needed - two-pass system infers speakers from content</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'default',
+            securityLevel: 'loose',
+            flowchart: {
+                useMaxWidth: true,
+                htmlLabels: true,
+                curve: 'basis'
+            },
+            sequence: {
+                diagramMarginX: 50,
+                diagramMarginY: 10,
+                actorMargin: 50,
+                width: 150,
+                height: 65,
+                boxMargin: 10,
+                boxTextMargin: 5,
+                noteMargin: 10,
+                messageMargin: 35,
+                mirrorActors: true,
+                bottomMarginAdj: 1,
+                useMaxWidth: true
+            }
+        });
+    </script>
+</body>
+</html>

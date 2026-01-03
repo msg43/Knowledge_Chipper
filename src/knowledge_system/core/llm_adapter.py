@@ -326,10 +326,49 @@ class LLMAdapter:
             return response
 
         except Exception as e:
+            error_msg = str(e).lower()
+            
             # Handle rate limit errors
-            if "rate" in str(e).lower() or "429" in str(e):
+            if "rate" in error_msg or "429" in error_msg:
                 rate_limiter.trigger_backoff()
-
+                raise KnowledgeSystemError(
+                    f"Rate limit exceeded. Please wait and try again.", 
+                    ErrorCode.LLM_API_ERROR
+                ) from e
+            
+            # Handle model access errors (403, permission, access denied, etc.)
+            if any(x in error_msg for x in ["403", "permission", "access denied", "not authorized", "forbidden", "does not have access"]):
+                raise KnowledgeSystemError(
+                    f"Model Access Denied: You don't have access to '{model}' on {provider}.\n\n"
+                    f"This model may require:\n"
+                    f"• Higher usage tier or special approval\n"
+                    f"• Specific subscription plan\n"
+                    f"• Waitlist access\n\n"
+                    f"Please try a different model or contact {provider} support for access.",
+                    ErrorCode.LLM_API_ERROR
+                ) from e
+            
+            # Handle invalid model errors (404, model not found, etc.)
+            if any(x in error_msg for x in ["404", "not found", "does not exist", "invalid model"]):
+                raise KnowledgeSystemError(
+                    f"Model Not Found: '{model}' is not available on {provider}.\n\n"
+                    f"The model may have been:\n"
+                    f"• Deprecated or retired\n"
+                    f"• Renamed\n"
+                    f"• Not yet released in your region\n\n"
+                    f"Please select a different model from the dropdown.",
+                    ErrorCode.LLM_API_ERROR
+                ) from e
+            
+            # Handle authentication errors
+            if any(x in error_msg for x in ["401", "unauthorized", "invalid api key", "authentication"]):
+                raise KnowledgeSystemError(
+                    f"Authentication Failed: Your {provider} API key is invalid or expired.\n\n"
+                    f"Please update your API key in Settings.",
+                    ErrorCode.LLM_API_ERROR
+                ) from e
+            
+            # Generic error
             raise KnowledgeSystemError(
                 f"LLM request failed: {e}", ErrorCode.LLM_API_ERROR
             ) from e

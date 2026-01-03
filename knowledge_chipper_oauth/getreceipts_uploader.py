@@ -80,6 +80,10 @@ class GetReceiptsUploader:
 
         print("🚀 Starting upload to GetReceipts.org...")
 
+        # Add version tracking metadata if available
+        if "processing_version" not in session_data:
+            session_data["processing_version"] = self._generate_version_metadata(session_data)
+
         # Count records
         total_records = sum(
             len(session_data.get(key, []))
@@ -155,6 +159,41 @@ class GetReceiptsUploader:
                 print(f"    - {error}")
 
         print(f"\n  Total: {total} records uploaded")
+    
+    def _generate_version_metadata(self, session_data: dict[str, Any]) -> dict[str, Any]:
+        """
+        Generate processing version metadata for tracking re-processing runs
+        
+        Returns:
+            Dictionary with version tracking information
+        """
+        # Extract source_id from first claim or episode
+        source_id = None
+        if session_data.get("claims") and len(session_data["claims"]) > 0:
+            source_id = session_data["claims"][0].get("source_id")
+        elif session_data.get("media_sources") and len(session_data["media_sources"]) > 0:
+            source_id = session_data["media_sources"][0].get("source_id")
+        
+        if not source_id:
+            return {}
+        
+        # Calculate statistics
+        claims = session_data.get("claims", [])
+        avg_importance = sum(c.get("importance_score", 0) for c in claims) / len(claims) if claims else 0
+        avg_confidence = sum(c.get("confidence_score", 0) for c in claims) / len(claims) if claims else 0
+        
+        return {
+            "source_id": source_id,
+            "version_number": 1,  # Will be incremented by server if already processed
+            "model_used": session_data.get("config", {}).get("llm_model", "unknown"),
+            "pipeline_version": session_data.get("config", {}).get("pipeline_version", "unknown"),
+            "claims_count": len(claims),
+            "people_count": len(session_data.get("people", [])),
+            "jargon_count": len(session_data.get("jargon", [])),
+            "concepts_count": len(session_data.get("concepts", [])),
+            "avg_claim_importance": avg_importance,
+            "avg_claim_confidence": avg_confidence
+        }
 
 
 # Example usage

@@ -46,6 +46,16 @@ ANTHROPIC_FALLBACK_MODELS = [
 ]
 
 
+GOOGLE_FALLBACK_MODELS = [
+    "gemini-2.0-flash-exp",
+    "gemini-1.5-pro-latest",
+    "gemini-1.5-flash-latest",
+    "gemini-1.5-pro",
+    "gemini-1.5-flash",
+    "gemini-pro",
+]
+
+
 def _load_yaml(path: Path) -> dict[str, Any]:
     try:
         if not path.exists():
@@ -139,19 +149,38 @@ def get_openai_models(force_refresh: bool = False) -> list[str]:
 
 
 def get_anthropic_models(force_refresh: bool = False) -> list[str]:
-    """Get Anthropic models from community list and overrides."""
-    # Get community list
+    """Get Anthropic models from API and overrides."""
+    # Get from API via community registry (now supports dynamic fetching!)
     community_registry = get_community_registry()
-    community_models = community_registry.get_provider_models(
+    api_models = community_registry.get_provider_models(
         "anthropic", force_refresh=force_refresh
     )
 
     # Get user overrides
     overrides = load_model_overrides().get("anthropic", [])
 
-    # Merge community + overrides
-    # If community list is empty, fall back to hardcoded list
-    base_models = community_models if community_models else ANTHROPIC_FALLBACK_MODELS
+    # Merge API + overrides
+    # If API list is empty, fall back to hardcoded list
+    base_models = api_models if api_models else ANTHROPIC_FALLBACK_MODELS
+    merged = _dedupe_preserve_order([*base_models, *overrides])
+
+    return merged
+
+
+def get_google_models(force_refresh: bool = False) -> list[str]:
+    """Get Google Gemini models from API and overrides."""
+    # Get from API via community registry
+    community_registry = get_community_registry()
+    api_models = community_registry.get_provider_models(
+        "google", force_refresh=force_refresh
+    )
+
+    # Get user overrides
+    overrides = load_model_overrides().get("google", [])
+
+    # Merge API + overrides
+    # If API list is empty, fall back to hardcoded list
+    base_models = api_models if api_models else GOOGLE_FALLBACK_MODELS
     merged = _dedupe_preserve_order([*base_models, *overrides])
 
     return merged
@@ -208,6 +237,8 @@ def get_provider_models(provider: str, force_refresh: bool = False) -> list[str]
         return get_openai_models(force_refresh=force_refresh)
     if p in {"anthropic", "claude"}:
         return get_anthropic_models(force_refresh=force_refresh)
+    if p in {"google", "gemini"}:
+        return get_google_models(force_refresh=force_refresh)
     if p == "local":
         return get_local_models(force_refresh=force_refresh)
     return []

@@ -128,9 +128,168 @@ class ModelRegistry:
             logger.error(f"Failed to fetch OpenAI models: {e}")
             return []
 
+    def _fetch_google_models(self) -> list[str]:
+        """Fetch available models from Google Gemini API."""
+        try:
+            api_key = self.settings.api_keys.google_api_key
+            if not api_key:
+                logger.info("No Google API key, skipping model fetch")
+                return []
+
+            from google import genai
+
+            client = genai.Client(api_key=api_key)
+            
+            # List all available models
+            models_list = client.models.list()
+            
+            # Filter to generative models (chat/completion capable)
+            gemini_models = []
+            for model in models_list:
+                model_name = model.name
+                # Extract just the model ID (remove 'models/' prefix if present)
+                if model_name.startswith("models/"):
+                    model_name = model_name[7:]
+                
+                # Only include Gemini models that support generateContent
+                if model_name.startswith("gemini-") and hasattr(model, 'supported_generation_methods'):
+                    if 'generateContent' in model.supported_generation_methods:
+                        gemini_models.append(model_name)
+
+            return sorted(gemini_models)
+
+        except Exception as e:
+            logger.error(f"Failed to fetch Google models: {e}")
+            return []
+
+    def _fetch_anthropic_models(self) -> list[str]:
+        """Fetch available models from Anthropic API."""
+        try:
+            api_key = (
+                self.settings.api_keys.anthropic_api_key 
+                or self.settings.api_keys.anthropic
+            )
+            if not api_key:
+                logger.info("No Anthropic API key, skipping model fetch")
+                return []
+
+            import requests
+
+            # Anthropic's models list endpoint
+            url = "https://api.anthropic.com/v1/models"
+            headers = {
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01",
+            }
+
+            response = requests.get(url, headers=headers, timeout=10)
+            
+            if response.status_code != 200:
+                logger.warning(f"Anthropic API returned status {response.status_code}")
+                return []
+
+            data = response.json()
+            
+            # Extract model IDs from the response
+            claude_models = []
+            if "data" in data:
+                for model in data["data"]:
+                    model_id = model.get("id", "")
+                    # Only include Claude models
+                    if model_id.startswith("claude-"):
+                        claude_models.append(model_id)
+
+            return sorted(claude_models)
+
+        except Exception as e:
+            logger.error(f"Failed to fetch Anthropic models: {e}")
+            return []
+
+    def _fetch_from_openrouter(self) -> dict[str, list[str]]:
+        """
+        Fetch comprehensive model list from OpenRouter.ai.
+        
+        OpenRouter aggregates 500+ models from 60+ providers including
+        OpenAI, Anthropic, Google, Meta, Mistral, and more.
+        
+        Returns:
+            Dictionary mapping provider names to model lists
+        """
+        try:
+            import requests
+
+            url = "https://openrouter.ai/api/v1/models"
+            
+            logger.info("Fetching models from OpenRouter.ai...")
+            response = requests.get(url, timeout=15)
+            
+            if response.status_code != 200:
+                logger.warning(f"OpenRouter API returned status {response.status_code}")
+                return {}
+
+            data = response.json()
+            
+            if "data" not in data:
+                logger.warning("OpenRouter response missing 'data' field")
+                return {}
+
+            # Group models by provider
+            models_by_provider: dict[str, list[str]] = {}
+            
+            for model in data["data"]:
+                model_id = model.get("id", "")
+                if not model_id:
+                    continue
+                
+                # OpenRouter model IDs are in format: "provider/model-name"
+                parts = model_id.split("/", 1)
+                if len(parts) != 2:
+                    continue
+                
+                provider, model_name = parts
+                
+                # Normalize provider names to match our conventions
+                provider_map = {
+                    "openai": "openai",
+                    "anthropic": "anthropic",
+                    "google": "google",
+                    "meta-llama": "meta",
+                    "mistralai": "mistral",
+                    "deepseek": "deepseek",
+                    "qwen": "qwen",
+                    "x-ai": "xai",
+                }
+                
+                normalized_provider = provider_map.get(provider, provider)
+                
+                if normalized_provider not in models_by_provider:
+                    models_by_provider[normalized_provider] = []
+                
+                models_by_provider[normalized_provider].append(model_name)
+            
+            # Sort each provider's models
+            for provider in models_by_provider:
+                models_by_provider[provider] = sorted(set(models_by_provider[provider]))
+            
+            logger.info(
+                f"✅ OpenRouter: Fetched {sum(len(m) for m in models_by_provider.values())} models "
+                f"from {len(models_by_provider)} providers"
+            )
+            
+            return models_by_provider
+
+        except Exception as e:
+            logger.error(f"Failed to fetch from OpenRouter: {e}")
+            return {}
+
     def fetch_models(self, force_refresh: bool = False) -> dict[str, list[str]]:
         """
-        Fetch model lists from official APIs and cache.
+        Fetch model lists using multi-tier strategy with intelligent fallbacks.
+        
+        Tier 1: OpenRouter.ai (Primary - 500+ models from 60+ providers)
+        Tier 2: Individual Provider APIs (OpenAI, Google, Anthropic)
+        Tier 3: Cache (Last successful fetch)
+        Tier 4: Hardcoded Fallbacks (Offline mode)
 
         Args:
             force_refresh: If True, bypass cache and fetch fresh data
@@ -143,39 +302,87 @@ class ModelRegistry:
             logger.info("Using cached model lists")
             return self._load_cache()
 
-        logger.info("Refreshing model lists from official sources")
+        logger.info("🔄 Refreshing model lists using multi-tier strategy...")
 
-        # Load existing cache to preserve Anthropic models
-        existing = self._load_cache() if self._is_cache_valid() else {}
-
-        # Fetch from official sources
+        models: dict[str, list[str]] = {}
+        
+        # ============================================
+        # TIER 1: OpenRouter (Primary - Most Comprehensive)
+        # ============================================
+        try:
+            openrouter_models = self._fetch_from_openrouter()
+            if openrouter_models:
+                models = openrouter_models
+                logger.info("✅ Tier 1: Successfully fetched from OpenRouter")
+                self._save_cache(models)
+                return models
+        except Exception as e:
+            logger.warning(f"⚠️ Tier 1 failed (OpenRouter): {e}")
+        
+        # ============================================
+        # TIER 2: Individual Provider APIs (Backup)
+        # ============================================
+        logger.info("Tier 2: Falling back to individual provider APIs...")
+        
+        try:
+            # Fetch from each provider's API
+            openai_models = self._fetch_openai_models()
+            google_models = self._fetch_google_models()
+            anthropic_models = self._fetch_anthropic_models()
+            local_models = self._fetch_ollama_models()
+            
+            # Combine results
+            if openai_models:
+                models["openai"] = openai_models
+            if google_models:
+                models["google"] = google_models
+            if anthropic_models:
+                models["anthropic"] = anthropic_models
+            if local_models:
+                models["local"] = local_models
+            
+            if models:
+                logger.info(f"✅ Tier 2: Fetched from {len(models)} provider APIs")
+                self._save_cache(models)
+                return models
+                
+        except Exception as e:
+            logger.warning(f"⚠️ Tier 2 failed (Provider APIs): {e}")
+        
+        # ============================================
+        # TIER 3: Cache (Last Successful Fetch)
+        # ============================================
+        cached = self._load_cache()
+        if cached:
+            logger.warning("⚠️ Tier 3: Using cached models (all APIs failed)")
+            return cached
+        
+        # ============================================
+        # TIER 4: Hardcoded Fallbacks (Offline Mode)
+        # ============================================
+        logger.error("⚠️ Tier 4: All sources failed, using hardcoded fallbacks")
+        
         models = {
-            "openai": self._fetch_openai_models(),
-            "local": self._fetch_ollama_models(),
-            # Preserve Anthropic models from cache (must be manually maintained)
-            "anthropic": existing.get(
-                "anthropic",
-                [
-                    # Default Anthropic models if cache is empty
-                    "claude-3-5-sonnet-20241022",
-                    "claude-3-5-haiku-20241022",
-                    "claude-3-5-sonnet-20240620",
-                    "claude-3-opus-20240229",
-                    "claude-3-sonnet-20240229",
-                    "claude-3-haiku-20240307",
-                    "claude-3-5-sonnet-latest",
-                ],
-            ),
+            "openai": [
+                "gpt-4o-2024-08-06",
+                "gpt-4o-mini-2024-07-18",
+                "gpt-4-turbo-2024-04-09",
+                "gpt-4-0125-preview",
+            ],
+            "anthropic": [
+                "claude-3-5-sonnet-20241022",
+                "claude-3-5-haiku-20241022",
+                "claude-3-opus-20240229",
+                "claude-3-5-sonnet-latest",
+            ],
+            "google": [
+                "gemini-2.0-flash-exp",
+                "gemini-1.5-pro-latest",
+                "gemini-1.5-flash-latest",
+            ],
         }
-
-        # Save to cache
+        
         self._save_cache(models)
-
-        logger.info(
-            f"Model refresh complete: {len(models['openai'])} OpenAI, "
-            f"{len(models['anthropic'])} Anthropic, {len(models['local'])} Ollama"
-        )
-
         return models
 
     def get_provider_models(

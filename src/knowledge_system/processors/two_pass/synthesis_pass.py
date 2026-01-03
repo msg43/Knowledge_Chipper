@@ -121,6 +121,60 @@ class SynthesisPass:
         
         return result
     
+    def _calculate_synthesis_length(
+        self,
+        top_claims: list[dict],
+        video_metadata: dict,
+    ) -> str:
+        """
+        Calculate recommended synthesis length based on content density.
+        
+        Args:
+            top_claims: List of high-importance claims
+            video_metadata: Video metadata including duration
+        
+        Returns:
+            Length guidance string (e.g., "5-7 paragraphs" or "1-2 pages")
+        """
+        # Get duration in seconds
+        duration = video_metadata.get('duration', 0)
+        if isinstance(duration, str):
+            # Parse duration string if needed (e.g., "1:23:45" -> seconds)
+            try:
+                parts = duration.split(':')
+                if len(parts) == 3:  # HH:MM:SS
+                    duration = int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
+                elif len(parts) == 2:  # MM:SS
+                    duration = int(parts[0]) * 60 + int(parts[1])
+                else:
+                    duration = int(duration)
+            except (ValueError, AttributeError):
+                duration = 0
+        
+        # Count claims
+        claim_count = len(top_claims)
+        
+        # Calculate claim density (claims per minute)
+        duration_minutes = duration / 60 if duration > 0 else 1
+        claim_density = claim_count / duration_minutes if duration_minutes > 0 else claim_count
+        
+        # Determine synthesis length based on content complexity
+        # Short content (< 15 min) or low density (< 1 claim/min) -> 3-5 paragraphs
+        if duration_minutes < 15 or claim_count < 10:
+            return "3-5 paragraphs"
+        
+        # Medium content (15-45 min) or medium density -> 5-8 paragraphs
+        elif duration_minutes < 45 or claim_count < 30:
+            return "5-8 paragraphs"
+        
+        # Long content (45-90 min) or high density -> 8-12 paragraphs (1-1.5 pages)
+        elif duration_minutes < 90 or claim_count < 50:
+            return "8-12 paragraphs (approximately 1-1.5 pages)"
+        
+        # Very long content (90+ min) or very high density -> 12-20 paragraphs (1.5-2 pages)
+        else:
+            return "12-20 paragraphs (approximately 1.5-2 pages)"
+    
     def _build_prompt(
         self,
         top_claims: list[dict],
@@ -132,6 +186,9 @@ class SynthesisPass:
         youtube_ai_summary: Optional[str],
     ) -> str:
         """Build synthesis prompt from template."""
+        # Calculate recommended synthesis length
+        synthesis_length = self._calculate_synthesis_length(top_claims, video_metadata)
+        
         # Format top claims
         claims_text = self._format_claims(top_claims)
         
@@ -156,6 +213,7 @@ class SynthesisPass:
             channel=video_metadata.get('channel', video_metadata.get('uploader', 'Unknown Channel')),
             duration=video_metadata.get('duration', 'Unknown'),
             description=video_metadata.get('description', 'No description')[:500],
+            synthesis_length=synthesis_length,
             top_claims=claims_text,
             jargon=jargon_text,
             people=people_text,
