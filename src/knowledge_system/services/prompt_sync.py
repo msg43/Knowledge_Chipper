@@ -272,6 +272,154 @@ class PromptSyncService:
         metadata = self.get_sync_metadata()
         return metadata is not None and metadata.get("total", 0) > 0
 
+    def sync_base_prompts(self, force: bool = False) -> dict[str, Any]:
+        """
+        Sync active base prompts from GetReceipts.org.
+        
+        Downloads extraction_pass and synthesis_pass prompts and saves to local files.
+        Also caches metadata for offline fallback detection.
+        
+        Args:
+            force: Force sync even if device is not enabled for uploads
+            
+        Returns:
+            Dict with sync results and any warnings:
+            - success: bool
+            - prompts_synced: int (if successful)
+            - fallback_used: bool
+            - reason: str (if failed)
+        """
+        try:
+            # Check if device is enabled (unless forced)
+            if not force and not self.device_auth.is_enabled():
+                logger.info("Device sync disabled - skipping base prompt sync")
+                return {"success": False, "reason": "sync_disabled", "fallback_used": False}
+
+            # Get device credentials for auth
+            credentials = self.device_auth.get_credentials()
+            
+            logger.info(f"🔄 Syncing base prompts from {self.api_url.replace('/prompt-refinements', '/prompts')}...")
+
+            # Fetch active prompts from API
+            response = requests.get(
+                f"{self.api_url.replace('/prompt-refinements', '/prompts')}",
+                params={"active_only": "true"},
+                headers={
+                    "X-Device-ID": credentials["device_id"],
+                    "X-Device-Key": credentials["device_key"],
+                },
+                timeout=10
+            )
+
+            if response.status_code == 401:
+                logger.warning("Device authentication failed - base prompts not synced")
+                return {"success": False, "reason": "auth_failed", "fallback_used": True}
+
+            if not response.ok:
+                logger.error(f"Failed to fetch base prompts: {response.status_code}")
+                return {"success": False, "reason": f"http_{response.status_code}", "fallback_used": True}
+
+            data = response.json()
+            
+            if not data.get("success"):
+                logger.error(f"API error: {data.get('error')}")
+                return {"success": False, "reason": "api_error", "error": data.get("error"), "fallback_used": True}
+
+            # Process prompts
+            prompts = data.get("prompts", [])
+            
+            if not prompts:
+                logger.warning("No active prompts returned from API")
+                return {"success": False, "reason": "no_prompts", "fallback_used": True}
+            
+            # Save to local files
+            prompts_dir = Path("src/knowledge_system/processors/two_pass/prompts")
+            prompts_dir.mkdir(parents=True, exist_ok=True)
+            
+            synced_count = 0
+            for prompt in prompts:
+                prompt_type = prompt.get("prompt_type")
+                if not prompt_type:
+                    continue
+                    
+                filename = f"{prompt_type}.txt"
+                file_path = prompts_dir / filename
+                content = prompt.get("content", "")
+                
+                # Write prompt content
+                file_path.write_text(content, encoding='utf-8')
+                
+                # Also cache with metadata for offline detection
+                cache_file = self.refinements_dir / f"{filename}.cache.json"
+                cache_data = {
+                    "content": content,
+                    "version_name": prompt.get("version_name", "unknown"),
+                    "prompt_type": prompt_type,
+                    "synced_at": datetime.utcnow().isoformat(),
+                    "last_updated": prompt.get("updated_at", "")
+                }
+                cache_file.write_text(json.dumps(cache_data, indent=2), encoding='utf-8')
+                
+                synced_count += 1
+                logger.info(f"  ✅ {prompt_type}: version '{prompt.get('version_name')}' synced")
+
+            logger.info(f"✅ Base prompts synced: {synced_count} total")
+            return {
+                "success": True,
+                "prompts_synced": synced_count,
+                "fallback_used": False
+            }
+
+        except requests.RequestException as e:
+            logger.error(f"Network error syncing base prompts: {e}")
+            return {"success": False, "reason": "network_error", "error": str(e), "fallback_used": True}
+        except Exception as e:
+            logger.error(f"Error syncing base prompts: {e}")
+            return {"success": False, "reason": "unknown", "error": str(e), "fallback_used": True}
+
+    def get_prompt_cache_info(self, prompt_type: str) -> dict[str, Any] | None:
+        """
+        Get cache metadata for a prompt to check if it's stale.
+        
+        Args:
+            prompt_type: 'extraction_pass' or 'synthesis_pass'
+            
+        Returns:
+            Dict with cache info or None if not cached:
+            - version_name: str
+            - synced_at: str (ISO timestamp)
+            - is_stale: bool (True if synced more than 7 days ago or never synced)
+            - age_days: int
+        """
+        cache_file = self.refinements_dir / f"{prompt_type}.txt.cache.json"
+        
+        if not cache_file.exists():
+            return None
+        
+        try:
+            cache_data = json.loads(cache_file.read_text(encoding='utf-8'))
+            synced_at = cache_data.get("synced_at")
+            
+            if not synced_at:
+                return None
+            
+            synced_date = datetime.fromisoformat(synced_at)
+            age = datetime.utcnow() - synced_date
+            age_days = age.days
+            
+            # Consider stale if more than 7 days old
+            is_stale = age_days > 7
+            
+            return {
+                "version_name": cache_data.get("version_name", "unknown"),
+                "synced_at": synced_at,
+                "is_stale": is_stale,
+                "age_days": age_days
+            }
+        except Exception as e:
+            logger.error(f"Error reading prompt cache: {e}")
+            return None
+
 
 # Module-level instance for convenience
 _prompt_sync_service: PromptSyncService | None = None
@@ -308,3 +456,23 @@ def sync_refinements_on_startup() -> None:
             logger.debug(f"Startup refinement sync skipped: {result.get('reason')}")
     except Exception as e:
         logger.debug(f"Startup refinement sync error (non-fatal): {e}")
+
+
+def sync_base_prompts_on_startup() -> dict[str, Any]:
+    """
+    Convenience function to sync base prompts on app startup.
+    
+    Returns sync result dict with success flag and any warnings.
+    Call this from the main application initialization.
+    """
+    try:
+        service = get_prompt_sync_service()
+        result = service.sync_base_prompts()
+        if result.get("success"):
+            logger.info(f"Startup prompt sync: {result.get('prompts_synced', 0)} prompts")
+        else:
+            logger.debug(f"Startup prompt sync skipped/failed: {result.get('reason')}")
+        return result
+    except Exception as e:
+        logger.debug(f"Startup prompt sync error (non-fatal): {e}")
+        return {"success": False, "reason": "exception", "error": str(e), "fallback_used": True}

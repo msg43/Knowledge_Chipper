@@ -70,8 +70,33 @@ class ExtractionPass:
         self.prompt_template = self._load_prompt_template()
     
     def _load_prompt_template(self) -> str:
-        """Load extraction pass prompt template."""
+        """Load extraction pass prompt template with cache awareness."""
         prompt_path = Path(__file__).parent / "prompts" / "extraction_pass.txt"
+        
+        # Check if prompt cache is stale
+        try:
+            from knowledge_system.services.prompt_sync import get_prompt_sync_service
+            
+            sync_service = get_prompt_sync_service()
+            cache_info = sync_service.get_prompt_cache_info('extraction_pass')
+            
+            if cache_info and cache_info.get('is_stale'):
+                logger.warning(
+                    f"⚠️ Using cached extraction prompt version '{cache_info['version_name']}' "
+                    f"(synced {cache_info['age_days']} days ago). "
+                    f"Sync may have failed - you may be offline or server unreachable."
+                )
+                # Note: Caller should check this and show GUI warning if needed
+            elif cache_info:
+                logger.info(
+                    f"✅ Using extraction prompt version '{cache_info['version_name']}' "
+                    f"(synced {cache_info['age_days']} days ago)"
+                )
+        except ImportError:
+            logger.debug("Prompt sync service not available - using local prompt file")
+        except Exception as e:
+            logger.warning(f"Could not check prompt cache: {e} - continuing with local file")
+        
         try:
             return prompt_path.read_text()
         except FileNotFoundError:

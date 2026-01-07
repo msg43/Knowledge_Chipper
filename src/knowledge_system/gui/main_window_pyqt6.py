@@ -119,6 +119,9 @@ class MainWindow(QMainWindow):
 
         # Setup UI
         self._setup_ui()
+        
+        # Sync base prompts and refinements on startup (after UI is ready)
+        self._sync_prompts_on_startup()
 
         # Set custom icon for the window
         self._set_window_icon()
@@ -583,6 +586,77 @@ class MainWindow(QMainWindow):
 
         except Exception as e:
             logger.error(f"Failed to load API keys to environment: {e}")
+
+    def _sync_prompts_on_startup(self) -> None:
+        """
+        Sync base prompts and refinements from GetReceipts.org on startup.
+        
+        Shows warning dialog if sync fails and app is running offline.
+        """
+        try:
+            from ..services.prompt_sync import sync_base_prompts_on_startup, sync_refinements_on_startup
+            
+            # Sync base prompts (extraction_pass.txt, synthesis_pass.txt)
+            base_result = sync_base_prompts_on_startup()
+            
+            # Sync refinements (learned patterns from entity corrections)
+            sync_refinements_on_startup()
+            
+            # Show warning if base prompts failed to sync
+            if not base_result.get("success") and base_result.get("fallback_used"):
+                reason = base_result.get("reason", "unknown")
+                
+                # Determine user-friendly message based on failure reason
+                if reason in ("network_error", "http_500", "http_503"):
+                    title = "Prompt Sync Unavailable"
+                    message = (
+                        "Unable to sync latest prompts from GetReceipts.org.\n\n"
+                        "You may be offline or the server is temporarily unreachable.\n\n"
+                        "Using last cached prompt versions. Processing will continue normally."
+                    )
+                elif reason == "sync_disabled":
+                    # Sync disabled by user, don't show warning
+                    return
+                elif reason == "auth_failed":
+                    title = "Prompt Sync Authentication Failed"
+                    message = (
+                        "Device authentication failed when syncing prompts.\n\n"
+                        "Using last cached prompt versions. Processing will continue normally.\n\n"
+                        "Check your device settings in the GetReceipts.org dashboard."
+                    )
+                else:
+                    title = "Prompt Sync Warning"
+                    message = (
+                        f"Prompt sync encountered an issue ({reason}).\n\n"
+                        "Using last cached prompt versions. Processing will continue normally."
+                    )
+                
+                # Show warning dialog (non-blocking)
+                QTimer.singleShot(1000, lambda: self._show_prompt_sync_warning(title, message))
+                
+        except ImportError:
+            logger.debug("Prompt sync service not available - continuing without sync")
+        except Exception as e:
+            logger.warning(f"Prompt sync on startup failed: {e} - continuing with local prompts")
+
+    def _show_prompt_sync_warning(self, title: str, message: str) -> None:
+        """Show a non-critical warning about prompt sync failure."""
+        try:
+            from PyQt6.QtWidgets import QMessageBox
+            
+            msg_box = QMessageBox(self)
+            msg_box.setIcon(QMessageBox.Icon.Warning)
+            msg_box.setWindowTitle(title)
+            msg_box.setText(message)
+            msg_box.setStandardButtons(QMessageBox.StandardButton.Ok)
+            msg_box.setDefaultButton(QMessageBox.StandardButton.Ok)
+            
+            # Make it non-modal so it doesn't block the app
+            msg_box.setModal(False)
+            msg_box.show()
+            
+        except Exception as e:
+            logger.error(f"Failed to show prompt sync warning: {e}")
 
     def _process_messages(self) -> None:
         """Process messages from the message queue."""
