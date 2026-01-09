@@ -4,6 +4,113 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added - Daemon Auto-Update System (January 8, 2026)
+
+**Automatic Updates for GetReceipts Daemon**
+
+The daemon now includes a built-in auto-update system that keeps itself up-to-date without user intervention.
+
+**Features:**
+- ✅ **Automatic checks** - Checks for updates every 24 hours and on daemon startup
+- ✅ **Zero-downtime updates** - Downloads and installs updates in background
+- ✅ **Automatic restart** - LaunchAgent restarts daemon with new version
+- ✅ **Manual trigger** - Web UI can trigger updates via API
+- ✅ **Version verification** - Semantic version comparison ensures proper updates
+- ✅ **Rollback support** - Backup of previous binary for safety
+
+**Implementation:**
+- `daemon/services/update_checker.py` - Update checking and installation logic
+- `daemon/api/routes.py` - API endpoints: `/api/updates/check`, `/api/updates/install`, `/api/updates/status`
+- `daemon/main.py` - Integrated update scheduler into daemon lifecycle
+- `src/lib/daemon-client.ts` - TypeScript client methods for web UI integration
+- `installer/build_dmg.sh` - Now packages daemon binary separately for GitHub releases
+
+**API Endpoints:**
+- `GET /api/updates/check` - Check if updates are available
+- `POST /api/updates/install` - Manually trigger update installation
+- `GET /api/updates/status` - Get current update status and settings
+
+**Update Flow:**
+1. Daemon checks GitHub releases API every 24 hours
+2. Compares current version with latest release
+3. Downloads new daemon binary if available
+4. Verifies download integrity
+5. Backs up current binary
+6. Installs new binary
+7. Exits (LaunchAgent automatically restarts with new version)
+
+**Distribution:**
+- Daemon binary now packaged as `GetReceiptsDaemon-{version}-macos.tar.gz` in GitHub releases
+- DMG installer includes both full installer and update-ready binary
+- Auto-update system pulls from GitHub releases automatically
+
+**User Experience:**
+- Completely transparent - updates happen in background
+- No interruption to processing jobs
+- Web UI can show update status and trigger manual updates
+- Daemon always stays current with latest features and fixes
+
+---
+
+## [Unreleased]
+
+### BREAKING - Desktop GUI Deprecated in Favor of Web-First Architecture (January 7, 2026)
+
+**PyQt6 Desktop GUI Replaced by Web Interface**
+
+The desktop GUI has been **deprecated** and replaced with a web-first architecture where all user interaction happens through the browser at [GetReceipts.org/contribute](https://getreceipts.org/contribute), while processing runs via a local background daemon.
+
+**What Changed:**
+- ⚠️ **Desktop GUI removed** - All PyQt6 interface code moved to `_deprecated/gui/`
+- ✅ **Web UI primary** - Processing control via GetReceipts.org/contribute
+- ✅ **Local daemon** - Background processing engine with REST API (no UI)
+- ✅ **Better UX** - Familiar web interface, cross-platform accessible, mobile-friendly future
+- ✅ **Easier updates** - No app reinstalls, unified with GetReceipts.org
+
+**Deprecated Items:**
+- `src/knowledge_system/gui/` → Moved to `_deprecated/gui/`
+- `launch_layer_cake_gui.py` → Moved to `_deprecated/`
+- `launch_layer_cake_gui.command` → Moved to `_deprecated/`
+- `launch_gui.command` → Moved to `_deprecated/`
+- All GUI documentation moved to `_deprecated/`
+
+**New Architecture:**
+```
+User (Browser) → GetReceipts.org/contribute → Local Daemon (Background)
+                       ↓                              ↓
+                 Submit Content                  Process Locally
+                 Monitor Jobs                    (Whisper + LLM)
+                 View Results                         ↓
+                       ↑                         Auto-Upload
+                       └───────────────────────────────┘
+```
+
+**Migration Guide:**
+1. Install daemon: Download DMG from releases
+2. Visit [GetReceipts.org/contribute](https://getreceipts.org/contribute)
+3. Link device (one-time browser authentication)
+4. Start processing via web interface
+
+**Benefits:**
+- No more desktop app windows to manage
+- Works from any browser (desktop, laptop, tablet)
+- Unified experience with GetReceipts.org
+- Easier to maintain and update
+- Future mobile app possible
+
+**For Developers:**
+- GUI code preserved in `_deprecated/` for reference
+- Daemon API: `python -m daemon.main` (port 8851)
+- REST endpoints documented in daemon README
+- Web UI maintained in GetReceipts repository
+
+**See Also:**
+- README.md - Updated with web-first documentation
+- MANIFEST.md - GUI sections marked deprecated
+- daemon/ - New daemon implementation
+
+---
+
 ### Updated - Health Tracking System to Web-Canonical Architecture (January 2, 2026)
 
 **Web-Canonical Health Data Sync**

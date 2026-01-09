@@ -407,26 +407,74 @@ class ProcessingService:
             # Stage 1: Download (YouTube only)
             # ============================================
             elif request.source_type == "youtube":
-                await self._update_job(job_id, "downloading", 0.05, "Downloading from YouTube")
+                logger.critical("VERIFYING CODE VERSION: LINE 409 - YOUTUBE DOWNLOAD PATH STARTING")
+                logger.critical(f"DEBUG: request.url = {repr(request.url)}")
+                logger.critical(f"DEBUG: request.url type = {type(request.url)}")
+                logger.critical(f"DEBUG: request dict = {request.model_dump()}")
+                
+                # Validate URL before proceeding
+                if not request.url:
+                    raise Exception("No URL provided in request (url field is empty/None)")
+                
+                await self._update_job(job_id, "downloading", 0.05, "Downloading from YouTube - CODE VERSION 2026-01-09-11:00")
 
-                from src.knowledge_system.processors.youtube_download import (
-                    YouTubeDownloadProcessor,
-                )
-                from src.knowledge_system.config import get_settings
+                try:
+                    logger.critical("DEBUG v2: Before imports")
+                    from src.knowledge_system.processors.youtube_download import (
+                        YouTubeDownloadProcessor,
+                    )
+                    from src.knowledge_system.config import get_settings
 
-                kc_settings = get_settings()
-                output_dir = Path(kc_settings.output_directory) / "downloads" / "youtube"
-                output_dir.mkdir(parents=True, exist_ok=True)
+                    logger.critical("DEBUG v2: About to call get_settings()")
+                    kc_settings = get_settings()
+                    logger.critical(f"DEBUG v2: kc_settings type: {type(kc_settings)}")
+                    logger.critical(f"DEBUG v2: kc_settings.paths type: {type(kc_settings.paths)}")
+                    logger.critical(f"DEBUG v2: kc_settings.paths.output_dir = {kc_settings.paths.output_dir}")
+                    output_dir = Path(kc_settings.paths.output_dir) / "downloads" / "youtube"
+                    output_dir.mkdir(parents=True, exist_ok=True)
+                    logger.critical(f"DEBUG v2: Created output_dir: {output_dir}")
 
-                downloader = YouTubeDownloadProcessor()
-                result = await asyncio.to_thread(
-                    downloader.process,
-                    request.url,
-                    output_dir=str(output_dir),
-                )
+                    # Initialize database service for download tracking
+                    from src.knowledge_system.database.service import DatabaseService
+                    import time
+                    
+                    db_service = DatabaseService()
+                    logger.critical(f"DEBUG v3: DatabaseService created, db_path={db_service.db_path}")
+                    
+                    # Test database write to catch any SQLAlchemy issues
+                    try:
+                        test_source = db_service.create_source(
+                            source_id="test_write_" + str(int(time.time())),
+                            title="Test Write",
+                            url="https://test.com",
+                            source_type="youtube"
+                        )
+                        if test_source:
+                            logger.critical("DEBUG v3: Test database write SUCCESSFUL ✓")
+                        else:
+                            logger.critical("DEBUG v3: Test database write returned None - exception was caught silently")
+                    except Exception as test_e:
+                        logger.critical(f"DEBUG v3: Test database write FAILED: {test_e}")
+                        import traceback
+                        logger.critical(f"DEBUG v3: Traceback:\n{traceback.format_exc()}")
+                    
+                    downloader = YouTubeDownloadProcessor()
+                    logger.critical("DEBUG v3: YouTubeDownloadProcessor created")
+                    result = await asyncio.to_thread(
+                        downloader.process,
+                        request.url,
+                        output_dir=str(output_dir),
+                        db_service=db_service,  # CRITICAL: Pass db_service for download tracking
+                    )
+                    logger.critical("DEBUG v3: downloader.process completed")
 
-                if not result.success:
-                    raise Exception(f"Download failed: {', '.join(result.errors)}")
+                    if not result.success:
+                        raise Exception(f"Download failed: {', '.join(result.errors)}")
+                except Exception as e:
+                    import traceback
+                    full_tb = traceback.format_exc()
+                    logger.critical(f"EXCEPTION IN YOUTUBE DOWNLOAD:\n{full_tb}")
+                    raise Exception(f"YouTube download error: {str(e)}\n\nFull traceback:\n{full_tb}")
 
                 # Extract info from result
                 source_id = result.metadata.get("video_id", "unknown")
@@ -620,13 +668,16 @@ class ProcessingService:
             )
 
         except Exception as e:
+            import traceback
+            full_traceback = traceback.format_exc()
             logger.exception(f"Job {job_id} failed")
+            logger.error(f"FULL ERROR TRACEBACK:\n{full_traceback}")
             await self._update_job(
                 job_id,
                 "failed",
                 self.jobs[job_id].progress,
                 f"Failed: {str(e)}",
-                error=str(e),
+                error=f"{str(e)}\n\nTraceback:\n{full_traceback}",
             )
 
     def _mark_stage_complete(self, job_id: str, stage: str):

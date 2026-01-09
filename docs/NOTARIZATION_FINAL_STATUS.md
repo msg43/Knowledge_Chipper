@@ -1,12 +1,23 @@
 # Notarization Final Status Report
 
 **Original Issue Date:** September 25, 2025  
-**Last Updated:** December 29, 2025
+**Last Updated:** January 6, 2026
 
 ## Summary
-All local configuration is correct, but Apple's notarization service is rejecting the packages with "The binary is not signed with a valid Developer ID certificate" despite the certificates being valid.
+~~All local configuration is correct, but Apple's notarization service is rejecting the packages with "The binary is not signed with a valid Developer ID certificate" despite the certificates being valid.~~
 
-**UPDATE (December 29, 2025):** Issue persists after 3 months. Fixed agreement compliance issue (403 error) but original certificate validation error remains unchanged.
+## ✅ ROOT CAUSE FOUND - January 6, 2026
+
+**The problem is the Developer ID Installer certificate, NOT the Application certificate!**
+
+- ✅ Developer ID **Application** cert: WORKS PERFECTLY (used for .app signing)
+- ❌ Developer ID **Installer** cert: BROKEN CHAIN (used for .pkg signing)
+
+**Solution:** Distribute as `.zip` instead of `.pkg` - this works NOW!
+
+See: `docs/NOTARIZATION_ROOT_CAUSE_FOUND.md` for full details.
+
+**Working script:** `scripts/build_signed_notarized_zip.sh`
 
 ## What's Working
 - ✅ Certificates are valid on Apple Developer Portal (expires 2030)

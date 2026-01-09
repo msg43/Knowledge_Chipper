@@ -114,6 +114,21 @@ fi
 
 log "DMG created: $DIST_DIR/$DMG_NAME-$VERSION.dmg"
 
+# Package daemon binary separately for GitHub releases (auto-update)
+log "Packaging daemon binary for auto-update..."
+DAEMON_PACKAGE="$DIST_DIR/GetReceiptsDaemon-${VERSION}-macos.tar.gz"
+cd "$DIST_DIR/daemon_dist"
+if [ -f "GetReceiptsDaemon" ]; then
+    tar -czf "$DAEMON_PACKAGE" GetReceiptsDaemon
+    log "Daemon package created: $DAEMON_PACKAGE"
+elif [ -d "GetReceiptsDaemon.app" ]; then
+    tar -czf "$DAEMON_PACKAGE" GetReceiptsDaemon.app
+    log "Daemon app package created: $DAEMON_PACKAGE"
+else
+    log "Warning: Could not find daemon binary to package"
+fi
+cd "$PROJECT_ROOT"
+
 # Cleanup
 log "Cleaning up..."
 rm -rf "$DMG_STAGING"
@@ -124,10 +139,14 @@ echo "  Build Complete!"
 echo "=========================================="
 echo ""
 echo "DMG: $DIST_DIR/$DMG_NAME-$VERSION.dmg"
+echo "Daemon Package: $DAEMON_PACKAGE"
 echo ""
 echo "To test locally:"
 echo "  1. Mount the DMG"
 echo "  2. Run install.sh"
 echo "  3. Visit http://localhost:8765/docs"
+echo ""
+echo "For GitHub release:"
+echo "  Upload both $DMG_NAME-$VERSION.dmg and GetReceiptsDaemon-${VERSION}-macos.tar.gz"
 echo ""
 

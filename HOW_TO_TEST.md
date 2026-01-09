@@ -1,31 +1,30 @@
 # How to Test the ID Unification - Step by Step
 
-**Status:** All code changes complete, ready for manual testing
+⚠️ **DEPRECATED (January 2026)** - This document describes GUI testing which has been replaced by web-first architecture.
+
+**For current testing procedures:**
+- Visit [GetReceipts.org/contribute](https://getreceipts.org/contribute)
+- Install daemon: See README.md installation section
+- Test via web interface instead of desktop GUI
+
+**Status:** All code changes complete, GUI deprecated in favor of web interface
 
 ---
 
-## Step 1: Launch the Application
+## ⚠️ Legacy GUI Testing Instructions (Deprecated)
 
-### Option A: Using launch_gui.command (Recommended)
+**Note:** The desktop GUI has been moved to `_deprecated/gui/`. These instructions are preserved for historical reference only.
+
+### Step 1: Launch the Application (DEPRECATED)
+
+The desktop GUI is no longer the recommended interface. Use the web UI at GetReceipts.org/contribute instead.
+
+**If you need to test legacy GUI code:**
 ```bash
-cd /Users/matthewgreer/Projects/Knowledge_Chipper
-./launch_gui.command
+# GUI files moved to _deprecated/gui/
+# Launcher scripts moved to _deprecated/
+# Not recommended for production use
 ```
-
-### Option B: Direct Python Launch
-```bash
-cd /Users/matthewgreer/Projects/Knowledge_Chipper
-/Users/matthewgreer/Projects/Knowledge_Chipper/venv/bin/python3 -m knowledge_system.gui.main
-```
-
-### What to Look For
-- ✅ GUI window appears
-- ✅ No error messages in terminal
-- ✅ All tabs are visible (Transcription, Process, Monitor, etc.)
-
-**If the app doesn't launch:**
-- Check terminal for error messages
-- Share the error with me and I'll fix it
 
 ---
 

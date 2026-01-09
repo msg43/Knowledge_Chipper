@@ -133,6 +133,7 @@ Complete inventory of all files in the Knowledge Chipper codebase with descripti
 ### Documentation - Architecture and Systems
 
 - `docs/FILE_ORGANIZATION.md` - Comprehensive guide to output file organization: explains directory structure (transcripts/, summaries/, moc/, exports/), file naming conventions, relationship between transcript and summary files, database as source of truth, and how to find/regenerate files. Addresses common confusion about where files are saved and why they don't overwrite each other.
+- `docs/PYINSTALLER_ISSUE_ANALYSIS.md` - Comprehensive analysis of PyInstaller compatibility issues with ASGI servers (Uvicorn/Hypercorn). Documents 15+ build attempts, root cause (string-based module imports), and recommended solutions including development daemon setup as working alternative.
 - `ARCHITECTURE_WEB_CANONICAL.md` - Complete architecture documentation for web-canonical implementation where GetReceipts Supabase is single source of truth and Knowledge_Chipper acts as ephemeral processor. Documents philosophy, workflows, database schemas, user experience, API endpoints, and rollback instructions.
 - `PROMPT_INVENTORY.md` - Complete catalog of all prompts in the system: ACTIVE two-pass architecture uses 2 core prompts (extraction_pass.txt with refinement injection + synthesis_pass.txt with dynamic length) plus 3 optional question mapper prompts; documents 15 deprecated HCE segment-based prompts; explains architecture comparison, system integration, and migration status. Both active prompts are fully wired up and functional.
 - `VESTIGIAL_CODE_ANALYSIS.md` - Comprehensive analysis of unused/vestigial code from pre-unified-pipeline architecture, including old extraction modules (people.py, glossary.py, concepts.py, skim.py), unused prompt files (judge_high/low variants), and unimplemented features (relations, contradictions). Documents architecture evolution and provides removal recommendations.
@@ -422,7 +423,8 @@ Comprehensive project documentation (128+ files).
 ### Core Files
 
 - `__init__.py` - Package init with version
-- `main.py` - FastAPI app entry point with CORS configuration and lifespan handlers
+- `main.py` - **ENHANCED (Jan 8, 2026):** Decoupled entry point for PyInstaller compatibility; imports app from app_factory and runs uvicorn with proper settings (reload=False, workers=1, factory=False) and multiprocessing.freeze_support()
+- `app_factory.py` - **NEW (Jan 8, 2026):** FastAPI application factory; creates and configures the app instance independently to prevent circular imports in PyInstaller; includes CORS configuration, lifespan handlers, and all route registration
 
 ### config/
 
@@ -432,7 +434,7 @@ Comprehensive project documentation (128+ files).
 ### api/
 
 - `__init__.py` - API module init
-- `routes.py` - **ENHANCED (Dec 28, 2025):** REST endpoints: /health, /process, /process/batch, /jobs (with filters), /jobs/{id}, /jobs/{id}/retry, /jobs/{id}/cancel, /jobs/bulk/retry, /jobs/bulk/delete, /config, /config/api-keys, /config/whisper-models, /config/device-status, /monitor/status, /monitor/start, /monitor/stop, /monitor/config, /monitor/events, /monitor/browse, /admin/database (viewer), /admin/database/summary, /admin/database/table/{name}
+- `routes.py` - **ENHANCED (Jan 8, 2026):** REST endpoints: /health, /process, /process/batch, /jobs (with filters), /jobs/{id}, /jobs/{id}/retry, /jobs/{id}/cancel, /jobs/bulk/retry, /jobs/bulk/delete, /config, /config/api-keys, /config/whisper-models, /config/device-status, /monitor/status, /monitor/start, /monitor/stop, /monitor/config, /monitor/events, /monitor/browse, /admin/database (viewer), /admin/database/summary, /admin/database/table/{name}, /updates/check, /updates/install, /updates/status
 - `database_viewer.py` - **NEW (Dec 28, 2025):** Read-only SQLite database viewer service for admin page; provides table browsing, pagination (100 records per load), smart sorting by most recent, and database summary stats
 
 ### models/
@@ -445,6 +447,11 @@ Comprehensive project documentation (128+ files).
 - `__init__.py` - Services module init
 - `processing_service.py` - Wraps existing processors (YouTubeDownloadProcessor, AudioProcessor, TwoPassPipeline, GetReceiptsUploader) for REST API; supports batch processing, job retry, cancel, and delete operations
 - `monitor_service.py` - **NEW (Dec 27, 2025):** Folder monitoring service wrapping FileWatcher for API access; provides start/stop/configure operations and event tracking
+- `update_checker.py` - **NEW (Jan 8, 2026):** Auto-update system for daemon; checks GitHub releases every 24 hours and on startup, downloads and installs updates automatically, handles version comparison, download verification, backup, and restart coordination with LaunchAgent
+- `author_service.py` - Author/channel management service for manual metadata entry
+- `link_token_handler.py` - Handles auto-linking device using token from download URL
+- `rss_service.py` - RSS/podcast feed processing service
+- `youtube_matcher.py` - YouTube search and video matching service
 
 ---
 
@@ -455,7 +462,7 @@ Comprehensive project documentation (128+ files).
 - `daemon.spec` - PyInstaller spec file for building standalone executable
 - `org.getreceipts.daemon.plist` - LaunchAgent for auto-starting daemon on login
 - `install.sh` - Post-install script (copies daemon, installs LaunchAgent, creates shortcut)
-- `build_dmg.sh` - Build script to create .dmg installer
+- `build_dmg.sh` - **ENHANCED (Jan 8, 2026):** Build script to create .dmg installer; now also packages daemon binary separately as GetReceiptsDaemon-{version}-macos.tar.gz for auto-update system
 
 ---
 
@@ -666,10 +673,16 @@ Claims-first pipeline module for extracting claims before speaker attribution.
 - `lazy_speaker_attribution.py` - LazySpeakerAttributor class for targeted LLM-based speaker attribution
 - `pipeline.py` - ClaimsFirstPipeline orchestrator coordinating transcript → extraction → evaluation → attribution; includes ClaimsFirstResult with rejected_claims tracking, quality_assessment, promote_claim(), generate_summaries() (Dec 2025)
 
-### GUI/
+### GUI/ ⚠️ DEPRECATED (January 2026)
 
-PyQt6-based graphical user interface.
+**PyQt6-based graphical user interface - REPLACED by web-first architecture.**
 
+**New Architecture:**
+- **Web UI:** [GetReceipts.org/contribute](https://getreceipts.org/contribute) - All user interaction
+- **Local Daemon:** `daemon/` - Background processing engine (no UI)
+- **GUI Code Status:** ✅ MOVED to `_deprecated/gui/` for reference
+
+**Legacy Files (moved to _deprecated/):**
 - `__init__.py` - GUI module initialization
 - `__main__.py` - GUI entry point
 - `main_window_pyqt6.py` - Main application window with tab management
@@ -678,21 +691,21 @@ PyQt6-based graphical user interface.
 - `startup_integration.py` - Startup integration and initialization
 - `queue_event_bus.py` - Real-time event bus for queue status updates
 
-#### GUI/ADAPTERS/
+#### GUI/ADAPTERS/ ⚠️ DEPRECATED
 
 GUI adapters for backend integration.
 
 - `__init__.py` - Adapters module initialization
 - `hce_adapter.py` - Adapter for HCE system integration with GUI
 
-#### GUI/ASSETS/
+#### GUI/ASSETS/ ⚠️ DEPRECATED
 
 GUI asset resources.
 
 - `__init__.py` - Assets module initialization
 - `icons.py` - Icon resources and management
 
-#### GUI/COMPONENTS/
+#### GUI/COMPONENTS/ ⚠️ DEPRECATED
 
 Reusable GUI components.
 
@@ -721,13 +734,13 @@ Reusable GUI components.
 - `rich_log_display.py` - Rich log display with syntax highlighting
 - `simple_progress_bar.py` - Simple progress bar widget
 
-#### GUI/CORE/
+#### GUI/CORE/ ⚠️ DEPRECATED
 
 Core GUI infrastructure.
 
 - Core GUI utilities and base classes
 
-#### GUI/DIALOGS/
+#### GUI/DIALOGS/ ⚠️ DEPRECATED
 
 Dialog windows for various operations.
 
@@ -754,15 +767,15 @@ Dialog windows for various operations.
 - `sign_up_dialog.py` - User sign-up dialog
 - `speaker_assignment_dialog.py` - Speaker assignment dialog
 
-#### GUI/MIXINS/
+#### GUI/MIXINS/ ⚠️ DEPRECATED
 
 GUI mixins for shared functionality.
 
 - Mixin classes providing reusable GUI behaviors
 
-#### GUI/TABS/
+#### GUI/TABS/ ⚠️ DEPRECATED
 
-Main application tabs (21 total).
+Main application tabs (21 total) - **REPLACED by web interface at GetReceipts.org/contribute**.
 
 - `__init__.py` - Tabs module initialization
 - `api_keys_tab.py` - API key management tab
@@ -791,14 +804,14 @@ Main application tabs (21 total).
 - `settings_tab.py` - Application settings tab (not listed above but exists)
 - `logs_tab.py` - Log viewer tab (not listed above but exists)
 
-#### GUI/UTILS/
+#### GUI/UTILS/ ⚠️ DEPRECATED
 
 GUI utility functions.
 
 - GUI-specific utility functions and helpers
 - `log_integration.py` - Integration of backend logging with GUI display
 
-#### GUI/WIDGETS/
+#### GUI/WIDGETS/ ⚠️ DEPRECATED
 
 Specialized widgets.
 
@@ -806,7 +819,7 @@ Specialized widgets.
 - `cookie_file_manager.py` - Cookie file management widget for multi-account downloads
 - `model_notification_widget.py` - Model availability notification widget
 
-#### GUI/WORKERS/
+#### GUI/WORKERS/ ⚠️ DEPRECATED
 
 Background worker threads for GUI operations.
 

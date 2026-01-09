@@ -1,20 +1,20 @@
 """
-Knowledge_Chipper Daemon
+Knowledge_Chipper Daemon - Entry Point
 
-FastAPI server that exposes processing capabilities via REST API.
-Designed to work with GetReceipts.org website as the primary UI.
+Decoupled entry point for PyInstaller compatibility.
+App definition is in app_factory.py to prevent circular imports.
 
 Usage:
     # Development
     python -m daemon.main
     
-    # Or with uvicorn directly
-    uvicorn daemon.main:app --host 127.0.0.1 --port 8765
+    # Production (PyInstaller bundle)
+    ./GetReceiptsDaemon
 """
 
 import logging
+import multiprocessing
 import sys
-from contextlib import asynccontextmanager
 from pathlib import Path
 
 # Add project root to path for imports
@@ -22,11 +22,9 @@ project_root = Path(__file__).parent.parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+import uvicorn
 
-from daemon import __version__
-from daemon.api.routes import router
+from daemon.app_factory import app  # Import the app instance
 from daemon.config.settings import settings
 
 # Setup logging
@@ -48,96 +46,31 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Lifespan context manager for startup and shutdown events."""
-    # Startup
-    logger.info("=" * 60)
-    logger.info(f"Knowledge_Chipper Daemon v{__version__} starting...")
-    logger.info(f"Server: http://{settings.host}:{settings.port}")
-    logger.info(f"Swagger UI: http://{settings.host}:{settings.port}/docs")
-    logger.info(f"CORS enabled for: {settings.cors_origins}")
-    logger.info("=" * 60)
-    
-    # Check for auto-linking token from installation
-    try:
-        from daemon.services.link_token_handler import get_link_token_handler
-        handler = get_link_token_handler()
-        # Don't block startup - run in background
-        import asyncio
-        asyncio.create_task(asyncio.to_thread(handler.check_and_link))
-    except Exception as e:
-        logger.warning(f"Link token check failed (non-critical): {e}")
-    
-    yield
-    
-    # Shutdown
-    logger.info("Knowledge_Chipper Daemon shutting down")
-
-
-# Create FastAPI app
-app = FastAPI(
-    title="Knowledge_Chipper Daemon",
-    description="""
-Local processing daemon for extracting claims from audio/video.
-
-## Architecture
-- **Website (GetReceipts.org)** = Primary UI
-- **Daemon (localhost:8765)** = Local processing
-
-All heavy lifting (Whisper, LLM, yt-dlp) happens locally on your Mac.
-
-## Endpoints
-- `GET /api/health` - Check if daemon is running
-- `POST /api/process` - Start processing a video
-- `GET /api/jobs/{id}` - Check job progress
-- `GET /api/jobs` - List all jobs
-    """,
-    version=__version__,
-    docs_url="/docs",  # Swagger UI
-    redoc_url="/redoc",  # ReDoc
-    lifespan=lifespan,
-)
-
-
-# CORS middleware - allow GetReceipts.org to connect
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.cors_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-
-# Include API routes
-app.include_router(router, prefix="/api")
-
-
-# Root endpoint
-@app.get("/")
-async def root():
-    """Root endpoint with API info."""
-    return {
-        "service": "Knowledge_Chipper Daemon",
-        "version": __version__,
-        "status": "running",
-        "docs": "/docs",
-        "api": "/api",
-        "health": "/api/health",
-    }
-
-
 def main():
-    """Entry point for running the daemon."""
-    import uvicorn
-
+    """
+    Entry point for running the daemon.
+    
+    Uses the Decoupled Entry Point pattern for PyInstaller compatibility:
+    - App is defined in app_factory.py (not here)
+    - multiprocessing.freeze_support() for macOS/Windows
+    - Pass app object directly to uvicorn.run()
+    - Force reload=False and workers=1
+    """
+    # CRITICAL: Required for PyInstaller on macOS/Windows
+    multiprocessing.freeze_support()
+    
+    logger.info("Starting Knowledge_Chipper Daemon...")
+    
+    # Run Uvicorn with the app OBJECT (not string path)
+    # This works in PyInstaller because we're not doing string-based imports
     uvicorn.run(
-        "daemon.main:app",
+        app,  # Pass the object directly
         host=settings.host,
         port=settings.port,
-        reload=settings.reload,
         log_level=settings.log_level.lower(),
+        reload=False,   # MUST be False for PyInstaller
+        workers=1,      # MUST be 1 for PyInstaller
+        factory=False,  # We're passing instance, not factory
     )
 
 

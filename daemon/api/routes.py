@@ -10,6 +10,7 @@ from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import HTMLResponse
+from pydantic import BaseModel
 
 from daemon import __version__
 from daemon.config.settings import settings
@@ -1485,3 +1486,97 @@ async def link_device_with_token(token: str = Query(..., description="Link token
     except Exception as e:
         logger.exception("Device linking failed")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================
+# Auto-Update System
+# ============================================
+@router.get("/updates/check")
+async def check_for_updates():
+    """
+    Check if daemon updates are available.
+    
+    Queries GitHub releases API to check for newer daemon versions.
+    Returns update status and version information.
+    """
+    from daemon.services.update_checker import get_update_checker
+    
+    checker = get_update_checker(__version__)
+    has_update, latest_version = await checker.check_for_updates()
+    
+    return {
+        "update_available": has_update,
+        "current_version": checker.current_version,
+        "latest_version": latest_version,
+        "last_checked": checker.last_check.isoformat() if checker.last_check else None
+    }
+
+
+@router.post("/updates/install")
+async def install_update():
+    """
+    Manually trigger daemon update installation.
+    
+    Downloads and installs the latest daemon version if available.
+    The daemon will automatically restart via LaunchAgent after installation.
+    """
+    import asyncio
+    from daemon.services.update_checker import get_update_checker
+    
+    checker = get_update_checker(__version__)
+    
+    # Check if update is available
+    has_update, latest_version = await checker.check_for_updates()
+    
+    if not has_update:
+        return {
+            "status": "no_update",
+            "message": f"Already on latest version ({checker.current_version})",
+            "current_version": checker.current_version
+        }
+    
+    # Install the update
+    logger.info(f"Manual update triggered: {checker.current_version} → {latest_version}")
+    success = await checker.download_and_install_update()
+    
+    if success:
+        # Schedule daemon restart in 3 seconds
+        async def delayed_restart():
+            await asyncio.sleep(3)
+            logger.info("Exiting for update restart...")
+            os._exit(0)  # LaunchAgent will restart us
+        
+        asyncio.create_task(delayed_restart())
+        
+        return {
+            "status": "success",
+            "message": f"Update to version {latest_version} installed - daemon will restart in 3 seconds",
+            "new_version": latest_version,
+            "restart_in_seconds": 3
+        }
+    else:
+        raise HTTPException(
+            status_code=500,
+            detail="Update installation failed - check daemon logs for details"
+        )
+
+
+@router.get("/updates/status")
+async def update_status():
+    """
+    Get current update status and settings.
+    
+    Returns information about auto-update configuration and current state.
+    """
+    from daemon.services.update_checker import get_update_checker
+    
+    checker = get_update_checker(__version__)
+    
+    return {
+        "auto_update_enabled": True,  # Always enabled for daemon
+        "check_interval_hours": 24,
+        "current_version": checker.current_version,
+        "last_check": checker.last_check.isoformat() if checker.last_check else None,
+        "update_available": checker.update_available,
+        "latest_version": checker.latest_version
+    }

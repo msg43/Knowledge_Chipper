@@ -22,11 +22,15 @@ project_root = spec_dir.parent
 block_cipher = None
 
 # Analysis: collect all dependencies
+# Use main.py as entry point (calls uvicorn.run with app object)
 a = Analysis(
-    ['../daemon/main.py'],
+    [str(project_root / 'daemon' / 'main.py')],
     pathex=[str(project_root)],
     binaries=[],
     datas=[
+        # DON'T include daemon as data - it needs to be Python code!
+        # daemon module will be discovered via entry point and hiddenimports
+        
         # Include knowledge_system package
         (str(project_root / 'src' / 'knowledge_system'), 'src/knowledge_system'),
         # Include OAuth package
@@ -37,6 +41,21 @@ a = Analysis(
         (str(project_root / 'schemas'), 'schemas'),
     ],
     hiddenimports=[
+        # Daemon modules (CRITICAL - was missing!)
+        'daemon',
+        'daemon.main',
+        'daemon.app_factory',  # NEW: App factory for decoupled entry point
+        'daemon.api',
+        'daemon.api.routes',
+        'daemon.config',
+        'daemon.config.settings',
+        'daemon.models',
+        'daemon.models.schemas',
+        'daemon.services',
+        'daemon.services.processing_service',
+        'daemon.services.rss_service',
+        'multiprocessing',  # Required for freeze_support()
+        
         # FastAPI and dependencies
         'uvicorn',
         'uvicorn.logging',
@@ -49,20 +68,27 @@ a = Analysis(
         'uvicorn.protocols.websockets.auto',
         'uvicorn.lifespan',
         'uvicorn.lifespan.on',
+        'hypercorn',
+        'hypercorn.asyncio',
+        'hypercorn.config',
         'fastapi',
         'starlette',
         'pydantic',
         'pydantic_settings',
         
         # Knowledge system
-        'knowledge_system',
-        'knowledge_system.config',
-        'knowledge_system.processors',
-        'knowledge_system.processors.youtube_download',
-        'knowledge_system.processors.audio_processor',
-        'knowledge_system.processors.two_pass',
-        'knowledge_system.core',
-        'knowledge_system.core.llm_adapter',
+        'src.knowledge_system',
+        'src.knowledge_system.config',
+        'src.knowledge_system.processors',
+        'src.knowledge_system.processors.youtube_download',
+        'src.knowledge_system.processors.audio_processor',
+        'src.knowledge_system.processors.two_pass',
+        'src.knowledge_system.core',
+        'src.knowledge_system.core.llm_adapter',
+        'src.knowledge_system.database',
+        'src.knowledge_system.database.service',
+        'src.knowledge_system.utils',
+        'src.knowledge_system.utils.deduplication',
         
         # Whisper
         'pywhispercpp',

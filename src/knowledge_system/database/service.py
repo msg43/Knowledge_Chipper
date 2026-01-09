@@ -368,7 +368,13 @@ class DatabaseService:
                     logger.info(f"Created source record: {source_id}")
                     return source
         except Exception as e:
+            import traceback
+            full_traceback = traceback.format_exc()
             logger.error(f"Failed to create/update source {source_id}: {e}")
+            logger.error(f"Full exception traceback:\n{full_traceback}")
+            logger.critical(f"CRITICAL DATABASE ERROR: Exception type={type(e).__name__}, message={str(e)}")
+            logger.critical(f"Database URL: {self.database_url}")
+            logger.critical(f"Database path: {self.db_path}")
             return None
 
     def _store_platform_tags(

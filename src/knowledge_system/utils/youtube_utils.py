@@ -61,6 +61,13 @@ def extract_urls(input_data: Any) -> list[str]:
         FileNotFoundError: If input appears to be a file path but file doesn't exist
         IOError: If file cannot be read
     """
+    logger.debug(f"extract_urls called with input_data type={type(input_data)}, value={repr(input_data)}")
+    
+    # Check for None or empty input
+    if input_data is None:
+        logger.error("extract_urls received None as input")
+        return []
+    
     # Handle different input types
     if isinstance(input_data, list):
         # If input is already a list, assume it's a list of URLs and return it
@@ -69,19 +76,29 @@ def extract_urls(input_data: Any) -> list[str]:
             item_str = str(item)
             if is_youtube_url(item_str):
                 urls.append(item_str)
+        logger.debug(f"extract_urls from list: found {len(urls)} YouTube URLs")
         return urls
 
-    input_str = str(input_data)
+    input_str = str(input_data).strip()
+    
+    if not input_str or input_str == "None":
+        logger.error(f"extract_urls received empty/None string: {repr(input_data)}")
+        return []
+    
     urls = []
 
     # If it's already a URL
     if is_youtube_url(input_str):
         urls.append(input_str)
+        logger.debug(f"extract_urls: recognized as YouTube URL: {input_str}")
         return urls
+    
+    logger.debug(f"extract_urls: input '{input_str}' does not match YouTube URL patterns")
 
     # If it's a file path
     file_path = Path(input_str)
     if file_path.exists():
+        logger.debug(f"extract_urls: treating as file path: {input_str}")
         try:
             with open(file_path, encoding="utf-8") as f:
                 for line in f:
@@ -95,6 +112,7 @@ def extract_urls(input_data: Any) -> list[str]:
         # If it looks like a file path but doesn't exist, raise error
         raise FileNotFoundError(f"File does not exist: {input_str}")
 
+    logger.debug(f"extract_urls: returning {len(urls)} URLs")
     return urls
 
 

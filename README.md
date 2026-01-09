@@ -1,105 +1,100 @@
-# Skip the Podcast Desktop App
+# Knowledge Chipper
 
 > **Transform hours of content into structured knowledge in minutes**
 
-Turn YouTube videos, podcasts, audio files, and documents into searchable claims, structured transcripts, and organized knowledge — all processed locally on your Mac with AI.
+Turn YouTube videos, podcasts, audio files, and documents into searchable claims, structured transcripts, and organized knowledge — processed locally on your Mac with AI, controlled from your browser.
 
-**Version 4.1.0** | **macOS Application** | **Offline-First + Cloud Sync**
-
----
-
-## What Is This App?
-
-Skip the Podcast is a macOS desktop application that extracts structured knowledge from your media and documents. Instead of listening to 3-hour podcasts or reading 200-page PDFs, the app:
-
-✅ **Transcribes** audio/video using Whisper AI (offline)
-✅ **Extracts** key claims, people, concepts, and terminology
-✅ **Scores** each claim on 6 dimensions across 12 user archetypes
-✅ **Attributes** speakers only to high-value claims (claims-first approach)
-✅ **Organizes** everything in a searchable knowledge database
-✅ **Syncs** to GetReceipts.org for web access and sharing
+**Version 4.1.0** | **Web-First Architecture** | **Local Processing + Cloud Sync**
 
 ---
 
-## 🆕 New Layer Cake GUI (December 2025)
+## What Is This?
 
-**Introducing an intuitive visual interface** that shows your entire processing pipeline at a glance!
+Knowledge Chipper is a **web-controlled local processing engine** that extracts structured knowledge from your media and documents. Instead of listening to 3-hour podcasts or reading 200-page PDFs:
 
-### What Is It?
+✅ **Control from Web Browser** - Process content via [GetReceipts.org/contribute](https://getreceipts.org/contribute)
+✅ **Process Locally** - Transcription and extraction run on your Mac (offline-capable)
+✅ **Extract Knowledge** - Key claims, people, concepts, and terminology automatically identified
+✅ **Score Claims** - 6-dimension scoring across 12 user archetypes
+✅ **Speaker Attribution** - Speakers attributed to high-value claims (claims-first approach)
+✅ **Sync to Web** - Everything syncs to GetReceipts.org for sharing and collaboration
 
-The **Layer Cake GUI** is a beautiful two-pane interface where:
-- **Left Pane** = 6 colorful tiles representing each processing stage
-- **Right Pane** = Live status logs showing what's happening
+---
 
-### How to Launch
+## Architecture: Web UI + Local Daemon
 
-```bash
-python launch_layer_cake_gui.py
+**No Desktop UI** - Everything is controlled through your web browser at [GetReceipts.org](https://getreceipts.org).
+
+### How It Works
+
+```
+You (Browser)  →  GetReceipts.org/contribute  →  Local Daemon (Background)
+                          ↓                              ↓
+                   Submit URLs/Files              Process Locally
+                   Configure Options              (Whisper + LLM)
+                   Monitor Progress                     ↓
+                          ↑                        Auto-Upload
+                          └──────────────────────────────┘
 ```
 
-### The 6 Processing Stages (Top → Bottom)
+### The Web Interface (User Control)
 
-1. **⚙️ Settings / Help / Contact** (Gray)
-   - Configure API keys, select models
-   - Customize tile colors (8 presets!)
-   - Get help or contact support
+Visit **[GetReceipts.org/contribute](https://getreceipts.org/contribute)** to:
 
-2. **🎵📺 Sources** (Purple)
-   - Drag & drop: MP3, YouTube, RSS, PDF, Text
-   - System transcribes audio/video
-   - Processes documents
+1. **Submit Content**
+   - Paste YouTube URLs or playlists
+   - Upload local audio/video files (MP4, MP3, WAV, etc.)
+   - Import documents (PDF, Word, Markdown, TXT)
+   - Import podcaster-provided PDF transcripts
 
-3. **📝 Transcripts** (Orange)
-   - Drag & drop: .txt or .json transcripts
-   - Skip transcription step
-   - Jump straight to claims/summaries
+2. **Configure Processing**
+   - Select Whisper model (base/medium/large)
+   - Choose LLM provider (Ollama, OpenAI, Anthropic, Google)
+   - Enable/disable auto-upload
+   - Set output preferences
 
-4. **💡 Claims** (Green)
-   - Review extracted claims
-   - Filter by tier (High/Medium/Low)
-   - Export claims to JSON/CSV
+3. **Monitor Jobs**
+   - Real-time progress tracking
+   - Filter by status (pending/processing/completed/failed)
+   - Retry failed jobs
+   - Bulk actions
 
-5. **📄 Summaries** (Pink)
-   - Review generated summaries
-   - Regenerate with different settings
-   - Edit before uploading
+4. **Folder Monitoring**
+   - Watch folders for automatic processing
+   - Drop files → auto-process → auto-upload
 
-6. **☁️ Cloud** (Blue - SkipThePodcast.com)
-   - Upload to web platform
-   - View sync status
-   - Manual upload for failed items
+### The Local Daemon (Processing Engine)
 
-### Key Features
+Runs silently in the background on your Mac:
 
-✨ **Drag & Drop** - Drop files directly onto tiles
-✨ **Expansion Panels** - Click any tile to reveal options (smooth animation!)
-✨ **Unified Start Button** - 3 checkboxes: Create Claims, Create Summary, Upload
-✨ **Live Logs** - Click any status box on right to expand and see details
-✨ **Customizable Colors** - Choose from 8 presets or pick your own colors
-✨ **Settings Persist** - All preferences saved across sessions
+- **No UI Required** - Controlled entirely via web browser
+- **Local AI Processing** - Whisper transcription, LLM extraction (offline-capable)
+- **RESTful API** - HTTP API for web integration (port 8765)
+- **Auto-Start** - Launches on login (macOS LaunchAgent)
+- **Auto-Update** - Checks for updates every 24 hours and on startup, installs automatically
+- **Resource Management** - Optimized for M1/M2/M3 Macs
 
-### Why Layer Cake?
+**Installation:**
+```bash
+# Download daemon installer from releases
+# Double-click DMG → installs daemon + sets up auto-launch
+```
 
-The traditional multi-tab interface hid the processing flow. The Layer Cake makes it visual:
-- See where your content is in the pipeline
-- Start processing from any stage
-- Watch progress in real-time
-- Jump between stages easily
+**Auto-Updates:**
+The daemon automatically keeps itself up-to-date by checking GitHub releases every 24 hours. When a new version is available, it downloads and installs the update automatically with zero downtime (LaunchAgent restarts it seamlessly). No manual updates required!
 
 ---
 
-## How Does It Work?
+## How Knowledge Extraction Works
 
-### The Desktop App (Local Processing)
+**1. Submit Content** (via web interface)
+- YouTube URLs or playlists
+- Local audio/video files (MP4, MP3, WAV, etc.)
+- Documents (PDF, Word, Markdown, TXT)
+- Podcaster-provided PDF transcripts
 
-**1. Add Your Content**
-- Paste YouTube URLs or playlists
-- Drag and drop local audio/video files (MP4, MP3, WAV, etc.)
-- Import documents (PDF, Word, Markdown, TXT)
-- **NEW:** Import podcaster-provided PDF transcripts with automatic YouTube matching
-
-**2. Automatic Processing**
-Use the **Extract Tab** to process content through the claims-first pipeline:
+**2. Automatic Processing** (local daemon)
+Claims-first pipeline:
 
 ```
 URL Input → Fetch Metadata → Fetch Transcript → Mine Claims → Evaluate → Timestamps → Speakers
@@ -110,18 +105,19 @@ URL Input → Fetch Metadata → Fetch Transcript → Mine Claims → Evaluate �
 
 *Speaker attribution is applied only to high-value (A/B-tier) claims, using LLM context analysis.*
 
-**Features of the Extract Tab:**
-- 📊 **6-stage progress display** with visual indicators
-- 🔧 **LLM selection per stage** - choose provider/model for Miner and Evaluator
-- ✏️ **Two-pane editor** - edit claims, jargon, people, concepts in-place
-- ❌ **Rejected claims visible** - promote good claims back to accepted
-- 📈 **Quality assessment** - acceptance rate, transcript quality, suggestions
-- 🔄 **Whisper fallback** - re-run with local transcription if quality is low
+**Processing Features:**
+- 📊 **6-stage pipeline** - Download → Transcribe → Extract → Evaluate → Attribute → Upload
+- 🔧 **Configurable models** - Choose provider/model for each stage
+- ✏️ **Quality assessment** - Acceptance rate, transcript quality, improvement suggestions
+- 🔄 **Automatic fallback** - Re-run with Whisper if transcript quality is low
+- ⚡ **Batch processing** - Handle multiple items simultaneously
+- 📈 **Progress tracking** - Real-time status updates in web interface
 
-**3. Review & Upload**
-- Claims appear in the **Review Tab** with importance scores (A/B/C tiers)
-- Click **"Upload to GetReceipts"** to sync to the web
-- Desktop automatically hides uploaded claims (web becomes canonical source)
+**3. Auto-Upload to GetReceipts**
+- Processed claims automatically sync to [GetReceipts.org](https://getreceipts.org)
+- Local database acts as processing cache (web is canonical source)
+- Review and edit claims on the web
+- Share knowledge with the community
 
 ### The Web App (GetReceipts.org)
 
@@ -345,154 +341,100 @@ youtube_api:
 - Apple Silicon (M1/M2/M3) or Intel Mac
 
 **Install:**
-1. Download the DMG from [Releases](https://github.com/yourusername/knowledge_chipper/releases)
-2. Drag to Applications folder
-3. Right-click → Open (first launch only - macOS Gatekeeper)
-4. App walks you through initial setup
+1. Download the daemon installer DMG from [Releases](https://github.com/yourusername/knowledge_chipper/releases)
+2. Double-click to mount, run installer
+3. Daemon automatically installs and starts
+4. Visit [GetReceipts.org/contribute](https://getreceipts.org/contribute) to begin
+
+**First-Time Setup:**
+- Daemon runs in background (no UI window)
+- Web interface auto-detects local daemon
+- One-time device linking via browser
 
 ### First Processing Session
 
 **Step 1: Configure AI Models**
 
-The app can use local AI (offline, free) or cloud AI (requires API key):
+The daemon can use local AI (offline, free) or cloud AI (requires API key):
 
 - **Local (Recommended)**: Install [Ollama](https://ollama.ai), then run:
   ```bash
   ollama pull qwen2.5:7b-instruct
   ```
-  The app auto-detects Ollama models and picks the best one for your Mac.
+  Daemon auto-detects Ollama models and picks the best one for your Mac.
 
-- **Cloud**: Add API keys in Settings tab (OpenAI GPT-4, Anthropic Claude, Google Gemini, etc.)
+- **Cloud**: Add API keys at [GetReceipts.org/contribute/settings](https://getreceipts.org/contribute/settings)
 
 **Step 2: Process Your First Video**
 
-1. Open the **Transcribe** tab
+1. Visit **[GetReceipts.org/contribute](https://getreceipts.org/contribute)**
 2. Paste a YouTube URL: `https://youtube.com/watch?v=...`
-3. Check **"Process automatically through entire pipeline"**
-4. Click **"Start Transcription"**
+3. Select processing options (Whisper model, LLM provider)
+4. Click **"Start Processing"**
 
-The app will:
+The daemon will:
 - Download the video (audio only)
 - Transcribe with timestamps
 - Extract claims, people, concepts (claims-first mode)
 - Score claims by importance (A/B/C tiers)
 - Attribute speakers to high-value claims
+- Auto-upload to GetReceipts
 
-**Step 3: Review & Upload**
+**Step 3: Monitor Progress**
 
-1. Go to the **Review** tab
-2. Browse extracted claims sorted by importance
-3. Fix any speaker names (app learns from corrections)
-4. Click **"Upload to GetReceipts"** when ready
-5. Claims disappear from desktop (now live on web)
+1. Stay on the contribute page or visit **[GetReceipts.org/contribute/jobs](https://getreceipts.org/contribute/jobs)**
+2. Watch real-time progress updates
+3. See completion notifications
+4. Retry failed jobs if needed
 
-**Step 4: Access via Web**
+**Step 4: Access Your Knowledge**
 
-1. Go to [GetReceipts.org](https://getreceipts.org)
-2. Your claims appear automatically (device auto-linked)
+1. Go to [GetReceipts.org/dashboard](https://getreceipts.org/dashboard)
+2. Browse extracted claims, people, concepts
 3. Edit, search, share, and explore connections
+4. Review quality and flag corrections
 
 ---
 
-## Understanding the 8 Tabs
+## Web Interface Features
 
-### 1. **Introduction**
-Quick tour and getting started guide
+All interaction happens through your browser at **[GetReceipts.org/contribute](https://getreceipts.org/contribute)**.
 
-### 2. **Transcribe**
-**Purpose:** Upload YouTube URLs or local files for transcription
+### 1. **Main Processing Page** (`/contribute`)
+- **Smart Input** - Auto-detects YouTube URLs, local files, or text content
+- **Processing Options** - Configure Whisper model, LLM provider, pipeline settings
+- **Batch Support** - Submit multiple URLs or files at once
+- **Real-time Status** - See daemon connection and processing status
 
-**Features:**
-- Single videos or entire playlists
-- Local audio/video files (drag & drop)
-- Claims-first mode (default): Extract claims, then attribute speakers to important ones
-- Full pipeline mode (one-click transcribe → analyze → upload)
+### 2. **Jobs Queue** (`/contribute/jobs`)
+- **Live Progress** - Real-time updates from local daemon
+- **Multi-stage Pipeline** - Track download → transcribe → extract → evaluate
+- **Filters** - Status (pending/processing/completed/failed), date range
+- **Bulk Actions** - Retry failed jobs, delete completed jobs
+- **Performance Metrics** - Throughput rates, time estimates
 
-**Best For:** Getting transcripts and extracting structured knowledge
+### 3. **Settings** (`/contribute/settings`)
+- **API Keys** - OpenAI, Anthropic, Google Gemini (optional - use Ollama locally)
+- **Model Defaults** - Set preferred Whisper model and LLM provider
+- **Device Linking** - One-time browser-based device authentication
+- **Processing Defaults** - Auto-upload toggle, output preferences
 
----
+### 4. **Folder Monitor** (`/contribute/monitor`)
+- **Automatic Processing** - Watch local folders for new content
+- **Configuration** - Choose folders, set processing options
+- **Event Log** - See what files were detected and processed
+- **Start/Stop Control** - Enable/disable monitoring remotely
 
-### 3. **Prompts**
-**Purpose:** Manage analysis templates
-
-**What It Does:**
-- Contains prompts for claim extraction, summarization, etc.
-- Optimized for different content types (podcasts, lectures, documents)
-- Advanced users can customize prompts
-
-**Best For:** Leave default unless you want custom extraction logic
-
----
-
-### 4. **Summarize**
-**Purpose:** Extract knowledge from transcripts or documents
-
-**Two Modes:**
-
-**A. Summarize from Files**
-- Add PDFs, Word docs, Markdown files
-- Import third-party transcripts
-- Process multiple files in batch
-
-**B. Summarize from Database** *(Recommended)*
-- Browse all previously transcribed content
-- Re-analyze with improved models
-- No need to manage intermediate files
-- Shows duration, token counts, existing summaries
-
-**Content Type Selection:**
-
-The app adapts its analysis based on your content type:
-
-| Type | When to Use | Special Handling |
-|------|-------------|------------------|
-| **Transcript (Own)** | Content you transcribed with this app | Uses speaker labels, timestamps, conversational context |
-| **Transcript (Third-party)** | External transcripts from other sources | Handles missing metadata gracefully |
-| **Document (PDF/eBook)** | Books, reports, long-form articles | Respects chapters, handles citations |
-| **Document (White Paper)** | Technical papers, research | Focuses on methodologies, frameworks |
-
-**Smart Chunking:**
-- Automatically breaks large content into optimal chunks
-- Respects natural boundaries (sentences, speaker changes, sections)
-- Smart overlap maintains context between chunks
+### 5. **Help & Documentation** (`/contribute/help`)
+- **Getting Started** - Step-by-step setup guide
+- **Troubleshooting** - Common issues and solutions
+- **API Reference** - For advanced integrations
 
 ---
 
-### 5. **Queue**
-**Purpose:** Real-time monitoring of all processing jobs
+## Knowledge Extraction System
 
-**Features:**
-- Live progress tracking (download %, transcription stage, analysis status)
-- Multi-stage pipeline view
-- Filter by status: In Progress, Completed, Failed
-- Performance metrics and throughput rates
-- Auto-refreshes every 5 seconds
-
-**View:**
-```
-Queue Tab Display:
-├─ Download Stage
-│  ├─ Video 1: 67% (Account 2) [3.2 MB/s]
-│  └─ Video 2: Queued (Account 1)
-├─ Transcription Stage
-│  └─ Video 3: Processing [42:10 / 1:23:45]
-├─ Summarization Stage
-│  └─ Video 4: Extracting claims...
-└─ Completed (24)
-```
-
----
-
-### 6. **Review**
-**Purpose:** Browse and edit extracted claims
-
-**Features:**
-- Claims organized by importance (A-tier, B-tier, C-tier, D-tier)
-- Multi-dimensional scoring across 12 user archetypes
-- Edit claim text, fix speaker attribution
-- Upload to GetReceipts with one click
-
-**6-Dimension Scoring System:**
+### 6-Dimension Scoring System
 
 Each claim is evaluated on 6 independent dimensions:
 1. **Epistemic Value** - Reduces uncertainty about how the world works
@@ -503,7 +445,7 @@ Each claim is evaluated on 6 independent dimensions:
 6. **Temporal Stability** - How long will this remain true? (ephemeral → timeless)
 7. **Scope** - How broadly applicable? (narrow → universal)
 
-**12 User Archetypes:**
+### 12 User Archetypes
 
 The system calculates importance for each user type:
 - **Scientist** - Values deep understanding and evidence
@@ -519,7 +461,7 @@ The system calculates importance for each user type:
 - **Generalist** - Values interesting, accessible knowledge
 - **Pragmatist** - Values immediate utility
 
-**Tier Assignment:**
+### Tier Assignment
 
 Final importance = max(all profile scores) — rescues niche-but-valuable insights!
 
@@ -527,52 +469,6 @@ Final importance = max(all profile scores) — rescues niche-but-valuable insigh
 - **B-tier** (6.5-7.9): Significant claims with substantial value
 - **C-tier** (5.0-6.4): Useful context and background
 - **D-tier** (<5.0): Rejected or trivial
-
-**After Upload:**
-- Claims marked as "uploaded" in local database
-- Hidden from Review tab (web becomes source of truth)
-- Re-processing same video creates new version on web
-
----
-
-### 7. **Monitor**
-**Purpose:** Watch folders for automatic processing
-
-**Use Case:** Drop files into a folder, app processes them automatically
-
-**Setup:**
-1. Choose folder to monitor
-2. Configure processing options
-3. Enable auto-processing
-4. Drop files → app processes → uploads to GetReceipts
-
----
-
-### 8. **Settings**
-**Purpose:** Configure API keys, models, and preferences
-
-**Key Settings:**
-
-**AI Providers:**
-- Local Models (Ollama): Free, offline, private
-- OpenAI (GPT-4, GPT-3.5): Cloud-based, API key required
-- Anthropic (Claude): Cloud-based, API key required
-- Google (Gemini 2.0, 1.5): Cloud-based, API key required
-
-**Hardware-Aware Model Selection:**
-- App automatically picks best model for your Mac
-- M2/M3 Ultra: Larger, more capable models
-- Base M1/M2: Optimized smaller models
-
-**GetReceipts Integration:**
-- Enable/disable auto-upload
-- View device ID
-- Reset device credentials
-
-**Processing Options:**
-- Enable speaker diarization (who said what)
-- Output file locations
-- Obsidian vault integration paths
 
 ---
 
@@ -1118,16 +1014,30 @@ make install
 # Run tests
 make test-quick
 
-# Launch GUI
-python src/knowledge_system/gui/main_window_pyqt6.py
+# Launch daemon locally
+python -m daemon.main
 ```
 
 **Development Commands:**
 ```bash
-make lint          # Run linting (flake8)
-make format        # Auto-format (black + isort)
+make lint           # Run linting (flake8)
+make format         # Auto-format (black + isort)
 make security-check # Security scan (bandit)
-make build         # Build distribution packages
+make build          # Build daemon installer
+```
+
+**Daemon API:**
+```bash
+# Health check
+curl http://localhost:8851/health
+
+# Submit processing job
+curl -X POST http://localhost:8851/process \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://youtube.com/watch?v=..."}'
+
+# Check job status
+curl http://localhost:8851/jobs
 ```
 
 ---
@@ -1197,16 +1107,35 @@ See `CONTRIBUTING.md` for:
 - [Happy](https://happy.engineering) - Device authentication inspiration
 
 **Technology Stack:**
-- **Frontend:** PyQt6 (macOS native)
+- **Web UI:** Next.js 15, React 19, TypeScript (GetReceipts.org)
+- **Daemon API:** FastAPI (Python) + REST endpoints
 - **Transcription:** whisper.cpp (offline)
-- **AI Models:** Ollama (local), OpenAI/Anthropic (cloud)
-- **Database:** SQLite (local), Supabase (web)
-- **Web App:** Next.js 15, React 19, TypeScript
+- **AI Models:** Ollama (local), OpenAI/Anthropic/Google (cloud)
+- **Database:** SQLite (local cache), Supabase PostgreSQL (web canonical)
 - **Downloads:** yt-dlp (YouTube)
+- **Installer:** DMG with LaunchAgent auto-start
 
 **License:** MIT
 
-**Architecture Decision:** Web-canonical with ephemeral local (November 2025)
+**Architecture Decision:** Web-first with local processing (January 2026)
+
+---
+
+## ⚠️ Desktop GUI Deprecated (January 2026)
+
+The PyQt6 desktop GUI has been **deprecated** in favor of the web-first architecture:
+
+- **Old:** Desktop app with tabs and windows
+- **New:** Web browser control + background daemon
+
+**Why the change?**
+- ✅ Better user experience (familiar web UI)
+- ✅ Cross-platform accessibility (any browser)
+- ✅ Easier updates (no app reinstalls)
+- ✅ Unified interface with GetReceipts.org
+- ✅ Mobile-friendly (future)
+
+**GUI Code Location:** Moved to `_deprecated/gui/` for reference
 
 ---
 
@@ -1221,4 +1150,6 @@ See `CONTRIBUTING.md` for:
 
 **Ready to transform your content into structured knowledge?**
 
-Download Skip the Podcast and start extracting insights from hours of media in minutes.
+1. Install the Knowledge Chipper daemon (one-time setup)
+2. Visit [GetReceipts.org/contribute](https://getreceipts.org/contribute)
+3. Start extracting insights from hours of media in minutes
