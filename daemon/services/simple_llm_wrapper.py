@@ -68,4 +68,9 @@ class SimpleLLMWrapper:
             )
         )
         
-        return result
+        # Extract text content from response dict
+        # Response format: {"content": "...", "model": "...", "usage": {...}}
+        if isinstance(result, dict):
+            return result.get('content', str(result))
+        else:
+            return str(result)
