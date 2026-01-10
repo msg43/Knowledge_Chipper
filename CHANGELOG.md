@@ -35,9 +35,14 @@ The Settings page now displays proper LLM provider and model selection dropdowns
 **User Experience:**
 - Settings page now shows both provider and model selection
 - Model dropdown updates automatically when provider changes
+- Model dropdown shows "Loading models..." placeholder initially for visibility
 - Models are fetched fresh from provider APIs (OpenAI, Anthropic, Google, Ollama)
 - Selections persist across app restarts
 - **All processing respects Settings choices** - no hardcoded overrides
+
+**Bug Fixes:**
+- Fixed LLM Model dropdown visibility issue - now shows placeholder text during initialization
+- Removed `append_log()` call during initialization that could cause errors
 
 ### Added - Daemon Auto-Update System (January 8, 2026)
 

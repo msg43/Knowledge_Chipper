@@ -362,6 +362,8 @@ class APIKeysTab(BaseTab):
         # LLM Model dropdown (populated based on provider selection)
         self.llm_model_combo = QComboBox()
         self.llm_model_combo.setMinimumWidth(200)
+        # Add placeholder to make dropdown visible initially
+        self.llm_model_combo.addItem("Loading models...")
         
         llm_model_info = (
             "Select the specific AI model to use.\n\n"
@@ -1021,11 +1023,11 @@ class APIKeysTab(BaseTab):
                 # Select the first model by default
                 if self.llm_model_combo.count() > 0:
                     self.llm_model_combo.setCurrentIndex(0)
+                logger.info(f"Loaded {len(models)} models for provider: {provider}")
             else:
                 # Fallback if no models found
                 self.llm_model_combo.addItem(f"No models found for {provider}")
-                
-            self.append_log(f"Loaded {len(models)} models for provider: {provider}")
+                logger.warning(f"No models found for provider: {provider}")
             
         except Exception as e:
             logger.error(f"Failed to load models for provider {provider}: {e}")
