@@ -4,6 +4,41 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added - Settings Page LLM Provider and Model Selection (January 10, 2026)
+
+**Enhanced LLM Configuration in Settings Tab**
+
+The Settings page now displays proper LLM provider and model selection dropdowns with dynamic model loading. All hardcoded defaults have been removed to ensure Settings choices are always respected.
+
+**Features:**
+- ✅ **LLM Provider dropdown** - Renamed from "Default LLM Provider" to "LLM Provider" for clarity
+- ✅ **LLM Model dropdown** - Dynamically populated based on selected provider
+- ✅ **Dynamic model registry** - Integrates with `model_registry.py` to fetch fresh models from APIs
+- ✅ **Persistent settings** - Provider and model selections are saved to credentials.yaml
+- ✅ **Smart loading** - Automatically loads saved provider/model on Settings tab open
+- ✅ **Multi-provider support** - OpenAI, Anthropic, Google, and Local (Ollama) providers
+- ✅ **No hardcoded defaults** - Removed all hardcoded OpenAI/GPT-4o references
+
+**Implementation:**
+- `_deprecated/gui/tabs/api_keys_tab.py` - Added LLM provider/model dropdowns to Settings tab
+- `_on_llm_provider_changed()` - Handler that fetches models when provider changes
+- `_load_existing_values()` - Loads saved LLM settings from config
+- `_save_settings()` - Persists LLM provider/model to credentials.yaml
+- Integration with `utils/model_registry.py` for dynamic model fetching
+
+**Hardcoded Defaults Removed:**
+- `config.py` - Updated LLMConfig to support all providers (openai/anthropic/google/local)
+- `system2_orchestrator_two_pass.py` - Removed `openai:gpt-4o` fallback, now uses settings
+- `two_pass/pipeline.py` - Updated docstring to show settings-based usage
+- `process_tab.py` - Removed hardcoded local provider defaults, now uses settings
+
+**User Experience:**
+- Settings page now shows both provider and model selection
+- Model dropdown updates automatically when provider changes
+- Models are fetched fresh from provider APIs (OpenAI, Anthropic, Google, Ollama)
+- Selections persist across app restarts
+- **All processing respects Settings choices** - no hardcoded overrides
+
 ### Added - Daemon Auto-Update System (January 8, 2026)
 
 **Automatic Updates for GetReceipts Daemon**

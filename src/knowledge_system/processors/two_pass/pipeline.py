@@ -65,8 +65,13 @@ class TwoPassPipeline:
     
     Usage:
         from knowledge_system.core.llm_adapter import LLMAdapter
+        from knowledge_system.config import get_settings
         
-        llm = LLMAdapter(provider="openai", model="gpt-4o")
+        settings = get_settings()
+        provider = settings.llm.provider
+        model = settings.llm.local_model if provider == "local" else settings.llm.model
+        
+        llm = LLMAdapter(provider=provider, model=model)
         pipeline = TwoPassPipeline(llm_adapter=llm)
         
         result = pipeline.process(

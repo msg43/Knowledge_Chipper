@@ -270,13 +270,16 @@ class TranscriptProcessingConfig(BaseModel):
 class LLMConfig(BaseModel):
     """LLM configuration."""
 
-    provider: str = Field(default="local", pattern="^(openai|claude|local)$")
-    model: str = "gpt-4o-mini-2024-07-18"
+    provider: str = Field(default="local", pattern="^(openai|claude|anthropic|google|local)$")
+    model: str = Field(
+        default="gpt-4o-mini-2024-07-18",
+        description="Cloud model name for openai/anthropic/google providers"
+    )
     max_tokens: int = Field(default=10000, ge=1, le=32000)
     temperature: float = Field(default=0.1, ge=0.0, le=2.0)
     local_model: str = Field(
-        default="qwen2.5-coder:7b-instruct",
-        description="Local model name for local provider",
+        default="qwen2.5:7b-instruct",
+        description="Local model name for local provider (Ollama)",
     )
     # Summarization prompt controls
     summarization_prompt_max_chars: int = Field(

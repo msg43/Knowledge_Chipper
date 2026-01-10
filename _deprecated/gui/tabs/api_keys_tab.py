@@ -7,6 +7,7 @@ from PyQt6.QtCore import Qt, QThread, QTimer, QUrl, pyqtSignal
 from PyQt6.QtGui import QDesktopServices
 from PyQt6.QtWidgets import (
     QCheckBox,
+    QComboBox,
     QFormLayout,
     QFrame,
     QGridLayout,
@@ -18,6 +19,8 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QProgressDialog,
     QPushButton,
+    QSizePolicy,
+    QSpacerItem,
     QSpinBox,
     QVBoxLayout,
     QWidget,
@@ -283,8 +286,6 @@ class APIKeysTab(BaseTab):
         )
 
         # Add spacing between PacketStream fields and proxy strict mode
-        from PyQt6.QtWidgets import QSizePolicy, QSpacerItem
-
         layout.addItem(
             QSpacerItem(20, 10, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed),
             7,
@@ -322,6 +323,62 @@ class APIKeysTab(BaseTab):
             self.proxy_strict_mode_checkbox,
             proxy_strict_info,
             8,
+            0,
+        )
+
+        # Add spacing between Proxy Strict Mode and LLM settings
+        layout.addItem(
+            QSpacerItem(20, 15, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed),
+            9,
+            0,
+            1,
+            2,
+        )
+
+        # LLM Provider dropdown
+        self.llm_provider_combo = QComboBox()
+        self.llm_provider_combo.addItems(["openai", "anthropic", "google", "local"])
+        self.llm_provider_combo.setMinimumWidth(140)
+        self.llm_provider_combo.currentTextChanged.connect(self._on_llm_provider_changed)
+        
+        llm_provider_info = (
+            "Select the default AI provider for processing.\n\n"
+            "• openai: GPT models (gpt-4o, gpt-4o-mini, etc.)\n"
+            "• anthropic: Claude models (claude-3-7-sonnet, claude-3-5-haiku, etc.)\n"
+            "• google: Gemini models (gemini-2.0-flash, gemini-1.5-pro, etc.)\n"
+            "• local: Ollama models running on your machine (qwen2.5, llama3, etc.)\n\n"
+            "This setting determines which AI service will be used for claims extraction and analysis."
+        )
+        
+        self._add_field_with_info(
+            layout,
+            "LLM Provider:",
+            self.llm_provider_combo,
+            llm_provider_info,
+            10,
+            0,
+        )
+
+        # LLM Model dropdown (populated based on provider selection)
+        self.llm_model_combo = QComboBox()
+        self.llm_model_combo.setMinimumWidth(200)
+        
+        llm_model_info = (
+            "Select the specific AI model to use.\n\n"
+            "The available models are fetched dynamically from the provider's API,\n"
+            "ensuring you always have access to the latest models.\n\n"
+            "Model selection affects:\n"
+            "• Processing speed and cost\n"
+            "• Quality and accuracy of results\n"
+            "• Context window size (how much text can be processed at once)"
+        )
+        
+        self._add_field_with_info(
+            layout,
+            "LLM Model:",
+            self.llm_model_combo,
+            llm_model_info,
+            11,
             0,
         )
 
@@ -945,6 +1002,36 @@ class APIKeysTab(BaseTab):
             # Non-fatal UI error; log and continue
             logger.error(f"Failed to show HF token help dialog: {e}")
 
+    def _on_llm_provider_changed(self, provider: str) -> None:
+        """Handle LLM provider selection change - update available models."""
+        if not provider:
+            return
+            
+        try:
+            # Import model registry
+            from ...utils.model_registry import get_provider_models
+            
+            # Get models for the selected provider
+            models = get_provider_models(provider, force_refresh=False)
+            
+            # Update the model combo box
+            self.llm_model_combo.clear()
+            if models:
+                self.llm_model_combo.addItems(models)
+                # Select the first model by default
+                if self.llm_model_combo.count() > 0:
+                    self.llm_model_combo.setCurrentIndex(0)
+            else:
+                # Fallback if no models found
+                self.llm_model_combo.addItem(f"No models found for {provider}")
+                
+            self.append_log(f"Loaded {len(models)} models for provider: {provider}")
+            
+        except Exception as e:
+            logger.error(f"Failed to load models for provider {provider}: {e}")
+            self.llm_model_combo.clear()
+            self.llm_model_combo.addItem(f"Error loading models: {str(e)[:50]}")
+
     def _load_existing_values(self) -> None:
         """Load existing API key values from settings."""
         # Load OpenAI key
@@ -1032,6 +1119,39 @@ class APIKeysTab(BaseTab):
         else:
             # Default to True for safety
             self.proxy_strict_mode_checkbox.setChecked(True)
+
+        # Load LLM Provider setting
+        if hasattr(self.settings, "llm") and hasattr(self.settings.llm, "provider"):
+            provider = self.settings.llm.provider
+            index = self.llm_provider_combo.findText(provider)
+            if index >= 0:
+                self.llm_provider_combo.setCurrentIndex(index)
+            else:
+                # Default to first provider if saved value not found
+                self.llm_provider_combo.setCurrentIndex(0)
+        else:
+            # Default to openai
+            self.llm_provider_combo.setCurrentIndex(0)
+        
+        # Trigger model loading for the selected provider
+        self._on_llm_provider_changed(self.llm_provider_combo.currentText())
+        
+        # Load LLM Model setting after models are populated
+        if hasattr(self.settings, "llm"):
+            # Try local_model first (for local provider), then fall back to model
+            model = None
+            if hasattr(self.settings.llm, "local_model") and self.settings.llm.local_model:
+                model = self.settings.llm.local_model
+            elif hasattr(self.settings.llm, "model") and self.settings.llm.model:
+                model = self.settings.llm.model
+                
+            if model:
+                index = self.llm_model_combo.findText(model)
+                if index >= 0:
+                    self.llm_model_combo.setCurrentIndex(index)
+                else:
+                    # Model not found in list, keep first one selected
+                    logger.warning(f"Saved model '{model}' not found in available models")
 
     def _setup_change_handlers(self) -> None:
         """Set up change handlers for password/key fields."""
@@ -1175,6 +1295,22 @@ class APIKeysTab(BaseTab):
             self.settings.youtube_processing.proxy_strict_mode = strict_mode_enabled
             logger.info(f"Proxy strict mode set to: {strict_mode_enabled}")
 
+            # Save LLM Provider and Model settings
+            selected_provider = self.llm_provider_combo.currentText()
+            selected_model = self.llm_model_combo.currentText()
+            
+            if selected_provider and selected_model:
+                self.settings.llm.provider = selected_provider
+                
+                # For local provider, save to local_model; for others, save to model
+                if selected_provider == "local":
+                    self.settings.llm.local_model = selected_model
+                else:
+                    self.settings.llm.model = selected_model
+                    
+                logger.info(f"LLM settings updated: provider={selected_provider}, model={selected_model}")
+                self.append_log(f"LLM Provider: {selected_provider}, Model: {selected_model}")
+
             # PERSISTENT STORAGE: Save credentials to YAML file for persistence across sessions
             self._save_credentials_to_file()
 
@@ -1243,6 +1379,12 @@ class APIKeysTab(BaseTab):
                     "proxy_strict_mode": getattr(
                         self.settings.youtube_processing, "proxy_strict_mode", True
                     )
+                },
+                # Persist LLM settings
+                "llm": {
+                    "provider": getattr(self.settings.llm, "provider", "openai"),
+                    "model": getattr(self.settings.llm, "model", ""),
+                    "local_model": getattr(self.settings.llm, "local_model", ""),
                 },
             }
 

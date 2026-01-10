@@ -111,15 +111,28 @@ async def process_with_two_pass_pipeline(
         # Save checkpoint
         orchestrator.save_checkpoint(run_id, {"stage": "extraction"})
         
-        # 2. Initialize LLM adapter
-        model_config = config.get("model", "openai:gpt-4o")
-        if ":" in model_config:
-            provider, model = model_config.split(":", 1)
-        else:
-            provider = "openai"
-            model = model_config
+        # 2. Initialize LLM adapter - use settings if no model specified in config
+        from ..config import get_settings
+        settings = get_settings()
         
-        logger.info(f"Using LLM: {provider}/{model}")
+        model_config = config.get("model")
+        if model_config:
+            # Config explicitly specifies model
+            if ":" in model_config:
+                provider, model = model_config.split(":", 1)
+            else:
+                # No provider specified, use settings provider
+                provider = settings.llm.provider
+                model = model_config
+        else:
+            # No model in config, use settings
+            provider = settings.llm.provider
+            if provider == "local":
+                model = settings.llm.local_model
+            else:
+                model = settings.llm.model
+        
+        logger.info(f"Using LLM from settings: {provider}/{model}")
         
         llm = LLMAdapter(
             provider=provider,
@@ -301,13 +314,24 @@ def _store_two_pass_results(
             ],
         }
         
-        # Get LLM info from config
-        model_config = config.get("model", "openai:gpt-4o")
-        if ":" in model_config:
-            provider, model = model_config.split(":", 1)
+        # Get LLM info from config - use settings if not specified
+        from ..config import get_settings
+        settings = get_settings()
+        
+        model_config = config.get("model")
+        if model_config:
+            if ":" in model_config:
+                provider, model = model_config.split(":", 1)
+            else:
+                provider = settings.llm.provider
+                model = model_config
         else:
-            provider = "openai"
-            model = model_config
+            # Use settings
+            provider = settings.llm.provider
+            if provider == "local":
+                model = settings.llm.local_model
+            else:
+                model = settings.llm.model
         
         summary = Summary(
             summary_id=summary_id,

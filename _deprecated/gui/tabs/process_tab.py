@@ -475,14 +475,20 @@ class ProcessTab(BaseTab, FileOperationsMixin):
                 self.files_list.item(i).text() for i in range(self.files_list.count())
             ]
 
-            # Build configuration
+            # Build configuration - use settings for LLM provider/model
+            from ...config import get_settings
+            settings = get_settings()
+            
+            provider = settings.llm.provider
+            model = settings.llm.local_model if provider == "local" else settings.llm.model
+            
             config = {
                 "transcribe": self.transcribe_checkbox.isChecked(),
                 "summarize": self.summarize_checkbox.isChecked(),
                 "device": "cpu",  # Default for now
                 "transcription_model": "base",  # Default for now
-                "summarization_provider": "local",  # Use local LLM by default
-                "summarization_model": "qwen2.5:7b-instruct",  # Default local model
+                "summarization_provider": provider,
+                "summarization_model": model,
             }
 
             # Create and configure worker
