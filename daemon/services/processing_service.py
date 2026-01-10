@@ -458,18 +458,20 @@ class ProcessingService:
                         import traceback
                         logger.critical(f"DEBUG v3: Traceback:\n{traceback.format_exc()}")
                     
-                    downloader = YouTubeDownloadProcessor()
-                    logger.critical("DEBUG v3: YouTubeDownloadProcessor created")
+                    # Use YouTube Transcript Service (proven reliable approach)
+                    # Gets transcript via YouTube Transcript API (fast, no download needed)
+                    from daemon.services.youtube_transcript_service import YouTubeTranscriptService
+                    
+                    transcript_service = YouTubeTranscriptService()
+                    logger.info(f"Getting YouTube transcript for: {request.url}")
+                    
                     result = await asyncio.to_thread(
-                        downloader.process,
-                        request.url,
-                        output_dir=str(output_dir),
-                        db_service=db_service,  # CRITICAL: Pass db_service for download tracking
+                        transcript_service.get_complete_data,
+                        request.url
                     )
-                    logger.critical("DEBUG v3: downloader.process completed")
-
-                    if not result.success:
-                        raise Exception(f"Download failed: {', '.join(result.errors)}")
+                    
+                    if not result.get('success'):
+                        raise Exception(f"Failed to get YouTube data: {result.get('error')}")
                 except Exception as e:
                     import traceback
                     full_tb = traceback.format_exc()
@@ -477,15 +479,23 @@ class ProcessingService:
                     raise Exception(f"YouTube download error: {str(e)}\n\nFull traceback:\n{full_tb}")
 
                 # Extract info from result
-                source_id = result.metadata.get("video_id", "unknown")
-                title = result.metadata.get("title", "Unknown")
-                audio_file = result.metadata.get("audio_file")
+                source_id = result['video_id']
+                title = result['title']
+                transcript_text = result['transcript']
+                
+                # Save transcript to file for later processing
+                transcript_file = output_dir / f"{source_id}_transcript.txt"
+                transcript_file.write_text(transcript_text, encoding='utf-8')
+                
+                logger.info(f"✅ Got transcript: {len(transcript_text)} chars, {result.get('transcript_entry_count')} entries")
                 
                 # Store for later stages
                 job_data["source_id"] = source_id
                 job_data["title"] = title
-                job_data["audio_file"] = audio_file
-                job_data["metadata"] = result.metadata
+                job_data["transcript_file"] = str(transcript_file)
+                job_data["transcript_text"] = transcript_text
+                job_data["metadata"] = result['metadata']
+                job_data["skip_transcription"] = True  # We already have the transcript!
 
                 await self._update_job(
                     job_id,
@@ -507,9 +517,9 @@ class ProcessingService:
                 job_data["metadata"] = {"file_path": file_path}
 
             # ============================================
-            # Stage 2: Transcribe with Whisper
+            # Stage 2: Transcribe with Whisper (or use existing transcript)
             # ============================================
-            if request.transcribe:
+            if request.transcribe and not job_data.get("skip_transcription"):
                 await self._update_job(job_id, "transcribing", 0.25, "Transcribing with Whisper")
 
                 from src.knowledge_system.processors.audio_processor import AudioProcessor
@@ -542,6 +552,14 @@ class ProcessingService:
                     
                 job_data["transcript"] = transcript
                 job_data["transcript_length"] = len(transcript)
+            
+            elif job_data.get("skip_transcription"):
+                # We already have the transcript from YouTube Transcript API
+                await self._update_job(job_id, "transcribing", 0.25, "Using YouTube transcript")
+                transcript = job_data.get("transcript_text", "")
+                job_data["transcript"] = transcript
+                job_data["transcript_length"] = len(transcript)
+                logger.info(f"✅ Using existing transcript: {len(transcript)} chars")
 
                 await self._update_job(
                     job_id,
