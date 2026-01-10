@@ -301,20 +301,20 @@ Propose which entities should be rejected, but INCLUDE THEM in the output. User 
 Return ONLY valid JSON. No markdown code blocks, no comments, no extra text.
 
 ```json
-{
+{{
   "claims": [
-    {
+    {{
       "claim_text": "Complete claim preserving multi-step arguments",
       "claim_type": "causal",
       "domain": "economics",
       "stance": "asserts",
       "evidence_spans": [
-        {
+        {{
           "quote": "Exact quote from transcript",
           "timestamp": "14:23",
           "context": "Surrounding context showing how quote relates to claim",
           "context_type": "exact"
-        }
+        }}
       ],
       "speaker": "Jeff Snider",
       "speaker_confidence": 9,
@@ -322,18 +322,18 @@ Return ONLY valid JSON. No markdown code blocks, no comments, no extra text.
       "flag_for_review": false,
       "timestamp": "14:23",
       "evidence_quote": "Direct quote from transcript [14:23]",
-      "dimensions": {
+      "dimensions": {{
         "epistemic_value": 8,
         "actionability": 6,
         "novelty": 7,
         "verifiability": 8,
         "understandability": 7,
         "temporal_stability": 8
-      },
+      }},
       "importance": 7.5,
       "decision": "accept"
-    },
-    {
+    }},
+    {{
       "claim_text": "Trivial claim example",
       "claim_type": "factual",
       "domain": "economics",
@@ -345,78 +345,78 @@ Return ONLY valid JSON. No markdown code blocks, no comments, no extra text.
       "flag_for_review": false,
       "timestamp": "03:15",
       "evidence_quote": "Brief quote",
-      "dimensions": {
+      "dimensions": {{
         "epistemic_value": 1,
         "actionability": 2,
         "novelty": 1,
         "verifiability": 10,
         "understandability": 10,
         "temporal_stability": 4
-      },
+      }},
       "importance": 2.1,
       "decision": "reject",
       "rejection_reason": "Trivial observation with no analytical insight"
-    }
+    }}
   ],
   "jargon": [
-    {
+    {{
       "term": "deleveraging",
       "definition": "Process of reducing debt levels in an economy, often painfully as credit contracts",
       "domain": "economics",
       "evidence_spans": [
-        {
+        {{
           "quote": "credit cycles, productivity growth, and deleveraging all interacting",
           "timestamp": "14:27",
           "context": "He calls it the 'economic machine' - you have credit cycles, productivity growth, and deleveraging all interacting."
-        }
+        }}
       ],
       "first_mention_ts": "14:27",
       "decision": "accept"
-    }
+    }}
   ],
   "people": [
-    {
+    {{
       "name": "Ray Dalio",
       "normalized_name": "Ray Dalio",
       "entity_type": "person",
       "role": "Investor known for systematic 'economic machine' framework",
       "context": "Discussed as example of mechanistic economic analysis",
       "evidence_spans": [
-        {
+        {{
           "quote": "The thing about Ray Dalio's approach",
           "timestamp": "14:22",
           "context": "The thing about Ray Dalio's approach is he treats the economy like a machine."
-        }
+        }}
       ],
       "first_mention_ts": "14:22",
       "decision": "accept"
-    }
+    }}
   ],
   "mental_models": [
-    {
+    {{
       "name": "Economic Machine",
       "description": "Framework viewing the economy as a deterministic system with interacting components (credit cycles, productivity growth, deleveraging) that can be modeled and predicted",
       "aliases": ["Dalio's economic machine"],
       "implications": "Suggests economy can be understood mechanistically and future states can be predicted by analyzing component interactions",
       "evidence_spans": [
-        {
+        {{
           "quote": "he treats the economy like a machine. He calls it the 'economic machine' - you have credit cycles, productivity growth, and deleveraging all interacting",
           "timestamp": "14:22",
           "context": "The thing about Ray Dalio's approach is he treats the economy like a machine. He calls it the 'economic machine' - you have credit cycles, productivity growth, and deleveraging all interacting."
-        }
+        }}
       ],
       "first_mention_ts": "14:22",
       "decision": "accept"
-    }
+    }}
   ],
-  "metadata": {
+  "metadata": {{
     "total_claims_extracted": 45,
     "total_claims_accepted": 38,
     "total_claims_rejected": 7,
     "average_importance": 6.2,
     "key_themes": ["monetary policy", "credit cycles", "deleveraging", "financial markets"]
-  }
-}
+  }}
+}}
 ```
 
 ## CRITICAL REMINDERS
