@@ -285,7 +285,7 @@ class LLMAdapter:
         # Choose semaphore based on provider type (local vs cloud)
         is_local = provider in ["ollama", "local"]
         semaphore = self.local_semaphore if is_local else self.cloud_semaphore
-        max_concurrent = self.max_concurrent_local if is_local else self.max_concurrent
+        max_concurrent = self.max_concurrent_local if is_local else self.max_concurrent_cloud
 
         # Acquire concurrency slot using thread-based semaphore to allow cross-event-loop usage
         await asyncio.to_thread(semaphore.acquire)
