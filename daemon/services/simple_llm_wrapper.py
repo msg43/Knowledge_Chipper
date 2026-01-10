@@ -71,6 +71,10 @@ class SimpleLLMWrapper:
         # Extract text content from response dict
         # Response format: {"content": "...", "model": "...", "usage": {...}}
         if isinstance(result, dict):
-            return result.get('content', str(result))
+            content = result.get('content', '')
+            if not content:
+                logger.error(f"LLM returned empty content. Full response: {result}")
+                logger.error(f"Response keys: {result.keys()}")
+            return content or str(result)
         else:
             return str(result)
