@@ -577,7 +577,7 @@ class ProcessingService:
             if request.extract_claims:
                 await self._update_job(job_id, "extracting", 0.50, "Extracting claims with LLM")
 
-                from src.knowledge_system.core.llm_adapter import LLMAdapter
+                from daemon.services.simple_llm_wrapper import SimpleLLMWrapper
                 from src.knowledge_system.processors.two_pass.pipeline import TwoPassPipeline
                 
                 transcript = job_data.get("transcript", "")
@@ -597,8 +597,8 @@ class ProcessingService:
                     else:
                         model = "gpt-4o"  # fallback to OpenAI
                 
-                # Initialize LLM adapter
-                llm = LLMAdapter(
+                # Initialize LLM wrapper (provides simple complete(prompt) interface)
+                llm = SimpleLLMWrapper(
                     provider=provider,
                     model=model,
                     temperature=0.3,
