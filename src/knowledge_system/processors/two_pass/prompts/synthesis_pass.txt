@@ -22,19 +22,19 @@ You are an expert knowledge synthesizer creating a world-class long summary from
 
 ## Mental Models & Frameworks
 
-{mental_models}
+{{mental_models}}
 
 ## Extraction Statistics
 
-{extraction_stats}
+{{extraction_stats}}
 
 ## YouTube AI Summary (External Reference)
 
-{youtube_ai_summary}
+{{youtube_ai_summary}}
 
 # SYNTHESIS INSTRUCTIONS
 
-Generate a {synthesis_length} long summary that synthesizes all this information into a sophisticated analytical narrative. Adjust the depth and breadth of your analysis to match the content's complexity and claim density.
+Generate a {{synthesis_length}} long summary that synthesizes all this information into a sophisticated analytical narrative. Adjust the depth and breadth of your analysis to match the content's complexity and claim density.
 
 ## Structure Guidelines
 
@@ -119,21 +119,21 @@ A world-class summary should:
 Return a JSON object with this structure:
 
 ```json
-{
-  "long_summary": "Your synthesis here following the recommended length ({synthesis_length}). Each paragraph should be substantial (4-8 sentences). Use proper paragraph breaks to create a flowing narrative.\n\nSecond paragraph...\n\nThird paragraph...",
+{{
+  "long_summary": "Your synthesis here following the recommended length ({{synthesis_length}}). Each paragraph should be substantial (4-8 sentences). Use proper paragraph breaks to create a flowing narrative.\n\nSecond paragraph...\n\nThird paragraph...",
   "key_themes": [
     "Theme 1",
     "Theme 2",
     "Theme 3"
   ],
-  "synthesis_quality": {
+  "synthesis_quality": {{
     "claims_integrated": 0,
     "jargon_terms_used": 0,
     "people_referenced": 0,
     "mental_models_explained": 0,
     "thematic_coherence": "high|medium|low"
-  }
-}
+  }}
+}}
 ```
 
 # EXAMPLE SYNTHESIS STYLE
