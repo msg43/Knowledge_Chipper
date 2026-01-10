@@ -40,21 +40,34 @@ class GetReceiptsUploader:
     def __init__(
         self,
         api_base_url: str = "https://getreceipts.org/api/knowledge-chipper",
+        bypass_device_auth: bool = False,
     ):
         """
         Initialize the uploader with automatic device authentication
 
         Args:
             api_base_url: Base URL for GetReceipts API endpoints
+            bypass_device_auth: If True, skip device authentication (uses anonymous upload)
         """
         self.api_base_url = api_base_url
-        self.device_auth = get_device_auth()
-        self.credentials = self.device_auth.get_credentials()
-
-        print(f"🔐 Using device ID: {self.credentials['device_id'][:8]}...")
+        self.bypass_device_auth = bypass_device_auth
+        
+        if bypass_device_auth:
+            print("⚠️  Device authentication BYPASSED - using anonymous upload")
+            self.device_auth = None
+            self.credentials = {
+                'device_id': 'anonymous',
+                'device_key': 'bypass'
+            }
+        else:
+            self.device_auth = get_device_auth()
+            self.credentials = self.device_auth.get_credentials()
+            print(f"🔐 Using device ID: {self.credentials['device_id'][:8]}...")
 
     def is_enabled(self) -> bool:
         """Check if auto-upload is enabled"""
+        if self.bypass_device_auth:
+            return True  # Always enabled when bypassing auth
         return self.device_auth.is_enabled()
 
     def upload_session_data(self, session_data: dict[str, Any]) -> dict[str, Any]:
@@ -96,14 +109,22 @@ class GetReceiptsUploader:
             return {}
 
         try:
+            # Build headers
+            headers = {"Content-Type": "application/json"}
+            
+            if not self.bypass_device_auth:
+                # Include device credentials only if not bypassing
+                headers["X-Device-ID"] = self.credentials["device_id"]
+                headers["X-Device-Key"] = self.credentials["device_key"]
+            else:
+                # When bypassing, use anonymous device ID
+                headers["X-Device-ID"] = "anonymous-bypass"
+                print("📤 Uploading without device authentication (bypass mode)")
+            
             # Upload via HTTP API endpoint
             response = requests.post(
                 f"{self.api_base_url}/upload",
-                headers={
-                    "X-Device-ID": self.credentials["device_id"],
-                    "X-Device-Key": self.credentials["device_key"],
-                    "Content-Type": "application/json"
-                },
+                headers=headers,
                 json=session_data,
                 timeout=120  # 2 minute timeout for large uploads
             )

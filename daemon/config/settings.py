@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     default_llm_model: Optional[str] = "gpt-4o"
     auto_upload_enabled: bool = True
     process_full_pipeline: bool = True
+    
+    # Feature Flags
+    bypass_device_auth: bool = True  # Set to False to re-enable device authentication
 
     # Database - Use existing Knowledge_Chipper database
     # Default to project root, but can be overridden with KC_DATABASE_PATH env var

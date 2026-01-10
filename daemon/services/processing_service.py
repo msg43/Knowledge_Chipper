@@ -648,7 +648,8 @@ class ProcessingService:
                 # Convert extraction result to format expected by uploader
                 session_data = self._prepare_upload_data(job_data)
                 
-                uploader = GetReceiptsUploader()
+                # Initialize uploader with bypass flag from settings
+                uploader = GetReceiptsUploader(bypass_device_auth=settings.bypass_device_auth)
                 
                 if uploader.is_enabled():
                     upload_result = await asyncio.to_thread(
