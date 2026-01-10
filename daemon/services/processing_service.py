@@ -767,15 +767,8 @@ class ProcessingService:
                         "definition": term.get("definition", ""),
                     })
             
-            # Add concepts
-            concepts = extraction.extraction.concepts or []
-            for concept in concepts:
-                if isinstance(concept, dict):
-                    session_data["concepts"].append({
-                        "source_id": source_id,
-                        "name": concept.get("name", ""),
-                        "description": concept.get("description", ""),
-                    })
+            # Note: ExtractionResult doesn't have 'concepts' - it has 'mental_models' instead
+            # Concepts are not extracted in the two-pass pipeline
         
         return session_data
 
