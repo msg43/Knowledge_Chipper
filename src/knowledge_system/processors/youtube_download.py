@@ -100,6 +100,9 @@ class YouTubeDownloadProcessor(BaseProcessor):
             "no_part": False,  # Enable partial downloading/resuming for connection interruptions
             # Exponential backoff retry strategy (limited retries to avoid looking suspicious)
             "retries": 4,  # Retry up to 4 times (avoids infinite hammering on persistent failures)
+            # Workaround for yt-dlp without Deno/Node.js runtime
+            # Uses default player client which doesn't require JavaScript execution
+            "extractor_args": {"youtube": {"player_client": ["default"]}},
             "retry_sleep": "3,8,15,34",  # Custom backoff sequence: 3s, 8s, 15s, 34s (total ~60s)
             "extractor_retries": 5,
             "socket_timeout": 60,  # Longer timeout to handle stalls
@@ -610,101 +613,21 @@ class YouTubeDownloadProcessor(BaseProcessor):
         thumbnails_dir = output_dir / "Thumbnails"
         thumbnails_dir.mkdir(exist_ok=True)
 
-        # PROXY CONFIGURATION - PacketStream (optional)
+        # DEPRECATED: PacketStream proxy code removed
+        # Now using browser cookies for authentication instead
         from ..config import get_settings
-        from ..utils.packetstream_proxy import PacketStreamProxyManager
 
         settings = get_settings()
         yt_config = settings.youtube_processing
 
-        # Note: VideoDeduplicationService already initialized at line 170
-        # No need to reinitialize here
+        # No proxy - using browser cookies for authentication
+        use_proxy = False
+        proxy_manager = None
+        proxy_url = None
 
-        # Check if we should disable proxies due to cookie usage
-        # Use instance variables if available, otherwise fall back to config
-        enable_cookies_check = (
-            self.enable_cookies
-            if hasattr(self, "enable_cookies")
-            else yt_config.enable_cookies
-        )
-        # CRITICAL: Check instance variable first (from GUI), then fall back to config
-        disable_proxies_check = (
-            self.disable_proxies_with_cookies
-            if self.disable_proxies_with_cookies is not None
-            else yt_config.disable_proxies_with_cookies
-        )
-
-        # DIAGNOSTIC LOGGING
-        logger.info(f"🔍 Proxy/Cookie Decision Point:")
-        logger.info(f"   self.enable_cookies = {self.enable_cookies}")
-        logger.info(f"   self.cookie_file_path = {self.cookie_file_path}")
-        logger.info(
-            f"   self.disable_proxies_with_cookies = {self.disable_proxies_with_cookies}"
-        )
-        logger.info(f"   enable_cookies_check = {enable_cookies_check}")
-        logger.info(f"   disable_proxies_check = {disable_proxies_check}")
-        logger.info(
-            f"   Decision: {'DISABLE PROXIES' if (enable_cookies_check and disable_proxies_check) else 'USE PROXIES'}"
-        )
-
-        if enable_cookies_check and disable_proxies_check:
-            use_proxy = False
-            proxy_manager = None
-            proxy_url = None
-            logger.info(
-                "🏠 Cookies enabled - using direct connection (home IP) as configured"
-            )
-            if progress_callback:
-                progress_callback("🏠 Using cookies with home IP (proxies disabled)")
-        else:
-            # PacketStream proxy (optional)
-            use_proxy = False
-            proxy_manager = None
-            proxy_url = None
-
-            try:
-                proxy_manager = PacketStreamProxyManager()
-                if proxy_manager.username and proxy_manager.auth_key:
-                    use_proxy = True
-                    logger.info(
-                        "🌐 Using PacketStream residential proxies for YouTube processing"
-                    )
-                    if progress_callback:
-                        progress_callback("🌐 Using PacketStream residential proxies...")
-                else:
-                    logger.warning("⚠️ PACKETSTREAM CREDENTIALS NOT CONFIGURED")
-                    logger.warning(
-                        "⚠️ Using direct access - YouTube may block bulk downloads!"
-                    )
-                    if progress_callback:
-                        progress_callback(
-                            "⚠️ PacketStream not configured - risk of YouTube blocking..."
-                        )
-            except Exception as e:
-                logger.warning(f"⚠️ PACKETSTREAM PROXY NOT AVAILABLE: {e}")
-                logger.warning(
-                    "⚠️ Using direct access - YouTube may trigger anti-bot detection for downloads!"
-                )
-                logger.warning(
-                    "⚠️ For reliable bulk downloads, configure PacketStream in Settings > API Keys"
-                )
-                if progress_callback:
-                    progress_callback(
-                        "⚠️ PacketStream proxy not configured - using direct access (may be blocked)..."
-                    )
-
-        # Note: PacketStream is optional - we can proceed without it (but may get rate limited)
-
-        # PROXY CONFIGURATION
-        # Note: Proxy is configured and will be tested per-URL
-        # Each URL gets unique session ID for IP rotation
-
-        if use_proxy and proxy_manager:
-            logger.info("✅ Using PacketStream proxy for downloads")
-            if progress_callback:
-                progress_callback("✅ PacketStream proxy configured")
-
-        # Proxy usage with PacketStream (optional); no legacy WebShare fallback
+        logger.info("🍪 Using browser cookie authentication (PacketStream deprecated)")
+        if progress_callback:
+            progress_callback("🍪 Authenticating with browser cookies")
 
         # Configure base yt-dlp options
         import copy
@@ -747,49 +670,45 @@ class YouTubeDownloadProcessor(BaseProcessor):
                 f"sleep_requests={yt_config.sleep_requests}s"
             )
 
-        # Add cookies if enabled (file upload only - browser extraction disabled for security)
-        # Use instance variables passed during initialization, not config file
-        logger.info(f"🔍 Cookie File Check:")
+        # Add cookies if enabled
+        # Auto-detect from browsers if no file path provided
+        logger.info(f"🔍 Cookie Configuration:")
         logger.info(f"   self.enable_cookies = {self.enable_cookies}")
         logger.info(f"   self.cookie_file_path = {self.cookie_file_path}")
 
-        if self.enable_cookies and self.cookie_file_path:
-            cookie_path = Path(self.cookie_file_path)
-            logger.info(f"   Cookie file exists: {cookie_path.exists()}")
-            if cookie_path.exists():
-                logger.info(f"   Cookie file size: {cookie_path.stat().st_size} bytes")
-                ydl_opts["cookiefile"] = self.cookie_file_path
-                logger.info(f"✅ Using cookies from file: {self.cookie_file_path}")
-                logger.info(
-                    f"✅ yt-dlp cookiefile option set to: {ydl_opts.get('cookiefile')}"
-                )
-
-                # Disable sleep intervals when using cookies - authenticated requests don't need delays
-                # The scheduler handles delays between videos, so yt-dlp doesn't need to sleep
-                ydl_opts["sleep_interval"] = 0
-                ydl_opts["max_sleep_interval"] = 0
-                ydl_opts["sleep_interval_requests"] = 0
-                logger.info(
-                    f"✅ Disabled yt-dlp sleep intervals (using cookies - scheduler handles delays)"
-                )
-
-                # NOTE: Do NOT use tv_embedded client when using cookies
-                # tv_embedded breaks audio-only format selection with ba/worst
-                # The default client works perfectly with cookies for audio-only downloads
-                logger.info(
-                    f"✅ Using default client (works best with cookies for audio-only)"
-                )
-
-                if progress_callback:
-                    progress_callback(f"🍪 Using cookies from throwaway account")
+        if self.enable_cookies:
+            if self.cookie_file_path:
+                # Use explicit cookie file if provided
+                cookie_path = Path(self.cookie_file_path)
+                logger.info(f"   Cookie file exists: {cookie_path.exists()}")
+                if cookie_path.exists():
+                    logger.info(f"   Cookie file size: {cookie_path.stat().st_size} bytes")
+                    ydl_opts["cookiefile"] = self.cookie_file_path
+                    logger.info(f"✅ Using cookies from file: {self.cookie_file_path}")
+                else:
+                    logger.warning(f"⚠️ Cookie file not found: {self.cookie_file_path}")
+                    if progress_callback:
+                        progress_callback(f"⚠️ Cookie file not found - trying browser cookies")
             else:
-                logger.warning(f"⚠️ Cookie file not found: {self.cookie_file_path}")
+                # Auto-detect cookies from browsers (Chrome, Safari, Firefox, etc.)
+                logger.info("🔍 Auto-detecting cookies from browsers...")
+                # yt-dlp will automatically try browsers in order: chrome, safari, firefox, etc.
+                # We use cookiesfrombrowser to let yt-dlp handle the browser detection
+                ydl_opts["cookiesfrombrowser"] = ("chrome",)  # Try Chrome first, yt-dlp will fallback to others
+                logger.info("✅ Configured to auto-load cookies from browser (Chrome → Safari → Firefox)")
                 if progress_callback:
-                    progress_callback(
-                        f"⚠️ Cookie file not found - proceeding without cookies"
-                    )
+                    progress_callback("🍪 Using cookies from your browser")
+
+            # Disable sleep intervals when using cookies - authenticated requests don't need delays
+            ydl_opts["sleep_interval"] = 0
+            ydl_opts["max_sleep_interval"] = 0
+            ydl_opts["sleep_interval_requests"] = 0
+            logger.info("✅ Disabled yt-dlp sleep intervals (using authenticated cookies)")
+
+            # Use default client with cookies (works best for audio-only downloads)
+            logger.info("✅ Using default player client (optimal with cookies)")
         else:
-            logger.info(f"   Cookies NOT enabled or no cookie file path provided")
+            logger.info("   Cookies NOT enabled")
 
         # NOTE: Do NOT add custom user-agent or http_headers when using PacketStream
         # PacketStream residential proxies work best with yt-dlp's default headers
@@ -976,41 +895,10 @@ class YouTubeDownloadProcessor(BaseProcessor):
                 if force_redownload and source_id:
                     self._delete_existing_audio_files(output_dir, source_id)
 
-                # Single-use IP strategy: Generate unique session ID for each video
-                current_proxy_url = None
-                session_id = None  # Initialize session_id
-                if use_proxy and proxy_manager:
-                    from ..utils.packetstream_proxy import PacketStreamProxyManager
-
-                    # Generate unique session ID for this video (single-use IP)
-                    # Add timestamp and random component to ensure uniqueness
-                    session_id = PacketStreamProxyManager.generate_session_id(
-                        url, source_id
-                    )
-                    # Make it truly unique by adding timestamp
-                    session_id = (
-                        f"{session_id}_{int(time.time())}_{random.randint(1000, 9999)}"
-                    )
-
-                    current_proxy_url = proxy_manager.get_proxy_url(
-                        session_id=session_id
-                    )
-
-                if current_proxy_url and source_id and session_id:
+                # No proxy - using browser cookies for authentication
+                if source_id:
                     logger.info(
-                        f"Using PacketStream proxy session '{session_id}' for video {source_id} ({i}/{len(urls)})"
-                    )
-                    logger.info(
-                        f"Proxy URL format: {current_proxy_url.split('@')[0]}@***"
-                    )
-                elif current_proxy_url:
-                    logger.info(f"Using PacketStream proxy for URL ({i}/{len(urls)})")
-                    logger.info(
-                        f"Proxy URL format: {current_proxy_url.split('@')[0]}@***"
-                    )
-                elif source_id:
-                    logger.info(
-                        f"Using direct connection for video {source_id} (no proxy configured)"
+                        f"Using browser cookie authentication for video {source_id} ({i}/{len(urls)})"
                     )
 
                 # Extract metadata to verify video availability
@@ -1029,8 +917,8 @@ class YouTubeDownloadProcessor(BaseProcessor):
                     # Skip connectivity test when using cookies - cookies provide authentication
                     # and the test is redundant (and can trigger wrong format selection)
                     if not self.enable_cookies:
-                        # Test proxy connectivity (only when NOT using cookies)
-                        test_opts = {**ydl_opts, "proxy": current_proxy_url}
+                        # Test connectivity (only when NOT using cookies)
+                        test_opts = {**ydl_opts}
                         test_opts.update(
                             {
                                 "quiet": True,
@@ -1040,19 +928,10 @@ class YouTubeDownloadProcessor(BaseProcessor):
                             }
                         )
 
-                        proxy_type = (
-                            "PacketStream" if use_proxy else "Direct (NO PROXY)"
-                        )
                         with yt_dlp.YoutubeDL(test_opts) as ydl_test:
-                            logger.info(f"Testing {proxy_type} connectivity for: {url}")
-                            if progress_callback and not use_proxy:
-                                progress_callback(
-                                    "⚠️ WARNING: Using direct connection (no proxy protection)"
-                                )
+                            logger.info(f"Testing connectivity for: {url}")
                             if progress_callback:
-                                progress_callback(
-                                    f"🔗 Testing {proxy_type} connectivity..."
-                                )
+                                progress_callback("🔗 Testing connectivity...")
 
                             # Quick connectivity test
                             test_info = ydl_test.extract_info(url, download=False)
@@ -1061,15 +940,13 @@ class YouTubeDownloadProcessor(BaseProcessor):
                                     "Connectivity test failed - no video info returned"
                                 )
 
-                            logger.info(f"✅ {proxy_type} connectivity test passed")
+                            logger.info("✅ Connectivity test passed")
                             if progress_callback:
-                                progress_callback(
-                                    f"✅ {proxy_type} working - extracting metadata..."
-                                )
+                                progress_callback("✅ Connected - extracting metadata...")
 
                     # Extract full metadata
-                    # IMPORTANT: Merge full ydl_opts (with cookies, Android client, etc)
-                    metadata_opts = {**ydl_opts, "proxy": current_proxy_url}
+                    # IMPORTANT: Merge full ydl_opts (with cookies, etc)
+                    metadata_opts = {**ydl_opts}
                     metadata_opts.update(
                         {
                             "quiet": True,
@@ -1176,17 +1053,17 @@ class YouTubeDownloadProcessor(BaseProcessor):
                 if progress_callback:
                     progress_callback("🚀 Starting download...")
 
-                # Configure yt-dlp options with the specific proxy for this video
-                final_ydl_opts = {**ydl_opts, "proxy": current_proxy_url}
+                # Configure yt-dlp options (no proxy - using cookies)
+                final_ydl_opts = {**ydl_opts}
 
                 # Suppress yt-dlp's stderr output to prevent spurious error messages like "ERROR: 'webm'"
                 # But capture it for error analysis
                 with suppress_stderr() as captured_stderr:
                     with yt_dlp.YoutubeDL(final_ydl_opts) as ydl:
                         logger.info(f"Downloading audio for: {url}{playlist_context}")
-                        if use_proxy and source_id:
+                        if source_id:
                             logger.info(
-                                f"Using PacketStream proxy for video {source_id}"
+                                f"Using browser cookie authentication for video {source_id}"
                             )
 
                         try:

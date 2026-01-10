@@ -598,7 +598,11 @@ class ProcessingService:
                         model = "gpt-4o"  # fallback to OpenAI
                 
                 # Initialize LLM adapter
-                llm = LLMAdapter(provider=provider)
+                llm = LLMAdapter(
+                    provider=provider,
+                    model=model,
+                    temperature=0.3,
+                )
                 
                 # Run two-pass pipeline
                 pipeline = TwoPassPipeline(llm_adapter=llm)
