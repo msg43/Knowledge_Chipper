@@ -1,7 +1,7 @@
 # Skipthepodcast.com Development Makefile
 # Comprehensive local testing and development commands
 
-.PHONY: help install test test-quick test-full test-unit test-integration test-gui \
+.PHONY: help install test test-quick test-full test-unit test-integration test-gui test-daemon \
         lint format type-check security-check pre-commit-all clean build \
         release-test smoke-test coverage dependencies-check update-ytdlp test-ytdlp-update check-ytdlp-releases
 
@@ -27,7 +27,8 @@ help:
 	@echo "  make test-quick      Run fast unit tests only (< 30 seconds)"
 	@echo "  make test-unit       Run all unit tests"
 	@echo "  make test-integration Run integration tests"
-	@echo "  make test-gui        Run GUI tests"
+	@echo "  make test-daemon     Run daemon API tests"
+	@echo "  make test-gui        Run GUI tests (deprecated)"
 	@echo "  make smoke-test      Quick smoke test to verify basic functionality"
 	@echo "  make coverage        Run tests with coverage reporting"
 	@echo ""
@@ -107,6 +108,11 @@ test-integration:
 test-gui:
 	@echo "🖥️  Running GUI tests..."
 	pytest tests/gui_comprehensive/ -v --maxfail=2
+
+test-daemon:
+	@echo "🔌 Running daemon API tests..."
+	python3 -m pytest tests/daemon/ -v --maxfail=3
+	@echo "✅ Daemon tests passed!"
 
 test-full:
 	@echo "🎯 Running comprehensive test suite..."

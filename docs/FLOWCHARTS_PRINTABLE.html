@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GetReceipts User Extraction Journey - Printable Version</title>
+    <style>
+        /* Print-optimized styles */
+        @page {
+            size: letter landscape;
+            margin: 0.5in;
+        }
+        
+        * {
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 100%;
+            margin: 0;
+            padding: 20px;
+            background: white;
+        }
+        
+        h1 {
+            color: #2c3e50;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+            page-break-after: avoid;
+        }
+        
+        h2 {
+            color: #34495e;
+            margin-top: 30px;
+            border-bottom: 2px solid #95a5a6;
+            padding-bottom: 8px;
+            page-break-after: avoid;
+        }
+        
+        h3 {
+            color: #7f8c8d;
+            margin-top: 20px;
+            page-break-after: avoid;
+        }
+        
+        p {
+            margin: 10px 0;
+            orphans: 3;
+            widows: 3;
+        }
+        
+        .legend {
+            display: flex;
+            gap: 20px;
+            margin: 20px 0;
+            padding: 15px;
+            background: #ecf0f1;
+            border-radius: 8px;
+            page-break-inside: avoid;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+        }
+        
+        .legend-icon {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        
+        .web-only { background: #4CAF50; color: white; }
+        .desktop-only { background: #2196F3; color: white; }
+        .hybrid { background: #9C27B0; color: white; }
+        
+        .flowchart-container {
+            margin: 30px 0;
+            padding: 20px;
+            border: 2px solid #bdc3c7;
+            border-radius: 8px;
+            background: #fafafa;
+            page-break-inside: avoid;
+        }
+        
+        .flowchart-description {
+            font-style: italic;
+            color: #7f8c8d;
+            margin-bottom: 15px;
+        }
+        
+        .mermaid-placeholder {
+            background: white;
+            border: 1px dashed #95a5a6;
+            padding: 20px;
+            margin: 15px 0;
+            min-height: 400px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            color: #7f8c8d;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            page-break-inside: auto;
+        }
+        
+        thead {
+            background: #34495e;
+            color: white;
+        }
+        
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border: 1px solid #bdc3c7;
+        }
+        
+        tr {
+            page-break-inside: avoid;
+            page-break-after: auto;
+        }
+        
+        tbody tr:nth-child(even) {
+            background: #ecf0f1;
+        }
+        
+        .feature-category {
+            font-weight: bold;
+            background: #95a5a6 !important;
+            color: white;
+        }
+        
+        .checkmark {
+            color: #27ae60;
+            font-weight: bold;
+        }
+        
+        .xmark {
+            color: #e74c3c;
+            font-weight: bold;
+        }
+        
+        .sequence-diagram {
+            background: white;
+            border: 1px solid #bdc3c7;
+            padding: 20px;
+            margin: 15px 0;
+            page-break-inside: avoid;
+        }
+        
+        .participant {
+            display: inline-block;
+            padding: 8px 16px;
+            margin: 5px;
+            background: #3498db;
+            color: white;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        
+        .note {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 15px 0;
+            page-break-inside: avoid;
+        }
+        
+        .note strong {
+            color: #856404;
+        }
+        
+        /* Print-specific styles */
+        @media print {
+            body {
+                padding: 0;
+            }
+            
+            .no-print {
+                display: none !important;
+            }
+            
+            h1, h2, h3 {
+                page-break-after: avoid;
+            }
+            
+            .flowchart-container,
+            .legend,
+            table,
+            .sequence-diagram,
+            .note {
+                page-break-inside: avoid;
+            }
+            
+            a {
+                text-decoration: none;
+                color: #333;
+            }
+            
+            a[href^="http"]:after {
+                content: " (" attr(href) ")";
+                font-size: 0.8em;
+                color: #666;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="no-print" style="background: #3498db; color: white; padding: 15px; margin: -20px -20px 20px -20px; border-radius: 0;">
+        <p style="margin: 0;"><strong>💡 Tip:</strong> Use your browser's print function (Cmd+P / Ctrl+P) to save as PDF or print. Landscape orientation recommended.</p>
+    </div>
+
+    <h1>🧠 GetReceipts User Extraction Journey</h1>
+    <p><strong>Complete Flowcharts & Wireframes</strong></p>
+    <p><em>Updated: January 11, 2026 - Added Desktop Shortcut & Daemon 1.1.1 Updates</em></p>
+
+    <div class="legend">
+        <div class="legend-item">
+            <span class="legend-icon web-only">🌐</span>
+            <span>Web Only (GetReceipts.org)</span>
+        </div>
+        <div class="legend-item">
+            <span class="legend-icon desktop-only">💻</span>
+            <span>Desktop Only (Knowledge_Chipper)</span>
+        </div>
+        <div class="legend-item">
+            <span class="legend-icon hybrid">🌐💻</span>
+            <span>Web + Local Daemon</span>
+        </div>
+    </div>
+
+    <!-- Complete User Journey Flow -->
+    <div class="flowchart-container">
+        <h2>🔄 Complete User Journey Flow</h2>
+        <p class="flowchart-description">
+            This comprehensive flowchart shows the entire processing pipeline from initial daemon detection through all content ingestion workflows to final upload.
+        </p>
+        
+        <div class="note">
+            <strong>📋 Key Processing Steps:</strong>
+            <ol>
+                <li><strong>Daemon Detection:</strong> Web checks localhost:8765 for running daemon</li>
+                <li><strong>Installation:</strong> DMG installer creates desktop shortcut at ~/Desktop/GetReceipts Daemon.app</li>
+                <li><strong>Device Linking:</strong> First-time setup links device to user account</li>
+                <li><strong>Content Ingestion:</strong> Supports YouTube URLs, playlists, RSS feeds, local files, documents</li>
+                <li><strong>Transcription:</strong> Uses YouTube transcripts when available, falls back to Whisper</li>
+                <li><strong>Two-Pass Extraction:</strong>
+                    <ul>
+                        <li>Pass 1: Extract claims, jargon, people, mental models with 6D scoring</li>
+                        <li>Pass 2: Synthesize high-importance claims (≥7.0) into thematic summary</li>
+                    </ul>
+                </li>
+                <li><strong>Upload:</strong> Auto-upload to GetReceipts.org (if enabled)</li>
+            </ol>
+        </div>
+
+        <div class="mermaid-placeholder">
+            <div style="text-align: center;">
+                <p><strong>📊 Complete User Journey Flowchart</strong></p>
+                <p>See online version at <a href="https://www.getreceipts.org/flowcharts.html">getreceipts.org/flowcharts.html</a> for interactive Mermaid diagram</p>
+                <p style="margin-top: 20px; font-size: 12px; color: #95a5a6;">
+                    Flow: User visits web → Daemon check → Device linking → Content input → Type detection → 
+                    Download/Upload → Transcription → Two-pass extraction → Upload to cloud
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Questions, Predictions & Health Data Flow -->
+    <div class="flowchart-container" style="page-break-before: always;">
+        <h2>📊 Data Flow: Questions, Predictions & Health Tracking</h2>
+        <p class="flowchart-description">
+            This flowchart shows how extracted data from Knowledge_Chipper and user-entered data flow into the Questions, Predictions, and Health tracking systems on GetReceipts.org.
+        </p>
+        
+        <div class="note">
+            <strong>🔄 Data Flow Overview:</strong>
+            <ol>
+                <li><strong>Desktop Extraction:</strong> Knowledge_Chipper extracts claims from content</li>
+                <li><strong>Web Manual Entry:</strong> Users create questions, predictions, health data directly on web</li>
+                <li><strong>Linking:</strong> Claims can be linked to questions, predictions, and health interventions</li>
+                <li><strong>Tracking:</strong> System tracks outcomes, metrics, and predictions over time</li>
+                <li><strong>Analysis:</strong> AI analyzes patterns and generates insights</li>
+            </ol>
+        </div>
+
+        <div class="mermaid-placeholder">
+            <div style="text-align: center;">
+                <p><strong>📊 Questions, Predictions & Health Data Flow</strong></p>
+                <p>See online version for interactive diagram</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Refinement Learning Loop -->
+    <div class="flowchart-container">
+        <h2>🔄 Refinement Learning Loop</h2>
+        <p class="flowchart-description">
+            Shows how user corrections on GetReceipts.org automatically improve future extractions by the local daemon.
+        </p>
+        
+        <div class="note">
+            <strong>🧠 Learning Loop Process:</strong>
+            <ol>
+                <li><strong>Review:</strong> User reviews extracted entities on web dashboard</li>
+                <li><strong>Correct:</strong> User approves/rejects/edits claims, jargon, people, models</li>
+                <li><strong>Synthesize:</strong> AI analyzes corrections to identify patterns</li>
+                <li><strong>Generate Refinements:</strong> System creates prompt improvements</li>
+                <li><strong>Sync:</strong> Daemon downloads refinements on startup</li>
+                <li><strong>Apply:</strong> Future extractions use improved prompts</li>
+            </ol>
+        </div>
+
+        <div class="mermaid-placeholder">
+            <div style="text-align: center;">
+                <p><strong>🔄 Refinement Learning Loop Flowchart</strong></p>
+                <p>See online version for interactive diagram</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Processing Sequence -->
+    <div class="flowchart-container" style="page-break-before: always;">
+        <h2>⏱️ Processing Sequence (Web + Daemon)</h2>
+        
+        <div class="sequence-diagram">
+            <p><strong>Participants:</strong></p>
+            <div style="margin: 15px 0;">
+                <span class="participant">User</span>
+                <span class="participant">GetReceipts.org</span>
+                <span class="participant">Local Daemon</span>
+                <span class="participant">YouTube</span>
+                <span class="participant">Whisper</span>
+                <span class="participant">Cloud LLM</span>
+                <span class="participant">Supabase</span>
+            </div>
+
+            <div style="margin-top: 20px;">
+                <p><strong>Sequence:</strong></p>
+                <ol>
+                    <li>User visits /contribute on GetReceipts.org</li>
+                    <li>Web checks daemon health at localhost:8765</li>
+                    <li>If daemon not running → Show installer prompt</li>
+                    <li>User enters YouTube URL or drags files</li>
+                    <li>User configures options in Settings</li>
+                    <li>Web sends POST /api/process to daemon</li>
+                    <li><strong>Stage 1 - Download:</strong> Daemon downloads audio from YouTube</li>
+                    <li><strong>Stage 2 - Transcribe:</strong> Daemon processes with Whisper model</li>
+                    <li><strong>Stage 3 - Extract:</strong> Daemon performs two-pass extraction via Cloud LLM</li>
+                    <li><strong>Stage 4 - Upload:</strong> Daemon uploads to Supabase via device auth</li>
+                    <li>Supabase returns episode code</li>
+                    <li>Daemon returns completion status with link to web</li>
+                    <li>Web shows success message with "View episode" link</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+
+    <!-- Feature Matrix -->
+    <div style="page-break-before: always;">
+        <h2>📊 GetReceipts Feature Matrix</h2>
+        <div class="note">
+            <strong>ℹ️ About GetReceipts:</strong> GetReceipts is a <strong>hybrid application</strong>: the web interface at getreceipts.org/contribute communicates with a local daemon (Knowledge_Chipper v1.1.1) that handles compute-intensive tasks like transcription and AI extraction. The daemon runs in the background with no GUI - all interaction happens through the web browser.
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 40%;">Feature</th>
+                    <th style="width: 20%;">🖥️ Requires Local Daemon</th>
+                    <th style="width: 15%;">🌐 Interface</th>
+                    <th style="width: 25%;">📝 Notes</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr class="feature-category">
+                    <td colspan="4">📥 Content Ingestion</td>
+                </tr>
+                <tr>
+                    <td>→ YouTube Single URL</td>
+                    <td><span class="checkmark">✅ Yes</span></td>
+                    <td>Web UI</td>
+                    <td>Enter URL at getreceipts.org/contribute</td>
+                </tr>
+                <tr>
+                    <td>→ YouTube Batch URLs <strong>NEW</strong></td>
+                    <td><span class="checkmark">✅ Yes</span></td>
+                    <td>Web UI</td>
+                    <td>Paste multiple URLs, one per line</td>
+                </tr>
+                <tr>
+                    <td>→ YouTube Playlist/Channel <strong>NEW</strong></td>
+                    <td><span class="checkmark">✅ Yes</span></td>
+                    <td>Web UI</td>
+                    <td>Automatically expands to individual videos</td>
+                </tr>
+                <tr>
+                    <td>→ Local Audio/Video Files</td>
+                    <td><span class="checkmark">✅ Yes</span></td>
+                    <td>Web UI</td>
+                    <td>Drag & drop files into browser</td>
+                </tr>
+                <tr>
+                    <td>→ PDF/DOCX Transcripts</td>
+                    <td><span class="checkmark">✅ Yes</span></td>
+                    <td>Web UI</td>
+                    <td>Drag & drop documents, optional YouTube matching</td>
+                </tr>
+                <tr>
+                    <td>→ RSS/Podcast Feeds <strong>NEW</strong></td>
+                    <td><span class="checkmark">✅ Yes</span></td>
+                    <td>Web UI</td>
+                    <td>Batch import up to 9999 episodes</td>
+                </tr>
+                <tr>
+                    <td>→ Folder Watching <strong>NEW</strong></td>
+                    <td><span class="checkmark">✅ Yes</span></td>
+                    <td>Daemon UI</td>
+                    <td>Auto-process files dropped into watched folder</td>
+                </tr>
+
+                <tr class="feature-category">
+                    <td colspan="4">⚙️ Processing Pipeline</td>
+                </tr>
+                <tr>
+                    <td>→ Whisper Transcription</td>
+                    <td><span class="checkmark">✅ Yes</span></td>
+                    <td>Both</td>
+                    <td>Local CPU/GPU processing, configurable model size</td>
+                </tr>
+                <tr>
+                    <td>→ Two-Pass AI Extraction</td>
+                    <td><span class="checkmark">✅ Yes</span></td>
+                    <td>Both</td>
+                    <td>Claims, jargon, people, mental models, synthesis</td>
+                </tr>
+                <tr>
+                    <td>→ Refinement Injection (Learning Loop) <strong>NEW</strong></td>
+                    <td><span class="checkmark">✅ Yes</span></td>
+                    <td>Automatic</td>
+                    <td>Web corrections improve future extractions</td>
+                </tr>
+                <tr>
+                    <td>→ LLM Provider Selection</td>
+                    <td><span class="checkmark">✅ Yes</span></td>
+                    <td>Web Settings</td>
+                    <td>OpenAI (GPT-4o), Anthropic (Claude 3.5 Sonnet)</td>
+                </tr>
+
+                <tr class="feature-category">
+                    <td colspan="4">📋 Job Management</td>
+                </tr>
+                <tr>
+                    <td>→ Job Queue Monitoring</td>
+                    <td><span class="checkmark">✅ Yes</span></td>
+                    <td>Web Monitor</td>
+                    <td>Real-time progress, stage tracking, logs</td>
+                </tr>
+                <tr>
+                    <td>→ Filter by Status/Type</td>
+                    <td><span class="checkmark">✅ Yes</span></td>
+                    <td>Web Monitor</td>
+                    <td>Filter pending/running/completed/failed jobs</td>
+                </tr>
+                <tr>
+                    <td>→ Retry Failed Jobs</td>
+                    <td><span class="checkmark">✅ Yes</span></td>
+                    <td>Web Monitor</td>
+                    <td>One-click retry with error logs</td>
+                </tr>
+                <tr>
+                    <td>→ Cancel Running Jobs</td>
+                    <td><span class="checkmark">✅ Yes</span></td>
+                    <td>Web Monitor</td>
+                    <td>Graceful cancellation with cleanup</td>
+                </tr>
+
+                <tr class="feature-category">
+                    <td colspan="4">⚙️ Configuration</td>
+                </tr>
+                <tr>
+                    <td>→ API Key Management</td>
+                    <td><span class="checkmark">✅ Yes</span></td>
+                    <td>Web Settings</td>
+                    <td>OpenAI and Anthropic keys stored locally</td>
+                </tr>
+                <tr>
+                    <td>→ Whisper Model Selection</td>
+                    <td><span class="checkmark">✅ Yes</span></td>
+                    <td>Web Settings</td>
+                    <td>tiny (fast) → large (accurate)</td>
+                </tr>
+                <tr>
+                    <td>→ Processing Defaults</td>
+                    <td><span class="checkmark">✅ Yes</span></td>
+                    <td>Web Settings</td>
+                    <td>Auto-upload, LLM provider, model preferences</td>
+                </tr>
+                <tr>
+                    <td>→ Device Linking</td>
+                    <td><span class="xmark">❌ No</span></td>
+                    <td>Web Auth</td>
+                    <td>One-time setup, automatic on first launch</td>
+                </tr>
+                <tr>
+                    <td>→ Desktop Shortcut Control <strong>NEW</strong></td>
+                    <td><span class="checkmark">✅ Yes</span></td>
+                    <td>Desktop Icon</td>
+                    <td>Start/restart/stop daemon via ~/Desktop/GetReceipts Daemon.app</td>
+                </tr>
+
+                <tr class="feature-category">
+                    <td colspan="4">☁️ Upload & Sync</td>
+                </tr>
+                <tr>
+                    <td>→ Auto-Upload to GetReceipts</td>
+                    <td><span class="checkmark">✅ Yes</span></td>
+                    <td>Automatic</td>
+                    <td>Uploads after extraction completes (if enabled)</td>
+                </tr>
+                <tr>
+                    <td>→ Manual Upload</td>
+                    <td><span class="checkmark">✅ Yes</span></td>
+                    <td>Daemon UI</td>
+                    <td>Upload previously processed episodes</td>
+                </tr>
+                <tr>
+                    <td>→ Sync Refinements</td>
+                    <td><span class="checkmark">✅ Yes</span></td>
+                    <td>Automatic</td>
+                    <td>Downloads prompt improvements on startup</td>
+                </tr>
+
+                <tr class="feature-category">
+                    <td colspan="4">🌐 Web-Only Features (No Daemon Required)</td>
+                </tr>
+                <tr>
+                    <td>→ Browse Episodes</td>
+                    <td><span class="xmark">❌ No</span></td>
+                    <td>Web Dashboard</td>
+                    <td>Search, filter, view all uploaded content</td>
+                </tr>
+                <tr>
+                    <td>→ Questions Management <strong>NEW</strong></td>
+                    <td><span class="xmark">❌ No</span></td>
+                    <td>/dashboard/questions</td>
+                    <td>Create, edit, delete questions; link to claims</td>
+                </tr>
+                <tr>
+                    <td>→ Prediction Markets <strong>NEW</strong></td>
+                    <td><span class="xmark">❌ No</span></td>
+                    <td>/dashboard/predictions</td>
+                    <td>Create predictions, trade shares, track mana balance</td>
+                </tr>
+                <tr>
+                    <td>→ Health Tracking <strong>NEW</strong></td>
+                    <td><span class="xmark">❌ No</span></td>
+                    <td>/dashboard/health</td>
+                    <td>Track interventions, metrics, and health issues</td>
+                </tr>
+                <tr>
+                    <td>→ Review & Correct Entities</td>
+                    <td><span class="xmark">❌ No</span></td>
+                    <td>Web Dashboard</td>
+                    <td>Approve/reject claims, jargon, people, models</td>
+                </tr>
+                <tr>
+                    <td>→ Synthesize Patterns</td>
+                    <td><span class="xmark">❌ No</span></td>
+                    <td>Web Dashboard</td>
+                    <td>AI analyzes corrections to generate refinements</td>
+                </tr>
+                <tr>
+                    <td>→ Manage Prompt Refinements</td>
+                    <td><span class="xmark">❌ No</span></td>
+                    <td>Web Dashboard</td>
+                    <td>Approve/edit/deactivate prompt improvements</td>
+                </tr>
+                <tr>
+                    <td>→ Export Data</td>
+                    <td><span class="xmark">❌ No</span></td>
+                    <td>Web Dashboard</td>
+                    <td>Download claims, transcripts, metadata</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="note" style="margin-top: 30px;">
+        <strong>📄 Document Information:</strong>
+        <ul style="margin: 10px 0;">
+            <li><strong>Source:</strong> <a href="https://www.getreceipts.org/flowcharts.html">getreceipts.org/flowcharts.html</a></li>
+            <li><strong>Last Updated:</strong> January 11, 2026</li>
+            <li><strong>Generated:</strong> January 11, 2026</li>
+            <li><strong>Daemon Version:</strong> 1.1.1 (January 11, 2026)</li>
+            <li><strong>Note:</strong> Interactive Mermaid flowcharts are best viewed online. This printable version includes descriptions and key information.</li>
+        </ul>
+    </div>
+
+    <div class="note" style="margin-top: 20px; background: #e3f2fd; border-left-color: #2196F3;">
+        <strong>🆕 What's New in Daemon 1.1.1:</strong>
+        <ul style="margin: 10px 0;">
+            <li><strong>Desktop Shortcut:</strong> Installer now creates ~/Desktop/GetReceipts Daemon.app for easy start/restart/stop</li>
+            <li><strong>Daemon-Only Architecture:</strong> GUI completely removed - all interaction via web browser</li>
+            <li><strong>Reduced Dependencies:</strong> 44% fewer dependencies (45→25), 84% smaller DMG (2.5GB→400MB)</li>
+            <li><strong>Faster Builds:</strong> Build time reduced by 75% (~20min→5min)</li>
+            <li><strong>Version Numbering:</strong> Now uses daemon version (1.1.1) instead of legacy app version (4.1.0)</li>
+        </ul>
+    </div>
+
+    <footer style="margin-top: 40px; padding-top: 20px; border-top: 2px solid #bdc3c7; text-align: center; color: #7f8c8d; font-size: 12px;">
+        <p>GetReceipts.org - Knowledge Extraction & Management System</p>
+        <p>For interactive flowcharts and latest updates, visit <a href="https://www.getreceipts.org/flowcharts.html">getreceipts.org/flowcharts.html</a></p>
+    </footer>
+</body>
+</html>

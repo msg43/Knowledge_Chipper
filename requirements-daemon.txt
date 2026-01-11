@@ -1,38 +1,21 @@
-# Minimal daemon requirements (no GUI, no diarization, no optional ML)
+# Ultra-minimal daemon requirements (headless, web-controlled)
 # For GetReceipts.org web integration
+# Version: 1.1.1 (January 11, 2026)
 
-# Core dependencies
+# Core framework
 click>=8.1.0
 pydantic>=2.5.0
+pydantic-settings>=2.0.0
 pyyaml>=6.0
 loguru>=0.7.0
-rich>=13.0.0
-
-# File watching
-watchdog>=3.0.0
-
-# PDF processing
-pypdf2>=3.0.0
-pdfplumber>=0.9.0
-
-# Audio/Video processing
-pydub>=0.25.1
-
-# ML and transcription (core only)
-pywhispercpp>=1.2.0  # Lightweight whisper.cpp binding
-pyannote-whisper @ git+https://github.com/yinruiqing/pyannote-whisper.git
-
-# YouTube processing
-yt-dlp==2025.11.12
-pytube>=15.0.0
+python-dotenv>=0.19.0
 
 # FastAPI daemon (REQUIRED)
 fastapi>=0.108.0
 uvicorn[standard]>=0.25.0
 python-multipart>=0.0.6
-pydantic-settings>=2.0.0
 
-# HTTP requests
+# HTTP/Network
 requests>=2.31.0
 aiohttp>=3.8.0
 
@@ -40,38 +23,43 @@ aiohttp>=3.8.0
 sqlalchemy>=2.0.0
 alembic>=1.12.0
 
-# OAuth integration for GetReceipts.org
+# Cloud sync
 supabase>=2.0.0
 
-# System monitoring
-psutil>=6.0.0
+# Transcription (REQUIRED)
+pywhispercpp>=1.2.0  # Lightweight whisper.cpp binding with word timestamps
 
-# Web scraping
+# YouTube processing
+yt-dlp==2025.11.12  # Pinned version with Deno support
+
+# Document processing
+pypdf2>=3.0.0
+pdfplumber>=0.9.0
 beautifulsoup4>=4.12.0
-youtube-transcript-api>=1.2.0
-feedparser>=6.0.0
 
-# AI/ML APIs (REQUIRED for claim extraction)
+# LLM APIs (REQUIRED)
 openai>=1.0.0
 anthropic>=0.7.0
 google-genai>=1.0.0
 
 # Utilities
-python-dotenv>=0.19.0
+psutil>=6.0.0
 tqdm>=4.65.0
-colorama>=0.4.6
+watchdog>=3.0.0
 
-# Fuzzy matching (lightweight)
-python-Levenshtein>=0.21.0
-fuzzywuzzy>=0.18.0
-
-# REMOVED (not needed for daemon):
-# - PyQt6 (GUI only)
-# - streamlit (GUI only)
-# - playwright (web scraping - optional)
-# - hdbscan, scipy (HCE - optional)
-# - sentence-transformers (heavy ML - optional)
-# - pandas, numpy (data processing - can add if needed)
-# - huggingface_hub (model bundling - not needed at runtime)
-# - pyannote.audio, torch, transformers (diarization - not using)
+# REMOVED (not needed for headless daemon):
+# - PyQt6 (GUI only) - 50MB
+# - streamlit (GUI only) - 30MB
+# - playwright (web scraping) - 200MB
+# - pyannote-whisper (pulls in torch/transformers) - 1GB+
+# - torch, transformers, pyannote.audio (diarization) - 1GB+
+# - sentence-transformers (embeddings) - 500MB
+# - pandas, numpy (data processing) - 50MB
+# - hdbscan, scipy (clustering) - 100MB
+# - pytube (redundant with yt-dlp)
+# - youtube-transcript-api (redundant with yt-dlp)
+# - feedparser (RSS not used)
+# - python-Levenshtein, fuzzywuzzy (fuzzy matching not critical)
+# - pydub (audio conversion - can add back if needed)
+# - colorama, rich (terminal formatting - not needed for daemon)
 

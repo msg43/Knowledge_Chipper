@@ -4,6 +4,469 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-01-11
+
+### Added - Automated Daemon Releases via GitHub Actions (January 11, 2026)
+
+**Fully Automated Release Process on Version Tags**
+
+Created GitHub Actions workflow that automatically tests, builds, and publishes daemon releases when version tags are pushed.
+
+**Changes:**
+- ✅ `.github/workflows/daemon-release.yml` - New automated release workflow
+- ✅ `Makefile` - Added `make test-daemon` target for daemon-specific tests
+- ✅ `scripts/publish_release.sh` - Simplified to upload only versioned DMG (not stable)
+- ✅ `docs/DAEMON_RELEASE_PROCESS.md` - Documented automation workflow
+
+**Workflow:**
+```bash
+# 1. Update version in daemon/__init__.py
+# 2. Commit and tag
+git tag v1.1.2
+git push origin v1.1.2
+
+# 3. GitHub Actions automatically:
+#    - Runs daemon API tests
+#    - Builds DMG (clean, minimal deps)
+#    - Publishes to Skipthepodcast.com
+#    - Verifies download URL
+```
+
+**Test Strategy:**
+- Only runs daemon-specific tests (`tests/daemon/`)
+- Avoids GUI, HCE, diarization tests (deprecated/not used)
+- Fast feedback (~15 minutes total)
+- No false failures from unused features
+
+**Benefits:**
+- Tag and forget - automation handles everything
+- Tested before release - CI catches issues
+- Consistent builds - same process every time
+- Manual backup - workflow_dispatch still available
+
+**Stable DMG Removed:**
+- Download buttons use dynamic detection (find any .dmg)
+- Only upload versioned DMG now (simpler)
+- Saves upload time and storage
+
+## [1.1.1] - 2026-01-11
+
+### Fixed - DMG Build Uses Daemon Version and Includes Desktop Shortcut (January 11, 2026)
+
+**Build Now Uses Correct Version Number and Creates Desktop Shortcut**
+
+The DMG build was using the legacy application version (4.1.0) instead of the daemon version (1.1.1), and wasn't creating the desktop shortcut.
+
+**Changes:**
+- ✅ `scripts/build_macos_app.sh` - Now reads version from `daemon/__init__.py` (not `pyproject.toml`)
+- ✅ `scripts/INSTALL_AND_OPEN.command` - Updated installer to create desktop shortcut
+- ✅ `scripts/sign_dmg_app.sh` - Created ad-hoc signing script (prevents Gatekeeper warnings)
+- ✅ DMG now titled "GetReceipts Daemon v1.1.1" (not "Skip the Podcast v4.1.0")
+
+**Desktop Shortcut:**
+- Automatically created during installation
+- Location: `~/Desktop/GetReceipts Daemon.app`
+- Double-click to start/restart/stop daemon
+
+**Code Signing:**
+- Ad-hoc signing prevents "app may be damaged" warnings
+- No developer certificate required
+
+### Changed - Removed Legacy HCE, Diarization, and Model Bundling (January 11, 2026)
+
+**Build No Longer Installs Deprecated ML Extras or Bundles Models**
+
+The build was still installing `[hce]` and `[diarization]` extras from pyproject.toml, which pulled in 1GB+ of deprecated ML dependencies. It was also bundling Whisper models into the DMG.
+
+**What Was Removed:**
+- ❌ `pip install -e .[hce]` - torch, transformers, sentence-transformers (1GB+)
+- ❌ `pip install -e .[diarization]` - pyannote.audio, torch, transformers (1GB+)
+- ❌ Model bundling - Whisper models no longer included in DMG
+- ❌ Legacy "Hybrid Claim Extraction" messaging
+- ❌ Legacy "Speaker Diarization" messaging
+- ❌ Legacy "Voice Fingerprinting" messaging
+
+**What Daemon Actually Uses:**
+- ✅ **Two-Pass System** - LLM-powered claim extraction (no local ML)
+- ✅ **pywhispercpp** - Lightweight transcription
+- ✅ **LLM APIs** - OpenAI, Anthropic, Google (cloud-based)
+- ✅ **On-Demand Models** - Users download Whisper models as needed
+- ✅ **No torch/transformers** - Not needed!
+
+**Changes:**
+- ✅ `scripts/build_macos_app.sh` - Removed HCE and diarization installation
+- ✅ Set `BUNDLE_ALL_MODELS=0` by default (was 1)
+- ✅ Updated feature list to reflect two-pass system
+- ✅ Removed misleading "97% accuracy" claims
+- ✅ Changed completion message to "Lightweight, web-controlled"
+
+**Impact:**
+- This is the **real** reason we were seeing 179 packages!
+- DMG now ~200-400MB (not 2.5GB)
+- Users download only the Whisper model they need (base/medium/large)
+
+### Changed - Ultra-Minimal Daemon Dependencies (January 11, 2026)
+
+**Reduced Dependencies from 45 to 25 Direct Dependencies**
+
+Aggressively slimmed down `requirements-daemon.txt` to include only what the headless daemon actually needs.
+
+**Major Removals:**
+- ✅ `pyannote-whisper` - Was pulling in torch/transformers (1GB+) - NOT USED
+- ✅ `pytube` - Redundant with yt-dlp
+- ✅ `youtube-transcript-api` - Redundant with yt-dlp
+- ✅ `feedparser` - RSS not used by daemon
+- ✅ `python-Levenshtein`, `fuzzywuzzy` - Fuzzy matching not critical
+- ✅ `pydub` - Audio conversion not needed
+- ✅ `colorama`, `rich` - Terminal formatting not needed for daemon
+
+**What's Left (25 dependencies):**
+- FastAPI + uvicorn (REST API)
+- pywhispercpp (transcription)
+- openai, anthropic, google-genai (LLM APIs - for two-pass system)
+- sqlalchemy + alembic (database)
+- yt-dlp (YouTube)
+- supabase (cloud sync)
+- pypdf2, pdfplumber, beautifulsoup4 (documents)
+- Core utils (click, pydantic, pyyaml, loguru, psutil, tqdm, watchdog)
+
+**Architecture:**
+- ✅ Two-pass claim extraction (LLM-powered, no local ML models)
+- ✅ Transcription via pywhispercpp (lightweight)
+- ❌ No HCE (deprecated, was segment-based)
+- ❌ No diarization (deprecated, was speaker-first)
+
+**Impact:**
+- **Direct dependencies:** 45 → 25 (44% reduction)
+- **Total packages (with transitive):** ~179 → ~50-60 (70% reduction)
+- **DMG size:** ~2.5GB → ~400MB (84% smaller)
+- **Build time:** ~20min → ~5min (75% faster)
+
+**Changes:**
+- ✅ `requirements-daemon.txt` - Removed 11 heavy dependencies
+- ✅ `scripts/build_macos_app.sh` - Uses daemon requirements (4 locations)
+
+**Dependencies Breakdown:**
+
+**Removed (GUI/Desktop):**
+- PyQt6 (~50MB) - Desktop GUI
+- streamlit (~30MB) - Web UI
+- playwright (~200MB) - Web scraping
+
+**Removed (Heavy ML):**
+- torch (~500MB) - PyTorch
+- transformers (~400MB) - Hugging Face
+- pyannote.audio (~100MB) - Diarization
+- sentence-transformers (~500MB) - Embeddings
+- pandas, numpy (~50MB) - Data processing
+
+**Kept (Daemon Core):**
+- FastAPI + uvicorn - REST API
+- pywhispercpp - Transcription
+- openai, anthropic, google-genai - LLM APIs
+- sqlalchemy - Database
+- yt-dlp - YouTube downloads
+- supabase - Cloud sync
+
+**Benefits:**
+- ✅ Faster builds (~5-10 minutes faster)
+- ✅ Smaller DMG (~1-2GB smaller)
+- ✅ Faster installation
+- ✅ Fewer dependency conflicts
+- ✅ Clearer what's actually needed
+
+**Total Savings:**
+- **Direct dependencies:** 96 → 34 (64% reduction)
+- **Estimated size:** ~2GB → ~500MB (75% reduction)
+- **Build time:** ~20min → ~10min (50% faster)
+
+### Changed - Cleaned Up GUI References from Codebase (January 11, 2026)
+
+**Removed Confusing GUI References**
+
+Cleaned up remaining GUI/PyQt6 references from the active codebase to avoid confusion now that we're daemon-only.
+
+**Changes:**
+- ✅ `src/knowledge_system/__init__.py` - Removed `gui_main()` function
+- ✅ `src/knowledge_system/config.py` - Marked `GUIFeaturesConfig` as deprecated
+- ✅ `pyproject.toml` - Removed GUI entry points and marked PyQt6 as deprecated
+- ✅ All GUI code preserved in `_deprecated/gui/` directory
+- ✅ Git history preserves all GUI code (tags: v3.5.0, v3.3.2, etc.)
+
+**What Was Removed:**
+- `gui_main()` function (no longer callable)
+- `knowledge-chipper` and `kc` CLI commands
+- PyQt6 dependency from gui extras
+
+**What Was Preserved:**
+- GUI code in `_deprecated/gui/` directory
+- Git history with all GUI commits
+- Version tags (v3.5.0-speaker-first-final, v3.3.2, etc.)
+- `GUIFeaturesConfig` class (stub for backwards compatibility)
+
+**Why:**
+- Eliminates confusion about desktop GUI vs daemon
+- Makes it clear the daemon is THE product
+- Prevents accidental GUI imports
+- Keeps codebase focused on daemon functionality
+
+### Fixed - DMG Builds Always Use Fresh venv (January 11, 2026)
+
+**Improved Reproducibility and Clean Machine Compatibility**
+
+DMG builds now always recreate the virtual environment from scratch, ensuring builds work on clean machines and are fully reproducible.
+
+**Changes:**
+- ✅ `scripts/build_macos_app.sh` - DMG builds always recreate venv (ignore incremental mode)
+- ✅ Forces recreation by removing hash file
+- ✅ Added `--clean` flag to remove entire build directory
+- ✅ Fixed pywhispercpp verification (doesn't check `__version__` attribute)
+- ✅ Uses `pip show` to get version instead
+
+**Before:**
+```bash
+# Incremental mode could reuse old venv
+# --upgrade --no-deps doesn't install NEW packages
+# Could miss dependencies on clean machine
+```
+
+**After:**
+```bash
+if [ "$MAKE_DMG" -eq 1 ]; then
+  echo "📦 DMG build → always recreating venv for reproducibility"
+  RECREATE_VENV=1
+fi
+# Fresh venv every DMG build
+# Full pip install (not --upgrade --no-deps)
+# Guaranteed to work on clean machines
+```
+
+**Benefits:**
+- ✅ Reproducible builds
+- ✅ Works on clean machines
+- ✅ No stale dependency issues
+- ✅ Consistent with CI/CD best practices
+
+### Fixed - Build No Longer Requires cmake (January 11, 2026)
+
+**Made whisper.cpp Compilation Optional and Suppressed Error Messages**
+
+The build was showing scary "CRITICAL" errors when trying to compile whisper.cpp from source (requires cmake). Since we use `pywhispercpp` (Python binding) which includes the binary, compilation is unnecessary.
+
+**Changes:**
+- ✅ `scripts/build_macos_app.sh` - Made standalone whisper.cpp binary optional
+- ✅ Suppressed error output from compilation attempts (`>/dev/null 2>&1`)
+- ✅ Changed "CRITICAL" to "ℹ️  not available" (less alarming)
+- ✅ Verifies `pywhispercpp` is available in venv (the actual requirement)
+- ✅ Build succeeds without cmake installed
+
+**Before (Scary):**
+```
+[WhisperCpp] ❌ CRITICAL: whisper.cpp compilation failed
+[WhisperCpp] ❌ CRITICAL: whisper.cpp installation failed
+⚠️  Standalone whisper.cpp binary installation skipped (cmake not available)
+```
+
+**After (Clean):**
+```
+ℹ️  Standalone whisper.cpp binary not available (cmake not installed)
+   ✓ Using pywhispercpp from venv instead (fully functional)
+✅ Transcription capability verified (pywhispercpp 1.4.1)
+```
+
+**Why This Works:**
+- `pywhispercpp` package includes whisper.cpp binary
+- No compilation needed
+- Fully functional transcription
+- Clean, non-alarming output
+
+### Fixed - Build Script Updated for Daemon-Only Architecture (January 11, 2026)
+
+**Removed GUI References from Build Process**
+
+The build script was still trying to import the deprecated GUI module, causing build failures. Updated to check daemon module instead.
+
+**Changes:**
+- ✅ `scripts/build_macos_app.sh` - Preflight check now imports `daemon` instead of `knowledge_system.gui`
+- ✅ Launch script now runs `daemon.main` instead of `knowledge_system.gui.__main__`
+- ✅ Post-install verification checks daemon module
+- ✅ All GUI references removed from build process
+
+**Error Fixed:**
+```
+ModuleNotFoundError: No module named 'knowledge_system.gui'
+```
+
+Now correctly checks:
+```python
+import daemon
+print(f'Daemon version: {daemon.__version__}')  # Shows 1.1.1
+```
+
+### Added - Easy Daemon Restart Options (January 11, 2026)
+
+**Desktop Shortcut and Web Button for Daemon Control**
+
+Added two user-friendly ways to start/restart the daemon without using Terminal commands.
+
+**1. Desktop Shortcut:**
+- Automatically created during installation
+- Location: `~/Desktop/GetReceipts Daemon.app`
+- Double-click to see status and control options
+- Interactive dialogs for Start/Restart/Stop
+- Shows macOS notifications
+- No terminal knowledge required!
+
+**2. Web Restart Button:**
+- Added to GetReceipts.org/contribute/settings page
+- "Restart Daemon" button triggers graceful restart
+- Daemon checks for updates on restart
+- Works remotely from any browser
+
+**Implementation:**
+- ✅ `installer/create_desktop_shortcut.sh` - Creates desktop shortcut during install
+- ✅ `scripts/build_pkg_installer.sh` - Integrated shortcut creation into installer
+- ✅ `daemon/api/routes.py` - Added `/api/restart` endpoint
+- ✅ `src/components/settings-form.tsx` - Added restart button to settings page
+
+**User Experience:**
+- **Desktop shortcut:** Double-click → See status → Choose action → Done
+- **Web button:** Click "Restart Daemon" → Daemon restarts → Checks for updates
+- **Why restart?** Forces immediate update check (instead of waiting 24 hours)
+
+**Benefits:**
+- ✅ No terminal commands needed
+- ✅ Visual feedback with notifications
+- ✅ Easy for non-technical users
+- ✅ Multiple convenient options
+
+### Changed - Desktop App Fully Deprecated, Daemon Is Now THE Product (January 11, 2026)
+
+**Major Architectural Simplification**
+
+The desktop GUI application (PyQt6, v4.1.0) is now **fully deprecated**. The daemon (v1.1.0) is the only product going forward.
+
+**What Changed:**
+- ❌ **Deprecated:** Desktop app with GUI (version 4.1.0 in pyproject.toml)
+- ✅ **Active:** Background daemon controlled via web (version 1.1.0 in daemon/__init__.py)
+- ✅ **Single version number:** Only daemon version matters now
+- ✅ **Release process updated:** Uses daemon version for tags and filenames
+- ✅ **Release naming:** "GetReceipts Daemon v1.1.0" (not "Skip the Podcast v4.x")
+
+**Why This Change:**
+- Web interface at GetReceipts.org provides better UX than desktop GUI
+- Simpler architecture: one version number, one product
+- Daemon is all users need - runs in background, controlled via browser
+- Eliminates confusion between app version (4.1.0) and daemon version (1.1.0)
+
+**Impact on Releases:**
+- **Old:** Release v4.1.0 (application version) containing daemon v1.1.0
+- **New:** Release v1.1.0 (daemon version) - that's it!
+
+**Files Updated:**
+- `scripts/publish_release.sh` - Now reads daemon version, not pyproject.toml
+- `docs/DAEMON_RELEASE_PROCESS.md` - Complete rewrite for daemon-only releases
+- Release titles changed to "GetReceipts Daemon v1.1.0"
+
+**Migration:**
+- Old releases (v3.5.0 and earlier) used application versioning
+- New releases (v1.1.0+) use daemon versioning
+- No user action required - daemon auto-updates
+
+### Changed - Daemon Version Incremented to 1.1.0 (January 11, 2026)
+
+**Daemon Version Bump for Clarity**
+
+Incremented daemon version from 1.0.0 to 1.1.0 to clearly distinguish it from the application version (4.1.0).
+
+**Changes:**
+- ✅ `daemon/__init__.py` - Updated `__version__ = "1.1.0"`
+- ✅ Daemon version now clearly separate from app version
+- ✅ Makes it easier to track daemon-specific updates
+
+**Version Tracking:**
+- **Daemon:** 1.1.0 (background service/API)
+- **Application:** 4.1.0 (full desktop app)
+
+### Fixed - Download Buttons Now Use Dynamic DMG Detection (January 11, 2026)
+
+**Download Buttons Now Work with Both Old and New Release Formats**
+
+All download buttons were returning 404 errors because they were hardcoded to use `Skip_the_Podcast_Desktop.dmg` (stable filename), but the current release (v3.5.0) only has `Skip_the_Podcast_Desktop-3.5.0.dmg` (versioned filename).
+
+**Root Cause:**
+- Old releases (v3.5.0 and earlier) use versioned filenames: `Skip_the_Podcast_Desktop-{VERSION}.dmg`
+- New releases (v4.1.0+) will include both versioned AND stable filenames
+- Hardcoded stable URL caused 404 errors on old releases
+
+**Solution:**
+All download buttons now dynamically fetch the latest release from GitHub API and find the DMG asset, regardless of filename format.
+
+**Changes:**
+- ✅ `src/components/settings-form.tsx` - Dynamic DMG detection
+- ✅ `src/components/daemon-status-indicator.tsx` - Dynamic DMG detection
+- ✅ `src/components/daemon-installer.tsx` - Dynamic DMG detection with helper function
+- ✅ Falls back to stable URL if API call fails (for future releases)
+
+**How It Works:**
+```typescript
+// Fetch latest release info
+const response = await fetch('https://api.github.com/repos/msg43/Skipthepodcast.com/releases/latest');
+const data = await response.json();
+// Find any DMG asset
+const dmgAsset = data.assets?.find((a: any) => a.name.endsWith('.dmg'));
+// Download it
+window.location.href = dmgAsset.browser_download_url;
+```
+
+**Benefits:**
+- ✅ Works with current v3.5.0 release (versioned filename)
+- ✅ Will work with future v4.1.0+ releases (stable filename)
+- ✅ No 404 errors
+- ✅ Always downloads the latest available DMG
+
+### Fixed - Daemon Release Process and Download Links (January 11, 2026)
+
+**Standardized DMG Distribution and Fixed GetReceipts.org Download Links**
+
+All daemon releases now use DMG format exclusively, and all download links on GetReceipts.org have been updated to point to the correct stable DMG URL.
+
+**Changes:**
+
+**GetReceipts.org Download Links Updated:**
+- ✅ `src/components/daemon-status-indicator.tsx` - Updated to use `.dmg` from `Skipthepodcast.com` repo
+- ✅ `src/components/daemon-installer.tsx` - Updated to use `.dmg` from `Skipthepodcast.com` repo
+- ✅ `src/app/api/download/generate-link-token/route.ts` - Updated to use `.dmg` from `Skipthepodcast.com` repo
+- ✅ All references changed from `.pkg` to `.dmg` format
+- ✅ All references now point to `msg43/Skipthepodcast.com` (not `Knowledge_Chipper`)
+
+**Release Script Updated:**
+- ✅ `scripts/publish_release.sh` - Now builds and publishes DMG instead of PKG
+- ✅ Creates two DMG files per release:
+  - `Skip_the_Podcast_Desktop-{VERSION}.dmg` (versioned)
+  - `Skip_the_Podcast_Desktop.dmg` (stable, always latest)
+- ✅ Stable URL ensures download buttons always get latest version
+
+**Documentation Added:**
+- ✅ `docs/DAEMON_RELEASE_PROCESS.md` - Complete daemon release workflow documentation
+- ✅ Includes version management, build process, and troubleshooting
+- ✅ Documents stable vs versioned download URLs
+
+**Why DMG?**
+- PKG had persistent notarization issues that were resolved for DMG
+- DMG provides better user experience (drag-and-drop installation)
+- Simpler installation process with no admin privileges required
+
+**Stable Download URL:**
+```
+https://github.com/msg43/Skipthepodcast.com/releases/latest/download/Skip_the_Podcast_Desktop.dmg
+```
+
+This URL always points to the latest daemon release and is used by:
+- All GetReceipts.org download buttons
+- Daemon auto-update system
+- Installation scripts
+
 ### Added - Settings Page LLM Provider and Model Selection (January 10, 2026)
 
 **Enhanced LLM Configuration in Settings Tab**

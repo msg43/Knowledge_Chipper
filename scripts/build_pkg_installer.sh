@@ -2099,6 +2099,12 @@ chown -R "$ACTUAL_USER:staff" "/Applications/Skip the Podcast Desktop.app/Conten
 echo "Daemon configured (will not auto-start on reboot)"
 echo "Control scripts installed at: /Applications/Skip the Podcast Desktop.app/Contents/Resources/bin/"
 
+# Create desktop shortcut for easy daemon control
+echo "Creating desktop shortcut..."
+bash "$PROJECT_ROOT/installer/create_desktop_shortcut.sh" 2>/dev/null || {
+    echo "⚠️  Failed to create desktop shortcut (non-fatal)"
+}
+
 # Register URL scheme handler with macOS Launch Services
 echo "Registering custom URL scheme handler..."
 # Force LaunchServices to recognize the new app and its URL scheme

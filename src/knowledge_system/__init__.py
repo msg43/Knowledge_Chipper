@@ -101,61 +101,8 @@ __author__ = "Skip the Podcast Desktop"
 __email__ = "dev@knowledge-system.local"
 
 
-def gui_main() -> None:
-    """Launch the GUI application from the main package."""
-    import sys
+# GUI functionality has been deprecated - daemon is now controlled via web interface
+# See: DESKTOP_APP_DEPRECATION.md for details
+# Legacy GUI code preserved in _deprecated/gui/ directory
 
-    # Smart cache clearing - clear only if needed
-    try:
-        from .utils.cache_management import clear_cache_if_needed
-
-        was_cleared, message = clear_cache_if_needed()
-        if was_cleared:
-            print(f"🧹 {message}")
-    except Exception as e:
-        # Don't let cache clearing errors prevent startup
-        print(f"⚠️  Cache clearing check failed: {e}")
-
-    try:
-        # Import PyQt6 first to check availability
-        from PyQt6.QtCore import QLoggingCategory
-        from PyQt6.QtWidgets import QApplication
-
-        # Suppress Qt CSS warnings about unknown properties like "transform"
-        # Qt's CSS parser doesn't support all CSS3 properties and generates warnings
-        QLoggingCategory.setFilterRules("qt.qss.debug=false")
-
-        # Create the QApplication
-        app = QApplication(sys.argv)
-
-        # Set application properties
-        app.setApplicationName("Skip the Podcast Desktop")
-        app.setApplicationDisplayName("Skip the Podcast Desktop")
-        app.setApplicationVersion(__version__)
-
-        # Import and create main window
-        # (no circular import since we're in the parent package)
-        from .gui.main_window_pyqt6 import MainWindow
-
-        window = MainWindow()
-        window.show()
-
-        # Ensure the window is raised and gets focus
-        window.raise_()
-        window.activateWindow()
-
-        # Start the event loop
-        sys.exit(app.exec())
-
-    except ImportError as e:
-        print("\n" + "=" * 60)
-        print("ERROR: PyQt6 is not installed!")
-        print("Knowledge_Chipper GUI requires PyQt6.")
-        print("Please install it with:")
-        print("  pip install PyQt6")
-        print("=" * 60 + "\n")
-        print(f"Error details: {e}")
-        sys.exit(1)
-
-
-__all__ = ["Settings", "get_settings", "get_logger", "gui_main", "__version__"]
+__all__ = ["Settings", "get_settings", "get_logger", "__version__"]

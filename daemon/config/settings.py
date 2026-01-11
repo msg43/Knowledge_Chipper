@@ -34,11 +34,11 @@ class Settings(BaseSettings):
 
     # Processing Defaults (user configurable)
     default_whisper_model: Literal["tiny", "base", "small", "medium", "large-v3"] = "medium"
-    default_llm_provider: Optional[Literal["openai", "anthropic"]] = "openai"
+    default_llm_provider: Optional[Literal["openai", "anthropic", "google"]] = "openai"
     default_llm_model: Optional[str] = "gpt-4o"
     auto_upload_enabled: bool = True
     process_full_pipeline: bool = True
-    
+
     # Feature Flags
     bypass_device_auth: bool = True  # Set to False to re-enable device authentication
 

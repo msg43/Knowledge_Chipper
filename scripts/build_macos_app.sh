@@ -14,12 +14,10 @@ echo "##PERCENT## 0 Starting updater"
 SKIP_INSTALL=0
 MAKE_DMG=0
 INCREMENTAL=0
-# Core functionality - these are REQUIRED, not optional
-WITH_DIARIZATION=1  # REQUIRED: Speaker diarization is core functionality
-WITH_HCE=1          # REQUIRED: Hybrid Claim Extraction is core functionality
-# CUDA removed - pointless on Mac-only app
-# Default to bundling all models for complete offline experience
-BUNDLE_ALL_MODELS=${BUNDLE_ALL_MODELS:-1}
+# Daemon-only build - no heavy ML extras needed
+# Two-pass system uses LLM APIs (no local ML models required)
+# Models downloaded on-demand by users (not bundled in DMG)
+BUNDLE_ALL_MODELS=${BUNDLE_ALL_MODELS:-0}  # Don't bundle models by default
 for arg in "$@"; do
   case "$arg" in
     --no-install|--skip-install)
@@ -27,6 +25,10 @@ for arg in "$@"; do
       ;;
     --make-dmg)
       MAKE_DMG=1
+      ;;
+    --clean)
+      echo "🧹 Clean build requested - will recreate venv"
+      rm -rf "$SCRIPT_DIR/.app_build"
       ;;
     --incremental)
       INCREMENTAL=1
@@ -117,29 +119,27 @@ if [ ! -f "pyproject.toml" ]; then
   echo "❌ pyproject.toml not found in $PROJECT_ROOT. Aborting."
   exit 1
 fi
-CURRENT_VERSION=$(python3 - <<'PY'
-import sys, pathlib
-pp = pathlib.Path('pyproject.toml')
+CURRENT_VERSION=$(python3 -c '
+import sys, re
 try:
-    import tomllib
-except Exception as e:
-    sys.stderr.write('❌ Python tomllib not available (requires Python 3.11+). Install python3.11+ and retry.\n')
+    with open("daemon/__init__.py", "r") as f:
+        content = f.read()
+    match = re.search(r"__version__\s*=\s*[\"'\'']([^\"'\'']+)[\"'\'']", content)
+    if match:
+        print(match.group(1))
+    else:
+        sys.stderr.write("Version not found in daemon/__init__.py\n")
+        sys.exit(3)
+except FileNotFoundError:
+    sys.stderr.write("daemon/__init__.py not found\n")
     sys.exit(2)
-with pp.open('rb') as f:
-    data = tomllib.load(f)
-ver = (data.get('project') or {}).get('version')
-if not ver:
-    sys.stderr.write('❌ Version missing in pyproject.toml [project.version]. Aborting.\n')
-    sys.exit(3)
-print(ver)
-PY
-)
+')
 if [ -z "$CURRENT_VERSION" ]; then
-  echo "❌ Could not determine version from pyproject.toml. Aborting."
+  echo "❌ Could not determine daemon version from daemon/__init__.py. Aborting."
   exit 1
 fi
 
-echo "🏗️ Building Skip the Podcast Desktop.app... (version $CURRENT_VERSION)"
+echo "🏗️ Building GetReceipts Daemon v${CURRENT_VERSION}..."
 echo "##PERCENT## 15 Preparing build"
 
 # Determine total steps for accurate high-level progress (no artificial heartbeats)
@@ -258,7 +258,7 @@ Skip the Podcast Desktop now follows Apple's macOS guidelines for file locations
 The app automatically creates these directories and migrates settings as needed.
 CONFIG_EOF
 
-cp requirements.txt "$BUILD_MACOS_PATH/"
+cp requirements-daemon.txt "$BUILD_MACOS_PATH/"
 cp scripts/build_macos_app.sh "$BUILD_MACOS_PATH/"
 # Safety: remove any stray packaging metadata if present
   echo "🧹 Removing stale packaging metadata from source..."
@@ -300,76 +300,75 @@ fi
 
 VENV_DIR="$BUILD_MACOS_PATH/venv"
 REQS_HASH_FILE="$BUILD_MACOS_PATH/.requirements.sha256"
-NEW_REQS_HASH=$(shasum -a 256 requirements.txt | awk '{print $1}')
-RECREATE_VENV=0
-if [ "$INCREMENTAL" -eq 1 ] && [ -d "$VENV_DIR" ] && [ -f "$REQS_HASH_FILE" ]; then
+NEW_REQS_HASH=$(shasum -a 256 requirements-daemon.txt | awk '{print $1}')
+
+# For DMG builds: ALWAYS recreate venv for reproducibility and clean machine compatibility
+# For incremental builds: Only recreate if requirements changed
+if [ "$MAKE_DMG" -eq 1 ]; then
+  echo "📦 DMG build → ALWAYS recreating venv for reproducibility"
+  RECREATE_VENV=1
+  # Force recreation by removing old hash
+  rm -f "$REQS_HASH_FILE"
+elif [ "$INCREMENTAL" -eq 1 ] && [ -d "$VENV_DIR" ] && [ -f "$REQS_HASH_FILE" ]; then
   OLD_HASH=$(cat "$REQS_HASH_FILE" 2>/dev/null || echo "")
   if [ "$OLD_HASH" != "$NEW_REQS_HASH" ]; then
-    echo "📦 requirements.txt changed → recreating venv"
+    echo "📦 requirements-daemon.txt changed → recreating venv"
     RECREATE_VENV=1
   else
-    echo "📦 requirements.txt unchanged → reusing venv"
+    echo "📦 requirements-daemon.txt unchanged → reusing venv"
+    RECREATE_VENV=0
   fi
 else
+  echo "📦 First build or clean build → creating fresh venv"
   RECREATE_VENV=1
 fi
 
 if [ "$RECREATE_VENV" -eq 1 ]; then
+  echo "🗑️  Removing old venv..."
   rm -rf "$VENV_DIR"
+  echo "🐍 Creating fresh venv..."
   "$PYTHON_BIN" -m venv "$VENV_DIR"
+  echo "✅ Fresh venv created"
 else
-  : # reuse existing venv
+  echo "♻️  Reusing existing venv"
 fi
 
 # Upgrade pip (separate step for clearer progress)
 next_step "Upgrade pip"
-"$VENV_DIR/bin/python" -m pip install --upgrade pip
+"$VENV_DIR/bin/python" -m pip install --upgrade pip --quiet
 
-# Install or update requirements (real work, no fake heartbeats)
+# Install requirements (always do full install for DMG builds)
 next_step "Install requirements"
 if [ "$RECREATE_VENV" -eq 1 ]; then
-  "$VENV_DIR/bin/python" -m pip install -r "$BUILD_MACOS_PATH/requirements.txt"
+  echo "📥 Installing all dependencies from requirements-daemon.txt..."
+  "$VENV_DIR/bin/python" -m pip install -r "$BUILD_MACOS_PATH/requirements-daemon.txt"
   echo "$NEW_REQS_HASH" > "$REQS_HASH_FILE"
+  echo "✅ All dependencies installed"
 else
-  "$VENV_DIR/bin/python" -m pip install -r "$BUILD_MACOS_PATH/requirements.txt" --upgrade --no-deps
-  echo "🔍 Checking for dependency conflicts..."
-  if ! "$VENV_DIR/bin/python" -m pip check; then
-    echo "❌ CRITICAL: Dependency conflicts detected in Python environment"
-    echo "   This will cause runtime failures and import errors"
-    echo "   Build terminated - all dependencies must be compatible"
-    exit 1
-  fi
-  echo "✅ No dependency conflicts detected"
+  echo "📥 Updating dependencies (incremental)..."
+  "$VENV_DIR/bin/python" -m pip install -r "$BUILD_MACOS_PATH/requirements-daemon.txt" --upgrade --no-deps
 fi
+
+# Always verify dependencies are compatible
+echo "🔍 Checking for dependency conflicts..."
+if ! "$VENV_DIR/bin/python" -m pip check; then
+  echo "❌ CRITICAL: Dependency conflicts detected in Python environment"
+  echo "   This will cause runtime failures and import errors"
+  echo "   Build terminated - all dependencies must be compatible"
+  exit 1
+fi
+echo "✅ No dependency conflicts detected"
 
 # Track installation status for user feedback
 EXTRAS_STATUS=""
 FAILED_EXTRAS=""
 
-# Install REQUIRED core functionality
-next_step "Install HCE (Hybrid Claim Extraction) - REQUIRED"
-# Install from project root (ensures pyproject.toml/extras resolution)
-if "$VENV_DIR/bin/python" -m pip install -e "$PROJECT_ROOT"[hce]; then
-  echo "✅ HCE (Hybrid Claim Extraction) installed successfully"
-  EXTRAS_STATUS="${EXTRAS_STATUS}✅ HCE (Hybrid Claim Extraction): Core functionality\n"
-else
-  echo "❌ CRITICAL: Failed to install HCE (Hybrid Claim Extraction)"
-  echo "   HCE is REQUIRED core functionality - build cannot continue"
-  echo "   Build terminated - all core dependencies must succeed"
-  exit 1
-fi
-
-next_step "Install Speaker Diarization - REQUIRED"
-# Install from project root (ensures pyproject.toml/extras resolution)
-if "$VENV_DIR/bin/python" -m pip install -e "$PROJECT_ROOT"[diarization]; then
-  echo "✅ Speaker Diarization installed successfully"
-  EXTRAS_STATUS="${EXTRAS_STATUS}✅ Speaker Diarization: Core multi-speaker processing\n"
-else
-  echo "❌ CRITICAL: Failed to install Speaker Diarization"
-  echo "   Diarization is REQUIRED core functionality - build cannot continue"
-  echo "   Build terminated - all core dependencies must succeed"
-  exit 1
-fi
+# Daemon uses two-pass system with LLM APIs - no heavy ML extras needed
+echo "ℹ️  Daemon uses two-pass system (LLM APIs) - no local ML models required"
+EXTRAS_STATUS="${EXTRAS_STATUS}✅ Two-Pass Claim Extraction: LLM-powered analysis\n"
+EXTRAS_STATUS="${EXTRAS_STATUS}✅ Transcription: pywhispercpp (whisper.cpp)\n"
+EXTRAS_STATUS="${EXTRAS_STATUS}✅ LLM APIs: OpenAI, Anthropic, Google\n"
+EXTRAS_STATUS="${EXTRAS_STATUS}✅ Cloud Sync: Supabase integration\n"
 
 # CUDA removed - pointless on Mac-only app
 # All core dependencies (HCE, Diarization) are now REQUIRED and installed above
@@ -782,11 +781,13 @@ else
     echo "Not running from app bundle - skipping authorization check" >> "\$LOG_FILE"
 fi
 
-echo "Launching GUI..." >> "\$LOG_FILE"
+echo "Launching daemon..." >> "\$LOG_FILE"
+# Launch the daemon (background service controlled via web)
+cd "\$APP_DIR"
 if [[ "\$(uname -m)" == "arm64" ]]; then
-    exec arch -arm64 "\$APP_DIR/venv/bin/python" -m knowledge_system.gui.__main__ 2>&1 | tee -a "\$LOG_FILE"
+    exec arch -arm64 "\$APP_DIR/venv/bin/python" -m daemon.main 2>&1 | tee -a "\$LOG_FILE"
 else
-    exec "\$APP_DIR/venv/bin/python" -m knowledge_system.gui.__main__ 2>&1 | tee -a "\$LOG_FILE"
+    exec "\$APP_DIR/venv/bin/python" -m daemon.main 2>&1 | tee -a "\$LOG_FILE"
 fi
 EOF
 mv "/tmp/launch" "$BUILD_MACOS_PATH/launch"
@@ -805,11 +806,11 @@ iconutil -c icns icon.iconset -o "/tmp/AppIcon.icns"
 mv "/tmp/AppIcon.icns" "$BUILD_RESOURCES_PATH/AppIcon.icns"
 rm -rf icon.iconset
 
-# Preflight import check (fail-fast)
+# Preflight import check (fail-fast) - Check daemon module instead of deprecated GUI
 echo "🧪 Preflight import check..."
 next_step "Preflight import check"
 echo "##PERCENT## 75 Preflight import check"
-if ! PYTHONPATH="$BUILD_MACOS_PATH/src:${PYTHONPATH}" "$VENV_DIR/bin/python" -c "import knowledge_system.gui.__main__"; then
+if ! PYTHONPATH="$BUILD_MACOS_PATH:${PYTHONPATH}" "$VENV_DIR/bin/python" -c "import daemon; print(f'Daemon version: {daemon.__version__}')"; then
   echo "❌ Preflight import failed. Aborting build."
   exit 1
 fi
@@ -852,7 +853,7 @@ if [ "$SKIP_INSTALL" -eq 0 ]; then
   next_step "Upgrade pip (final)"
   sudo -H "$MACOS_PATH/venv/bin/python" -m pip install --upgrade pip
   next_step "Install requirements (final)"
-  sudo -H "$MACOS_PATH/venv/bin/python" -m pip install -r "$MACOS_PATH/requirements.txt"
+  sudo -H "$MACOS_PATH/venv/bin/python" -m pip install -r "$MACOS_PATH/requirements-daemon.txt"
 
   # Ensure pyproject.toml exists at final app path for extras resolution
   if [ ! -f "$MACOS_PATH/pyproject.toml" ] && [ -f "$PROJECT_ROOT/pyproject.toml" ]; then
@@ -873,9 +874,9 @@ if [ "$SKIP_INSTALL" -eq 0 ]; then
     echo "   Build terminated - all core dependencies must succeed"
     exit 1
   fi
-  # Post-install preflight
+  # Post-install preflight - Check daemon module instead of deprecated GUI
   next_step "Final verification"
-  if ! PYTHONPATH="$MACOS_PATH/src:${PYTHONPATH}" "$MACOS_PATH/venv/bin/python" -c "import knowledge_system.gui.__main__"; then
+  if ! PYTHONPATH="$MACOS_PATH:${PYTHONPATH}" "$MACOS_PATH/venv/bin/python" -c "import daemon; print(f'Daemon version: {daemon.__version__}')"; then
     echo "❌ Post-install preflight import failed. Aborting."
     exit 1
   fi
@@ -1203,33 +1204,56 @@ if [ "$MAKE_DMG" -eq 1 ] || { [ "$SKIP_INSTALL" -eq 1 ] && [ "${IN_APP_UPDATER:-
   fi
 
   # Install whisper.cpp binary for local transcription
-  echo "🎤 Installing whisper.cpp binary for local transcription..."
-  echo "##PERCENT## 94 Installing whisper.cpp"
-
+  echo "🎤 Checking whisper.cpp availability..."
+  echo "##PERCENT## 94 Checking whisper.cpp"
+  
+  # whisper.cpp is provided via pywhispercpp Python package (already in venv)
+  # Attempt to install standalone binary as optimization, but not critical
+  # Suppress error output since compilation failure is expected without cmake
   if [ -f "$SCRIPT_DIR/install_whisper_cpp_binary.py" ]; then
-    # Install whisper.cpp binary in the app bundle
-    if "$PYTHON_BIN" "$SCRIPT_DIR/install_whisper_cpp_binary.py" --app-bundle "$BUILD_APP_PATH" --quiet; then
-      echo "✅ whisper.cpp successfully installed in app bundle"
-      # Verify the installation worked
+    if "$PYTHON_BIN" "$SCRIPT_DIR/install_whisper_cpp_binary.py" --app-bundle "$BUILD_APP_PATH" --quiet >/dev/null 2>&1; then
+      echo "✅ whisper.cpp standalone binary installed"
       WHISPER_BIN="$BUILD_APP_PATH/Contents/MacOS/bin/whisper"
       if [ -f "$WHISPER_BIN" ]; then
-        echo "   ✓ whisper.cpp binary verified at: $WHISPER_BIN"
+        echo "   ✓ Standalone binary at: $WHISPER_BIN"
+      fi
+    else
+      echo "ℹ️  Standalone whisper.cpp binary not available (cmake not installed)"
+      echo "   ✓ Using pywhispercpp from venv instead (fully functional)"
+    fi
+  else
+    echo "ℹ️  Standalone whisper.cpp installer not found"
+    echo "   ✓ Using pywhispercpp from venv (fully functional)"
+  fi
+  
+  # Verify pywhispercpp is available in venv (the actual requirement)
+  VENV_PYTHON="$VENV_DIR/bin/python"
+  if [ ! -f "$VENV_PYTHON" ]; then
+    echo "❌ CRITICAL: venv Python not found at $VENV_PYTHON"
+    exit 1
+  fi
+  
+  # Check if pywhispercpp can be imported (don't check __version__ as it may not exist)
+  if "$VENV_PYTHON" -c "import pywhispercpp; print('✓ pywhispercpp available')" 2>/dev/null; then
+    # Get version from pip instead
+    WHISPER_VERSION=$("$VENV_PYTHON" -m pip show pywhispercpp 2>/dev/null | grep "^Version:" | awk '{print $2}')
+    echo "✅ Transcription capability verified (pywhispercpp $WHISPER_VERSION)"
+  else
+    echo "⚠️  pywhispercpp not found in venv, installing now..."
+    if "$VENV_PYTHON" -m pip install pywhispercpp>=1.2.0 --quiet; then
+      echo "✅ pywhispercpp installed successfully"
+      # Verify it works now
+      if "$VENV_PYTHON" -c "import pywhispercpp" 2>/dev/null; then
+        echo "   ✓ pywhispercpp import verified"
       else
-        echo "❌ CRITICAL: whisper.cpp binary not found after installation"
-        echo "   DMG MUST include whisper.cpp for local transcription capability"
+        echo "❌ CRITICAL: pywhispercpp installation failed"
         exit 1
       fi
     else
-      echo "❌ CRITICAL: whisper.cpp installation failed"
-      echo "   DMG MUST include whisper.cpp for local transcription capability"
-      echo "   Build terminated - all dependencies must succeed"
+      echo "❌ CRITICAL: Failed to install pywhispercpp"
+      echo "   Build terminated - transcription is a core requirement"
       exit 1
     fi
-  else
-    echo "❌ CRITICAL: whisper.cpp installer not found at: $SCRIPT_DIR/install_whisper_cpp_binary.py"
-    echo "   DMG MUST include whisper.cpp for local transcription capability"
-    echo "   Build terminated - all required scripts must be present"
-    exit 1
   fi
 
   # Install Deno for yt-dlp YouTube support (REQUIRED for yt-dlp >= 2025.11.12)
@@ -1315,19 +1339,22 @@ EOF
     echo "✅ HuggingFace token available - automatic model download enabled"
   fi
 
-  # Bundle all models for offline use
-  echo "📦 Bundling all models into app..."
-  if bash "$SCRIPT_DIR/bundle_all_models.sh" "$BUILD_APP_PATH/Contents/MacOS"; then
-    echo "✅ All models bundled successfully"
+  # Model bundling (optional - disabled by default for daemon)
+  if [ "$BUNDLE_ALL_MODELS" -eq 1 ]; then
+    echo "📦 Bundling models into app..."
+    if bash "$SCRIPT_DIR/bundle_all_models.sh" "$BUILD_APP_PATH/Contents/MacOS" 2>/dev/null; then
+      echo "✅ Models bundled successfully"
+    else
+      echo "ℹ️  Model bundling skipped or unavailable"
+    fi
   else
-    echo "⚠️ Model bundling had issues but continuing"
+    echo "ℹ️  Model bundling disabled - users download models as needed"
   fi
-  echo "📦 Bundled DMG approach: Everything included for offline use"
 fi
 
 echo "##PERCENT## 100 Complete"
-echo "🎯 Complete bundled build: All models and dependencies included"
-echo "   Ready for offline use - no internet required"
+echo "🎯 Daemon build complete: Lightweight, web-controlled"
+echo "   Models downloaded on-demand by users"
 echo "   Users can install with right-click → Open (bypasses Gatekeeper warnings)"
 if [ "$SKIP_INSTALL" -eq 0 ]; then
   echo "🚀 You can now launch Skip the Podcast Desktop from your Applications folder"
@@ -1385,11 +1412,11 @@ echo "✅ App bundle ready - proceeding with DMG creation"
   fi
 
   # Create helpful README for DMG users
-  cat > "$DMG_STAGING/root/README - Installation.txt" << EOF
-Skip the Podcast Desktop - Quick Start Guide
+  cat > "$DMG_STAGING/root/README - Installation.txt" << 'EOF'
+GetReceipts Daemon - Quick Start Guide
 ===============================================
 
-⚠️  IMPORTANT - AVOID "APP MAY BE DAMAGED" WARNINGS:
+⚠️  IMPORTANT - AVOID GATEKEEPER WARNINGS:
 
 📦 RECOMMENDED INSTALLATION:
    Double-click "⚠️ CLICK ME TO INSTALL.command"
@@ -1398,48 +1425,58 @@ Skip the Podcast Desktop - Quick Start Guide
    ✓ Copy the app to Applications
    ✓ Remove quarantine attributes automatically
    ✓ Bypass ALL macOS Gatekeeper warnings
-   ✓ Configure permissions and signing
-   ✓ Launch the app when done
+   ✓ Create desktop shortcut for daemon control
+   ✓ Launch the daemon
 
-   You'll be asked for your password once during installation.
+   You will be asked for your password once.
 
 🚫 IF YOU DRAG THE APP MANUALLY:
-   macOS may show "app is damaged or incomplete" warnings
-   You'll need to right-click → Open → Open to bypass them
-   OR run: sudo xattr -dr com.apple.quarantine "/Applications/Skip the Podcast Desktop.app"
+   macOS may show warnings about damaged or unverified apps.
+   You will need to right-click → Open → Open to bypass them.
 
 💡 WHY USE THE INSTALLER?
-   • No "damaged app" or security warnings
-   • Automatic Gatekeeper bypass (like professional apps)
-   • One-time password prompt during install
-   • App launches normally every time after
+   • No security warnings
+   • Automatic Gatekeeper bypass
+   • Desktop shortcut created automatically
+   • One-time password prompt
    • Professional installation experience
 
 ⚙️ SYSTEM REQUIREMENTS:
    • macOS 11.0 or later
    • 4GB RAM recommended
-   • 2GB free disk space
+   • 500MB free disk space
 
 🔧 CORE FEATURES:
-   All core features are bundled in the DMG:
-   • Hybrid Claim Extraction (HCE)
-   • Speaker Diarization (Multi-speaker audio)
-   • Voice Fingerprinting (97% accuracy)
+   • Two-Pass Claim Extraction (LLM-powered)
+   • Local Transcription (whisper.cpp)
+   • YouTube Download & Processing
+   • Document Processing (PDF, DOCX)
+   • Cloud Sync to GetReceipts.org
+
+🌐 USAGE:
+   1. Install the daemon (this DMG)
+   2. Visit https://getreceipts.org/contribute
+   3. Start processing videos via web browser
+   4. All control happens on the website
+
+🔄 RESTARTING THE DAEMON:
+   • Double-click "GetReceipts Daemon" icon on your desktop
+   • Or visit GetReceipts.org/contribute/settings
+   • Or Terminal: launchctl restart org.skipthepodcast.daemon
 
 📋 TROUBLESHOOTING:
-   If the app doesn't launch:
-   • Ensure you have macOS 11.0 or later
-   • Try the right-click → Open method
-   • Check ~/Library/Logs/Skip the Podcast Desktop/
+   • Check daemon status: http://localhost:8765/health
+   • View logs: ~/Library/Logs/Skip the Podcast Desktop/
+   • Requires: macOS 11.0+, 4GB RAM
 
-💡 The app includes an embedded Python runtime for maximum compatibility.
-
-💬 NEED HELP?
-   Visit: https://github.com/skipthepodcast/desktop/issues
-
-Built: $(date)
-Version: $CURRENT_VERSION
+💬 SUPPORT:
+   https://github.com/msg43/Skipthepodcast.com/issues
 EOF
+  
+  # Add version info after EOF (since we're using quoted EOF now)
+  echo "" >> "$DMG_STAGING/root/README - Installation.txt"
+  echo "Built: $(date)" >> "$DMG_STAGING/root/README - Installation.txt"
+  echo "Version: $CURRENT_VERSION" >> "$DMG_STAGING/root/README - Installation.txt"
 
   echo "🔨 Creating DMG with hdiutil..."
   DMG_PATH="$DIST_DIR/Skip_the_Podcast_Desktop-${CURRENT_VERSION}.dmg"
@@ -1529,12 +1566,12 @@ EOF
   echo "🔐 Code signing app bundle to prevent Gatekeeper issues..."
   SIGN_SCRIPT="$SCRIPT_DIR/sign_dmg_app.sh"
   if [ -f "$SIGN_SCRIPT" ]; then
-    echo "   Using ad-hoc signing to prevent 'app may be damaged' errors..."
+    echo "   Using ad-hoc signing to prevent \"app may be damaged\" errors..."
     if bash "$SIGN_SCRIPT" "$DMG_APP_PATH"; then
       echo "✅ App bundle successfully signed in DMG staging area"
     else
       echo "⚠️  Code signing had issues but continuing with DMG creation"
-      echo "   Users may see 'app may be damaged' warnings (can be bypassed)"
+      echo "   Users may see \"app may be damaged\" warnings (can be bypassed)"
       echo "   For development testing, this is acceptable"
     fi
 
@@ -1550,7 +1587,7 @@ EOF
     echo "✅ DMG finalized with signed app bundle"
   else
     echo "⚠️  WARNING: Code signing script not found at: $SIGN_SCRIPT"
-    echo "   Users may see 'app may be damaged or incomplete' Gatekeeper warnings"
+    echo "   Users may see \"app may be damaged or incomplete\" Gatekeeper warnings"
     echo "   To fix: Ensure scripts/sign_dmg_app.sh exists"
   fi
 

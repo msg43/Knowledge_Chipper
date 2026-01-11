@@ -196,7 +196,7 @@ class ConfigUpdateRequest(BaseModel):
     
     # Note: Only "medium" is exposed in web UI, but other models supported for advanced users
     default_whisper_model: Optional[Literal["tiny", "base", "small", "medium", "large-v3"]] = None
-    default_llm_provider: Optional[Literal["openai", "anthropic"]] = None
+    default_llm_provider: Optional[Literal["openai", "anthropic", "google"]] = None
     default_llm_model: Optional[str] = None
     auto_upload_enabled: Optional[bool] = None
     process_full_pipeline: Optional[bool] = None

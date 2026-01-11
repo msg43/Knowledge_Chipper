@@ -30,10 +30,19 @@ Complete inventory of all files in the Knowledge Chipper codebase with descripti
 
 ### Build and Deployment
 
-- `Makefile` - Build automation for common development tasks (test, lint, format, install)
+- `Makefile` - Build automation for common development tasks (test, lint, format, install, test-daemon)
 - `Makefile.hce` - Build automation specific to HCE (Hybrid Claim Extraction) system
 - `SkipThePodcast.pkgproj` - Packages.app project file for building macOS .dmg installer
 - `launch_gui.command` - Shell script to launch GUI application on macOS with proper environment setup
+
+### GitHub Actions Workflows
+
+- `.github/workflows/daemon-release.yml` - **NEW (Jan 11, 2026):** Automated daemon release workflow: triggers on version tags (v*.*.*), runs daemon API tests, builds DMG on macOS runner, publishes to Skipthepodcast.com repo. Includes version verification, DMG size checks, and download URL validation. Only tests daemon functionality (no GUI/HCE/diarization) to avoid false failures.
+- `.github/workflows/smoke-test.yml` - Lightweight smoke test on every push: Python syntax validation, basic imports, YAML validation
+- `.github/workflows/build-and-sign.yml` - Legacy build workflow (TEMPORARILY DISABLED) - being updated for daemon architecture
+- `.github/workflows/automated-gui-tests.yml` - GUI test automation (deprecated with GUI)
+- `.github/workflows/comprehensive-gui-tests.yml` - Comprehensive GUI tests (deprecated with GUI)
+- `.github/workflows/watch-deno-releases.yml` - Monitors Deno releases for yt-dlp compatibility
 
 ### Documentation - Project Status
 
@@ -41,6 +50,9 @@ Complete inventory of all files in the Knowledge Chipper codebase with descripti
 - `ALL_FIXES_COMPLETE.md` - Comprehensive list of all bug fixes that have been completed
 - `ALL_IMPLEMENTATION_COMPLETE.md` - List of all major features that have been fully implemented
 - `ALL_TRANSCRIPTION_FIXES_COMPLETE.md` - Comprehensive list of all transcription-related bug fixes completed
+- `DESKTOP_APP_DEPRECATION.md` - **NEW (Jan 11, 2026):** Complete documentation of desktop GUI deprecation: explains shift from desktop app (v4.1.0) to daemon-only (v1.1.1), version number simplification, product naming changes, user migration path, and timeline
+- `DAEMON_DEPENDENCIES_SLIM.md` - **NEW (Jan 11, 2026):** Dependency optimization analysis: reduced from 206 to 34 direct dependencies by removing GUI (PyQt6, streamlit, playwright) and heavy ML (torch, transformers, pyannote.audio). Documents 68% size reduction, 50% faster builds, before/after comparison, and verification steps
+- `DAEMON_AUTOMATION_COMPLETE.md` - **NEW (Jan 11, 2026):** Automated daemon release implementation: GitHub Actions workflow (.github/workflows/daemon-release.yml) triggers on version tags, runs daemon-specific tests only, builds DMG on macOS, publishes to Skipthepodcast.com. Documents test strategy, simplified publish script (single DMG), and complete usage instructions.
 - `ANTI_BOT_CRITICAL_FIXES.md` - Documentation of anti-bot detection fixes for YouTube downloads
 - `ARCHIVE_VALIDATION_FIX.md` - Fix for archive validation issues
 - `CHANGELOG.md` - Chronological record of all notable changes to the project
@@ -134,6 +146,7 @@ Complete inventory of all files in the Knowledge Chipper codebase with descripti
 
 - `docs/FILE_ORGANIZATION.md` - Comprehensive guide to output file organization: explains directory structure (transcripts/, summaries/, moc/, exports/), file naming conventions, relationship between transcript and summary files, database as source of truth, and how to find/regenerate files. Addresses common confusion about where files are saved and why they don't overwrite each other.
 - `docs/PYINSTALLER_ISSUE_ANALYSIS.md` - Comprehensive analysis of PyInstaller compatibility issues with ASGI servers (Uvicorn/Hypercorn). Documents 15+ build attempts, root cause (string-based module imports), and recommended solutions including development daemon setup as working alternative.
+- `docs/DAEMON_RELEASE_PROCESS.md` - **NEW (Jan 11, 2026):** Complete daemon release workflow documentation: version management (daemon vs app versions), DMG build process, GitHub release automation, stable vs versioned download URLs, GetReceipts.org integration, auto-update system, and troubleshooting guide. Documents switch from PKG to DMG format due to notarization issues.
 - `ARCHITECTURE_WEB_CANONICAL.md` - Complete architecture documentation for web-canonical implementation where GetReceipts Supabase is single source of truth and Knowledge_Chipper acts as ephemeral processor. Documents philosophy, workflows, database schemas, user experience, API endpoints, and rollback instructions.
 - `PROMPT_INVENTORY.md` - Complete catalog of all prompts in the system: ACTIVE two-pass architecture uses 2 core prompts (extraction_pass.txt with refinement injection + synthesis_pass.txt with dynamic length) plus 3 optional question mapper prompts; documents 15 deprecated HCE segment-based prompts; explains architecture comparison, system integration, and migration status. Both active prompts are fully wired up and functional.
 - `VESTIGIAL_CODE_ANALYSIS.md` - Comprehensive analysis of unused/vestigial code from pre-unified-pipeline architecture, including old extraction modules (people.py, glossary.py, concepts.py, skim.py), unused prompt files (judge_high/low variants), and unimplemented features (relations, contradictions). Documents architecture evolution and provides removal recommendations.

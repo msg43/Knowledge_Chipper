@@ -79,48 +79,33 @@ fi
 
 log "🚀 Starting release publication process..."
 
-# Get current version from pyproject.toml
-CURRENT_VERSION=$(python3 - <<'PY'
-import sys
-try:
-    import tomllib
-except Exception:
-    sys.stderr.write('❌ Python tomllib not available (requires Python 3.11+)\n')
-    sys.exit(2)
-with open('pyproject.toml', 'rb') as f:
-    data = tomllib.load(f)
-ver = (data.get('project') or {}).get('version')
-if not ver:
-    sys.stderr.write('❌ Version missing in pyproject.toml\n')
-    sys.exit(3)
-print(ver)
-PY
-)
+# Get current version from daemon/__init__.py (daemon version is now THE version)
+CURRENT_VERSION=$(python3 -c 'import re; content = open("daemon/__init__.py").read(); match = re.search(r"__version__.*=.*\"([^\"]+)\"", content); print(match.group(1) if match else "")')
 
 if [ -z "$CURRENT_VERSION" ]; then
-    error "Could not determine version from pyproject.toml"
+    error "Could not determine version from daemon/__init__.py"
     exit 1
 fi
 
-log "📋 Current version: $CURRENT_VERSION"
+log "📋 Current daemon version: $CURRENT_VERSION"
 
-# Check if PKG exists for current version
-PKG_FILE="$PRIVATE_REPO_PATH/dist/Skip_the_Podcast_Desktop-${CURRENT_VERSION}.pkg"
+# Check if DMG exists for current version
+DMG_FILE="$PRIVATE_REPO_PATH/dist/Skip_the_Podcast_Desktop-${CURRENT_VERSION}.dmg"
 
 if [ "$SKIP_BUILD" -eq 0 ]; then
-    if [ -f "$PKG_FILE" ] && [ "$FORCE_REBUILD" -eq 0 ]; then
-        log "📦 PKG already exists for version $CURRENT_VERSION"
-        read -p "Use existing PKG? (y/N): " -n 1 -r
+    if [ -f "$DMG_FILE" ] && [ "$FORCE_REBUILD" -eq 0 ]; then
+        log "📦 DMG already exists for version $CURRENT_VERSION"
+        read -p "Use existing DMG? (y/N): " -n 1 -r
         echo
         if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            log "🏗️ Rebuilding PKG..."
-            rm -f "$PKG_FILE"
+            log "🏗️ Rebuilding DMG..."
+            rm -f "$DMG_FILE"
         fi
     fi
 
-    # Build PKG if it doesn't exist
-    if [ ! -f "$PKG_FILE" ]; then
-        log "🏗️ Building PKG with build_macos_app.sh..."
+    # Build DMG if it doesn't exist
+    if [ ! -f "$DMG_FILE" ]; then
+        log "🏗️ Building DMG with build_macos_app.sh..."
         if [ "$DRY_RUN" -eq 1 ]; then
             log "[DRY RUN] Would run: bash scripts/build_macos_app.sh --make-dmg --skip-install"
         else
@@ -129,18 +114,18 @@ if [ "$SKIP_BUILD" -eq 0 ]; then
     fi
 fi
 
-# Verify PKG exists (skip in dry-run mode)
-if [ "$DRY_RUN" -eq 0 ] && [ ! -f "$PKG_FILE" ]; then
-    error "PKG file not found: $PKG_FILE"
+# Verify DMG exists (skip in dry-run mode)
+if [ "$DRY_RUN" -eq 0 ] && [ ! -f "$DMG_FILE" ]; then
+    error "DMG file not found: $DMG_FILE"
     exit 1
 fi
 
-if [ -f "$PKG_FILE" ]; then
-    PKG_SIZE=$(du -h "$PKG_FILE" | cut -f1)
-    log "📦 PKG ready: $PKG_FILE ($PKG_SIZE)"
+if [ -f "$DMG_FILE" ]; then
+    DMG_SIZE=$(du -h "$DMG_FILE" | cut -f1)
+    log "📦 DMG ready: $DMG_FILE ($DMG_SIZE)"
 else
-    PKG_SIZE="(estimated ~200MB)"
-    log "📦 PKG would be created: $PKG_FILE"
+    DMG_SIZE="(estimated ~200MB)"
+    log "📦 DMG would be created: $DMG_FILE"
 fi
 
 # Setup temporary directory for public repo
@@ -277,53 +262,79 @@ if command -v gh >/dev/null 2>&1; then
             gh release delete "$TAG_NAME" --repo "msg43/skipthepodcast.com" --yes || true
         fi
 
-        # Copy README.md from private repo to temp location for upload
-        cp "$PRIVATE_REPO_PATH/README.md" "./README.md"
-
-        # Create the release with PKG asset and README.md
+        # Prepare files to upload (only versioned DMG - download buttons use dynamic detection)
+        UPLOAD_FILES=("$DMG_FILE")
+        
+        # Copy README.md if it exists
+        if [ -f "$PRIVATE_REPO_PATH/README.md" ]; then
+            cp "$PRIVATE_REPO_PATH/README.md" "./README.md"
+            UPLOAD_FILES+=("./README.md")
+        fi
+        
         gh release create "$TAG_NAME" \
             --repo "msg43/skipthepodcast.com" \
-            --title "Skip the Podcast v${CURRENT_VERSION}" \
+            --title "GetReceipts Daemon v${CURRENT_VERSION}" \
             --generate-notes=false \
-            --notes "**Skip the Podcast v${CURRENT_VERSION}**
+            --notes "**GetReceipts Daemon v${CURRENT_VERSION}**
 
-🍎 **macOS Application Release**
+🍎 **macOS Background Service**
+
+## What Is This?
+
+The GetReceipts daemon runs in the background on your Mac and processes videos/audio locally. All control happens through your web browser at [GetReceipts.org/contribute](https://getreceipts.org/contribute).
 
 ## Installation
-1. Download the \`.pkg\` file below
-2. Open the downloaded file
-3. Drag Skip the Podcast.app to your Applications folder
-4. Launch from Applications
+
+1. Download the \`.dmg\` file below
+2. Open the downloaded DMG
+3. Double-click \"⚠️ CLICK ME TO INSTALL.command\"
+4. Follow the installer prompts (creates desktop shortcut automatically)
+5. Visit [GetReceipts.org/contribute](https://getreceipts.org/contribute) to start processing
+
+## What's New in v${CURRENT_VERSION}
+
+- ✅ **Desktop App Deprecated** - Daemon-only architecture (web-controlled)
+- ✅ **Ultra-Minimal Dependencies** - 70% fewer packages, 56% smaller DMG
+- ✅ **Desktop Shortcut** - Easy daemon control without terminal
+- ✅ **Web Restart Button** - Restart from GetReceipts.org settings
+- ✅ **On-Demand Models** - Whisper models download automatically when needed
 
 ## Release Info
+
 - **Version:** ${CURRENT_VERSION}
 - **Build Date:** $(date +"%Y-%m-%d")
-- **File Size:** $PKG_SIZE
+- **File Size:** $DMG_SIZE
 - **Platform:** macOS (Universal Binary)
+- **Control Interface:** Web browser (GetReceipts.org)
 
-## What's New
-This release includes the latest features and improvements from the Skip the Podcast development cycle.
+## System Requirements
 
-📖 **Download the README.md file below for complete documentation and feature details.**
+- macOS 11.0+ (Big Sur or later)
+- 4GB RAM minimum
+- 500MB free disk space
+- Internet connection for model downloads
+
+📖 **See [CHANGELOG.md](https://github.com/msg43/Knowledge_Chipper/blob/main/CHANGELOG.md) for detailed changes.**
 
 ---
-*This release was automatically generated from the build system.*" \
-            "$PKG_FILE" \
-            "./README.md"
+*First daemon-only release. Previous releases (v3.5.0 and earlier) included desktop GUI.*" \
+            "${UPLOAD_FILES[@]}"
     fi
 else
     warning "GitHub CLI (gh) not found. Release created but you'll need to manually:"
     warning "1. Go to https://github.com/msg43/skipthepodcast.com/releases"
     warning "2. Create a new release for tag $TAG_NAME"
-    warning "3. Upload the PKG file: $PKG_FILE"
-    warning "4. Upload the README.md file: $PRIVATE_REPO_PATH/README.md"
+    warning "3. Upload the DMG file: $DMG_FILE"
+    warning "4. Upload the README.md file (if exists): $PRIVATE_REPO_PATH/README.md"
 fi
 
 success "🎉 Release publication complete!"
 log "📍 Public repository: https://github.com/msg43/skipthepodcast.com"
 log "📍 Releases page: https://github.com/msg43/skipthepodcast.com/releases"
 log "📦 Release tag: $TAG_NAME"
-log "💾 PKG size: $PKG_SIZE"
+log "💾 DMG size: $DMG_SIZE"
+log "📥 Download URL: https://github.com/msg43/Skipthepodcast.com/releases/latest/download/Skip_the_Podcast_Desktop-${CURRENT_VERSION}.dmg"
+log "ℹ️  Note: Download buttons use dynamic detection and will find this DMG automatically"
 
 if [ "$DRY_RUN" -eq 1 ]; then
     warning "This was a dry run. No actual changes were made."

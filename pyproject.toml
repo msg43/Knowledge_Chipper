@@ -89,8 +89,10 @@ dev = [
     "twine>=4.0.0",
 ]
 
+# GUI extras deprecated - daemon is now controlled via web interface
+# Kept for backwards compatibility only (will be removed in future version)
 gui = [
-    "PyQt6>=6.9.0",
+    # PyQt6>=6.9.0  # DEPRECATED - No longer needed
 ]
 
 cuda = [
@@ -121,9 +123,9 @@ full = [
 ]
 
 [project.scripts]
-# CLI removed - GUI-only application
-knowledge-chipper = "knowledge_system.gui:main"
-kc = "knowledge_system.gui:main"
+# Desktop GUI deprecated - daemon is now controlled via web interface
+# Entry points removed (daemon runs via LaunchAgent, controlled at GetReceipts.org)
+# Legacy: knowledge-chipper = "knowledge_system.gui:main" (DEPRECATED)
 
 [project.urls]
 "Homepage" = "https://github.com/msg43/skipthepodcast.com"

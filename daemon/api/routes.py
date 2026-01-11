@@ -1561,6 +1561,40 @@ async def install_update():
         )
 
 
+@router.post("/restart")
+async def restart_daemon():
+    """
+    Restart the daemon.
+    
+    This endpoint triggers a graceful restart of the daemon process.
+    The LaunchAgent will automatically restart it.
+    
+    Useful for:
+    - Checking for updates immediately (instead of waiting 24 hours)
+    - Applying configuration changes
+    - Fixing stuck processes
+    """
+    import os
+    import signal
+    
+    logger.info("Restart requested via API - initiating graceful shutdown")
+    
+    # Schedule restart after response is sent
+    async def delayed_restart():
+        await asyncio.sleep(1)  # Give time for response to be sent
+        logger.info("Executing restart - sending SIGTERM to self")
+        os.kill(os.getpid(), signal.SIGTERM)
+    
+    # Start the delayed restart task
+    asyncio.create_task(delayed_restart())
+    
+    return {
+        "status": "success",
+        "message": "Daemon is restarting - will check for updates and be back online in a few seconds",
+        "restart_in_seconds": 1
+    }
+
+
 @router.get("/updates/status")
 async def update_status():
     """

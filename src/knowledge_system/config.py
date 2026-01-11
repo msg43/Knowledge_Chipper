@@ -1237,21 +1237,16 @@ class SpeakerIdentificationConfig(BaseModel):
     )
 
 
+# GUI configuration deprecated - daemon is now controlled via web interface
+# Legacy GUI code preserved in _deprecated/gui/ directory
+# Keeping class stub for backwards compatibility with existing config files
 class GUIFeaturesConfig(BaseModel):
-    """GUI feature toggles configuration."""
-
-    # Tab visibility settings
-    show_process_management_tab: bool = Field(
-        default=False, description="Show the Process Management tab in the GUI"
-    )
-    show_file_watcher_tab: bool = Field(
-        default=True, description="Show the File Watcher tab in the GUI"
-    )
-
-    # Other GUI feature toggles can be added here in the future
-    enable_advanced_features: bool = Field(
-        default=False, description="Enable advanced/experimental GUI features"
-    )
+    """DEPRECATED: GUI feature toggles configuration (no longer used)."""
+    
+    # Kept for backwards compatibility only
+    show_process_management_tab: bool = Field(default=False)
+    show_file_watcher_tab: bool = Field(default=True)
+    enable_advanced_features: bool = Field(default=False)
 
 
 class CloudConfig(BaseModel):

@@ -1,0 +1,227 @@
+name: Daemon Release
+
+# Automated daemon build and release on version tags
+# Triggers when you push a version tag: git tag v1.1.2 && git push origin v1.1.2
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'  # Semantic version tags only (e.g., v1.1.1, v1.2.0)
+  workflow_dispatch:  # Allow manual triggering for testing
+
+env:
+  PYTHON_VERSION: '3.13'
+
+jobs:
+  # Job 1: Test daemon functionality
+  test:
+    name: Test Daemon API
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Get daemon version
+        id: version
+        run: |
+          VERSION=$(python3 -c 'import re; content = open("daemon/__init__.py").read(); match = re.search(r"__version__.*=.*\"([^\"]+)\"", content); print(match.group(1) if match else "")')
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "Daemon version: $VERSION"
+      
+      - name: Verify tag matches daemon version
+        run: |
+          TAG_VERSION="${GITHUB_REF#refs/tags/v}"
+          DAEMON_VERSION="${{ steps.version.outputs.VERSION }}"
+          if [ "$TAG_VERSION" != "$DAEMON_VERSION" ]; then
+            echo "❌ ERROR: Tag version ($TAG_VERSION) doesn't match daemon version ($DAEMON_VERSION)"
+            echo "   Update daemon/__init__.py to match the tag"
+            exit 1
+          fi
+          echo "✅ Version match verified: $TAG_VERSION"
+      
+      - name: Install daemon dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-daemon.txt
+          pip install pytest pytest-asyncio httpx
+      
+      - name: Run daemon tests
+        run: |
+          echo "🔌 Running daemon API tests..."
+          pytest tests/daemon/ -v --maxfail=3
+      
+      - name: Verify daemon imports
+        run: |
+          python -c "
+          import sys
+          sys.path.insert(0, '.')
+          import daemon
+          from daemon.main import app
+          from daemon.api.routes import router
+          print(f'✅ Daemon v{daemon.__version__} imports successfully')
+          "
+  
+  # Job 2: Build DMG on macOS
+  build:
+    name: Build DMG
+    needs: test
+    runs-on: macos-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Get daemon version
+        id: version
+        run: |
+          VERSION=$(python3 -c 'import re; content = open("daemon/__init__.py").read(); match = re.search(r"__version__.*=.*\"([^\"]+)\"", content); print(match.group(1) if match else "")')
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building daemon v$VERSION"
+      
+      - name: Build DMG
+        run: |
+          bash scripts/build_macos_app.sh --clean --make-dmg --skip-install
+      
+      - name: Verify DMG created
+        run: |
+          DMG_FILE="dist/Skip_the_Podcast_Desktop-${{ steps.version.outputs.VERSION }}.dmg"
+          if [ ! -f "$DMG_FILE" ]; then
+            echo "❌ DMG not found: $DMG_FILE"
+            exit 1
+          fi
+          
+          DMG_SIZE=$(du -h "$DMG_FILE" | cut -f1)
+          DMG_SIZE_MB=$(du -m "$DMG_FILE" | cut -f1)
+          
+          echo "✅ DMG created: $DMG_FILE"
+          echo "📏 Size: $DMG_SIZE ($DMG_SIZE_MB MB)"
+          
+          # Verify size is reasonable (should be < 500MB for minimal daemon)
+          if [ "$DMG_SIZE_MB" -gt 500 ]; then
+            echo "⚠️  WARNING: DMG is larger than expected ($DMG_SIZE_MB MB > 500MB)"
+            echo "   This may indicate bundled models or unnecessary dependencies"
+          fi
+      
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: daemon-dmg-${{ steps.version.outputs.VERSION }}
+          path: dist/Skip_the_Podcast_Desktop-${{ steps.version.outputs.VERSION }}.dmg
+          retention-days: 30
+  
+  # Job 3: Publish release to Skipthepodcast.com repo
+  publish:
+    name: Publish Release
+    needs: build
+    runs-on: macos-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Get daemon version
+        id: version
+        run: |
+          VERSION=$(python3 -c 'import re; content = open("daemon/__init__.py").read(); match = re.search(r"__version__.*=.*\"([^\"]+)\"", content); print(match.group(1) if match else "")')
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+      
+      - name: Download DMG artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: daemon-dmg-${{ steps.version.outputs.VERSION }}
+          path: dist/
+      
+      - name: Verify DMG downloaded
+        run: |
+          ls -lh dist/
+          DMG_FILE="dist/Skip_the_Podcast_Desktop-${{ steps.version.outputs.VERSION }}.dmg"
+          if [ ! -f "$DMG_FILE" ]; then
+            echo "❌ DMG artifact not found"
+            exit 1
+          fi
+          echo "✅ DMG artifact ready for release"
+      
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          DMG_FILE="dist/Skip_the_Podcast_Desktop-${VERSION}.dmg"
+          DMG_SIZE=$(du -h "$DMG_FILE" | cut -f1)
+          
+          # Check if release already exists
+          if gh release view "v${VERSION}" --repo msg43/skipthepodcast.com >/dev/null 2>&1; then
+            echo "⚠️  Release v${VERSION} already exists, deleting..."
+            gh release delete "v${VERSION}" --repo msg43/skipthepodcast.com --yes || true
+          fi
+          
+          # Create release with versioned DMG only
+          gh release create "v${VERSION}" \
+            --repo "msg43/skipthepodcast.com" \
+            --title "GetReceipts Daemon v${VERSION}" \
+            --generate-notes=false \
+            --notes "**GetReceipts Daemon v${VERSION}**
+
+🍎 **macOS Background Service**
+
+## What Is This?
+
+The GetReceipts daemon runs in the background on your Mac and processes videos/audio locally. All control happens through your web browser at [GetReceipts.org/contribute](https://getreceipts.org/contribute).
+
+## Installation
+
+1. Download the \`.dmg\` file below
+2. Open the downloaded DMG
+3. Double-click \"⚠️ CLICK ME TO INSTALL.command\"
+4. Follow the installer prompts (creates desktop shortcut automatically)
+5. Visit [GetReceipts.org/contribute](https://getreceipts.org/contribute) to start processing
+
+## Release Info
+
+- **Version:** ${VERSION}
+- **Build Date:** $(date +"%Y-%m-%d")
+- **File Size:** ${DMG_SIZE}
+- **Platform:** macOS (Universal Binary)
+- **Control Interface:** Web browser (GetReceipts.org)
+
+## System Requirements
+
+- macOS 11.0+ (Big Sur or later)
+- 4GB RAM minimum
+- 500MB free disk space
+- Internet connection for model downloads
+
+📖 **See [CHANGELOG.md](https://github.com/msg43/Knowledge_Chipper/blob/main/CHANGELOG.md) for detailed changes.**
+
+---
+*Automated release from GitHub Actions*" \
+            "$DMG_FILE"
+      
+      - name: Verify release published
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          echo "✅ Release published!"
+          echo "📍 Release page: https://github.com/msg43/Skipthepodcast.com/releases/tag/v${VERSION}"
+          echo "📥 Download URL: https://github.com/msg43/Skipthepodcast.com/releases/latest/download/Skip_the_Podcast_Desktop-${VERSION}.dmg"
+          
+          # Verify download URL works (with retry for CDN propagation)
+          for i in {1..5}; do
+            if curl -sL -I "https://github.com/msg43/Skipthepodcast.com/releases/latest/download/Skip_the_Podcast_Desktop-${VERSION}.dmg" | grep -q "HTTP/2 302"; then
+              echo "✅ Download URL verified!"
+              break
+            else
+              echo "⏳ Waiting for CDN propagation (attempt $i/5)..."
+              sleep 10
+            fi
+          done
