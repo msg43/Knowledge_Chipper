@@ -134,11 +134,24 @@ class ExtractionPass:
         # Build prompt
         prompt = self._build_prompt(transcript, metadata)
         
+        # Validate prompt was properly built
+        logger.info(f"📝 Prompt built: {len(prompt):,} chars")
+        logger.info(f"   - Contains transcript: {'{transcript}' not in prompt}")
+        logger.info(f"   - Contains metadata: title={metadata.get('title', 'N/A')[:50]}")
+        
+        if len(prompt) < 1000:
+            logger.warning(f"⚠️  Prompt suspiciously short ({len(prompt)} chars)! May be malformed.")
+        
+        if '{transcript}' in prompt:
+            logger.error("❌ CRITICAL: Prompt contains unreplaced {transcript} placeholder!")
+            logger.error(f"   Prompt preview: {prompt[:1000]}")
+            raise ValueError("Prompt template variables not substituted")
+        
         # Call LLM
         logger.info("Starting extraction pass...")
         try:
             response = self.llm.complete(prompt)
-            logger.info("Extraction pass complete")
+            logger.info(f"Extraction pass complete: received {len(response):,} char response")
         except Exception as e:
             logger.error(f"Extraction pass failed: {e}")
             raise
@@ -296,6 +309,18 @@ class ExtractionPass:
             
             data = json.loads(json_str)
             
+            # Log what we parsed
+            logger.info(f"📊 Parsed extraction data:")
+            logger.info(f"  - Claims: {len(data.get('claims', []))}")
+            logger.info(f"  - Jargon: {len(data.get('jargon', []))}")
+            logger.info(f"  - People: {len(data.get('people', []))}")
+            logger.info(f"  - Mental Models: {len(data.get('mental_models', []))}")
+            
+            if not data.get('claims'):
+                logger.warning("⚠️  No claims found in extraction response!")
+                logger.warning(f"Response keys: {list(data.keys())}")
+                logger.warning(f"Full data: {json.dumps(data, indent=2)[:1000]}")
+            
             return ExtractionResult(
                 claims=data.get('claims', []),
                 jargon=data.get('jargon', []),
@@ -306,11 +331,16 @@ class ExtractionPass:
         
         except (json.JSONDecodeError, ValueError) as e:
             logger.error(f"Failed to parse extraction response: {e}")
-            logger.debug(f"Response: {response[:500]}...")
+            logger.error(f"Response preview: {response[:1000]}...")
+            logger.error(f"Full response length: {len(response)} chars")
             
-            # Return empty result
+            # Return empty result with detailed error
             return ExtractionResult(
-                metadata={"error": f"Parse error: {str(e)}"}
+                metadata={
+                    "error": f"Parse error: {str(e)}",
+                    "response_preview": response[:500],
+                    "response_length": len(response)
+                }
             )
     
     def _validate_and_repair(self, result: ExtractionResult) -> ExtractionResult:

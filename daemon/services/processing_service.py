@@ -407,57 +407,19 @@ class ProcessingService:
             # Stage 1: Download (YouTube only)
             # ============================================
             elif request.source_type == "youtube":
-                logger.critical("VERIFYING CODE VERSION: LINE 409 - YOUTUBE DOWNLOAD PATH STARTING")
-                logger.critical(f"DEBUG: request.url = {repr(request.url)}")
-                logger.critical(f"DEBUG: request.url type = {type(request.url)}")
-                logger.critical(f"DEBUG: request dict = {request.model_dump()}")
-                
                 # Validate URL before proceeding
                 if not request.url:
                     raise Exception("No URL provided in request (url field is empty/None)")
                 
-                await self._update_job(job_id, "downloading", 0.05, "Downloading from YouTube - CODE VERSION 2026-01-09-11:00")
+                await self._update_job(job_id, "downloading", 0.05, "Downloading from YouTube")
 
                 try:
-                    logger.critical("DEBUG v2: Before imports")
-                    from src.knowledge_system.processors.youtube_download import (
-                        YouTubeDownloadProcessor,
-                    )
                     from src.knowledge_system.config import get_settings
 
-                    logger.critical("DEBUG v2: About to call get_settings()")
                     kc_settings = get_settings()
-                    logger.critical(f"DEBUG v2: kc_settings type: {type(kc_settings)}")
-                    logger.critical(f"DEBUG v2: kc_settings.paths type: {type(kc_settings.paths)}")
-                    logger.critical(f"DEBUG v2: kc_settings.paths.output_dir = {kc_settings.paths.output_dir}")
                     output_dir = Path(kc_settings.paths.output_dir) / "downloads" / "youtube"
                     output_dir.mkdir(parents=True, exist_ok=True)
-                    logger.critical(f"DEBUG v2: Created output_dir: {output_dir}")
 
-                    # Initialize database service for download tracking
-                    from src.knowledge_system.database.service import DatabaseService
-                    import time
-                    
-                    db_service = DatabaseService()
-                    logger.critical(f"DEBUG v3: DatabaseService created, db_path={db_service.db_path}")
-                    
-                    # Test database write to catch any SQLAlchemy issues
-                    try:
-                        test_source = db_service.create_source(
-                            source_id="test_write_" + str(int(time.time())),
-                            title="Test Write",
-                            url="https://test.com",
-                            source_type="youtube"
-                        )
-                        if test_source:
-                            logger.critical("DEBUG v3: Test database write SUCCESSFUL ✓")
-                        else:
-                            logger.critical("DEBUG v3: Test database write returned None - exception was caught silently")
-                    except Exception as test_e:
-                        logger.critical(f"DEBUG v3: Test database write FAILED: {test_e}")
-                        import traceback
-                        logger.critical(f"DEBUG v3: Traceback:\n{traceback.format_exc()}")
-                    
                     # Use YouTube Transcript Service (proven reliable approach)
                     # Gets transcript via YouTube Transcript API (fast, no download needed)
                     from daemon.services.youtube_transcript_service import YouTubeTranscriptService
@@ -606,11 +568,20 @@ class ProcessingService:
                     temperature=0.3,
                 )
                 
+                # Validate transcript before processing
+                if not transcript or len(transcript.strip()) == 0:
+                    raise Exception("Cannot extract claims: Transcript is empty")
+                
+                logger.info(f"📝 Transcript ready: {len(transcript):,} chars")
+                
                 # Run two-pass pipeline
                 pipeline = TwoPassPipeline(llm_adapter=llm)
                 
                 source_id = job_data.get("source_id", "unknown")
                 metadata = job_data.get("metadata", {})
+                
+                logger.info(f"🚀 Starting two-pass extraction for {source_id}")
+                logger.info(f"   Provider: {provider}, Model: {model}")
                 
                 result = await asyncio.to_thread(
                     pipeline.process,
@@ -619,16 +590,62 @@ class ProcessingService:
                     metadata=metadata,
                 )
 
+                # DEBUG: Log what we got back
+                logger.info(f"Two-pass result type: {type(result)}")
+                logger.info(f"Result attributes: {dir(result)}")
+                logger.info(f"Total claims: {result.total_claims}")
+                if hasattr(result, 'extraction'):
+                    logger.info(f"Extraction type: {type(result.extraction)}")
+                    logger.info(f"Extraction claims: {len(result.extraction.claims) if hasattr(result.extraction, 'claims') else 'N/A'}")
+                    if hasattr(result.extraction, 'claims'):
+                        logger.info(f"First claim sample: {result.extraction.claims[0] if result.extraction.claims else 'None'}")
+
                 # Store extraction results
                 job_data["claims_count"] = result.total_claims
                 job_data["extraction_result"] = result
                 job_data["high_importance_claims"] = result.high_importance_claims
 
+                # VALIDATION: Fail job if no data extracted
+                # Check all entity types to ensure SOMETHING was extracted
+                total_entities = result.total_claims
+                if hasattr(result, 'extraction'):
+                    total_entities += len(getattr(result.extraction, 'jargon', []))
+                    total_entities += len(getattr(result.extraction, 'people', []))
+                    total_entities += len(getattr(result.extraction, 'mental_models', []))
+                
+                if total_entities == 0:
+                    import json
+                    error_details = {
+                        "transcript_length": len(transcript),
+                        "metadata_keys": list(metadata.keys()),
+                        "provider": provider,
+                        "model": model,
+                        "result_type": str(type(result)),
+                        "has_extraction_attr": hasattr(result, 'extraction'),
+                    }
+                    error_msg = (
+                        f"EXTRACTION FAILED: Zero entities extracted from {len(transcript):,} char transcript.\n"
+                        f"Details: {json.dumps(error_details, indent=2)}\n\n"
+                        f"Possible causes:\n"
+                        f"  1. API key invalid/missing for {provider}\n"
+                        f"  2. LLM returned error instead of JSON\n"
+                        f"  3. Prompt malformed (check logs for unreplaced variables)\n"
+                        f"  4. JSON parsing failed\n"
+                        f"  5. Response structure mismatch\n\n"
+                        f"Check logs above for:\n"
+                        f"  - API key status (ANTHROPIC_API_KEY, OPENAI_API_KEY, etc.)\n"
+                        f"  - LLM response preview\n"
+                        f"  - Prompt length and content\n"
+                        f"  - JSON parsing warnings"
+                    )
+                    logger.error(error_msg)
+                    raise Exception(error_msg)
+
                 await self._update_job(
                     job_id,
                     "extracting",
                     0.75,
-                    f"Extracted {result.total_claims} claims",
+                    f"Extracted {result.total_claims} claims, {len(getattr(result.extraction, 'jargon', []))} jargon, {len(getattr(result.extraction, 'people', []))} people",
                     claims_count=result.total_claims,
                 )
 
@@ -761,7 +778,9 @@ class ProcessingService:
             "concepts": [],
         }
         
-        # Extract claims from the extraction result
+        # Extract claims from the TwoPassResult
+        # 'extraction' variable is actually the TwoPassResult
+        # extraction.extraction is the ExtractionResult
         if hasattr(extraction, "extraction") and extraction.extraction:
             claims = extraction.extraction.claims or []
             for claim in claims:
@@ -792,8 +811,15 @@ class ProcessingService:
                         "definition": term.get("definition", ""),
                     })
             
-            # Note: ExtractionResult doesn't have 'concepts' - it has 'mental_models' instead
-            # Concepts are not extracted in the two-pass pipeline
+            # Add mental_models as concepts
+            mental_models = extraction.extraction.mental_models or []
+            for model in mental_models:
+                if isinstance(model, dict):
+                    session_data["concepts"].append({
+                        "source_id": source_id,
+                        "name": model.get("name", ""),
+                        "definition": model.get("description", ""),
+                    })
         
         return session_data
 

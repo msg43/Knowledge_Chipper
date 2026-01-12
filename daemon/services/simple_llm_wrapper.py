@@ -89,7 +89,17 @@ class SimpleLLMWrapper:
                     max_tokens=4096,  # Reasonable default for claim extraction
                 )
             )
-            logger.info(f"✅ LLM call successful: {len(result.get('content', ''))} chars")
+            
+            # Log response details for diagnostics
+            content = result.get('content', '')
+            logger.info(f"✅ LLM call successful: {len(content)} chars")
+            logger.info(f"📄 Response preview (first 500 chars): {content[:500]}")
+            
+            # Check if response looks like JSON
+            if content.strip().startswith('{') or '```json' in content:
+                logger.info("✓ Response appears to be JSON format")
+            else:
+                logger.warning(f"⚠️  Response does NOT appear to be JSON! Starts with: {content[:100]}")
         except Exception as e:
             logger.error(f"❌ LLM call failed: provider={self.provider}, model={self.model}, error={e}")
             raise

@@ -1650,6 +1650,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Comprehensive Extraction Diagnostics** (multiple files): Systematic validation and logging to diagnose zero-claims issue
+  - Added LLM response preview logging in SimpleLLMWrapper (500 char preview, JSON format detection)
+  - Added prompt validation in ExtractionPass (length check, variable substitution verification, transcript placeholder detection)
+  - Added transcript validation before pipeline execution (empty check, length logging)
+  - Added hard validation preventing false success when zero entities extracted
+  - Added detailed error messages with 6 possible causes and diagnostic steps
+  - Job now fails properly with actionable error if extraction produces no claims/jargon/people
+  - Prevents upload attempts with empty data
+  - Prevents false "success" reporting to user
 - **One-Click Release Script** (`~/Desktop/Release_Daemon.command`): Automated daemon release workflow
   - Bumps version automatically (increments patch number)
   - Builds signed & notarized PKG package
@@ -1661,6 +1670,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Documentation: `RELEASE_DAEMON_SCRIPT.md`
 
 ### Fixed
+- **Debug Messages in Job Status** (`daemon/services/processing_service.py`): Removed debug timestamps and test messages that were showing during extraction
+  - Removed "CODE VERSION 2026-01-09-11:00" message from download status
+  - Removed debug logging statements (logger.critical DEBUG messages)
+  - Removed test database write operations
+  - Cleaned up 30+ lines of debug code
 - **PyQt6 Import in device_auth.py** (`src/knowledge_system/services/device_auth.py`): CRITICAL - Removed PyQt6 dependency causing extraction failures
   - Issue: device_auth.py still used `from PyQt6.QtCore import QSettings` causing `ModuleNotFoundError: No module named 'PyQt6'`
   - Impact: All extractions failed in v1.1.18 with "No module named 'PyQt6'" error
