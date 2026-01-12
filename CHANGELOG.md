@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed - PyInstaller Build Improvements (January 12, 2026)
+
+**Migrated daemon.spec to onedir mode and cleaned up dependencies**
+
+Updated PyInstaller configuration to use onedir mode (required for PyInstaller 7.0+) and removed unnecessary `pydub` dependency that was causing build warnings.
+
+**What Changed:**
+- Build mode: onefile → onedir (future-proof for PyInstaller 7.0)
+- Removed `pydub` from hiddenimports (replaced by FFmpegAudioProcessor)
+- Added database driver excludes to reduce warning noise
+- Updated documentation in spec file
+
+**Technical Details:**
+- Onedir mode required for PyInstaller 7.0+ with macOS .app bundles
+- `pydub` was causing "ERROR: Hidden import 'pydub' not found" warning
+- Audio processing now uses FFmpeg directly via `audio_utils.py`
+- Build warnings reduced from ~10 to ~5 (remaining are platform-specific and harmless)
+
+**Changes:**
+- ✅ `installer/daemon.spec` - Migrated to onedir mode, removed pydub, added excludes
+
 ## [1.1.3] - 2026-01-12
 
 ### Changed - PKG Distribution with Auto-Install (January 12, 2026)
