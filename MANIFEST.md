@@ -407,6 +407,7 @@ Comprehensive project documentation (128+ files).
 - `DATABASE_SERVICE_LIFECYCLE.md` - Database service lifecycle management
 - `DATABASE_RECORD_DUPLICATION_AUDIT.md` - Audit of database record duplication issues
 - `DATABASE_SCHEMA_USER_NOTES_FIX.md` - November 20, 2025 fix for missing user_notes column in claims table causing Review tab crash. Added automatic incremental migration system to apply schema additions on startup
+- `TROUBLESHOOTING_DAEMON_VERSION.md` - **NEW (Jan 12, 2026):** Comprehensive guide for diagnosing and fixing daemon version mismatches caused by cached builds, development processes, or weak restarts; includes nuclear clean build procedure, prevention checklist, diagnostic commands, and common scenario solutions
 - `DIST_FOLDER_CLEANUP.md` - Cleanup procedures for distribution folder
 - `CLEANUP_COMPLETE_SUMMARY.md` - Summary of completed cleanup tasks
 

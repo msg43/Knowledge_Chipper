@@ -212,8 +212,29 @@ clean:
 	rm -rf coverage.xml
 	rm -rf bandit-report.json
 	rm -rf test_output/
-	find . -type d -name __pycache__ -exec rm -rf {} + || true
-	find . -type f -name "*.pyc" -delete || true
+	
+	# Aggressive Python bytecode cache cleaning
+	@echo "Cleaning Python bytecode cache..."
+	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+	find . -type f -name "*.pyc" -delete 2>/dev/null || true
+	find . -type f -name "*.pyo" -delete 2>/dev/null || true
+	
+	# PyInstaller cache
+	@echo "Cleaning PyInstaller cache..."
+	rm -rf ~/.pyinstaller_cache 2>/dev/null || true
+	rm -rf .pyinstaller 2>/dev/null || true
+	
+	# Kill development daemon processes
+	@echo "Checking for running daemon processes..."
+	@if pgrep -f "python.*daemon.main" >/dev/null 2>&1; then \
+		echo "⚠️  Found development daemon process. Kill it? (y/n)"; \
+		read -r REPLY; \
+		if [ "$$REPLY" = "y" ]; then \
+			pkill -9 -f "python.*daemon.main" || true; \
+			echo "✓ Killed development daemon"; \
+		fi; \
+	fi
+	
 	@echo "✅ Cleanup complete!"
 
 # Show troubleshooting guide for push failures

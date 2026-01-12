@@ -49,6 +49,49 @@ echo ""
 echo -e "${GREEN}✓ Auto-detected version: ${VERSION}${NC}"
 echo ""
 
+# [0/5] Pre-flight checks
+echo ""
+echo -e "${BLUE}[0/5] Pre-flight checks...${NC}"
+
+# Check for running development daemon
+if lsof -ti:8765 >/dev/null 2>&1; then
+    PORT_PID=$(lsof -ti:8765)
+    PROCESS=$(ps -p $PORT_PID -o command= 2>/dev/null)
+    
+    if [[ "$PROCESS" == *"python"*"daemon"* ]]; then
+        echo -e "${YELLOW}⚠️  Development daemon detected on port 8765${NC}"
+        echo "   Process: $PROCESS"
+        echo "   This will cause version conflicts!"
+        echo ""
+        echo "Kill it and continue? (y/n)"
+        read -r REPLY
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            kill -9 $PORT_PID
+            sleep 2
+            echo -e "${GREEN}✓ Killed development daemon${NC}"
+        else
+            echo -e "${RED}Aborting release${NC}"
+            exit 1
+        fi
+    fi
+fi
+
+# Verify no stale build artifacts
+if [ -d "build/" ] || [ -d "dist/" ]; then
+    echo -e "${YELLOW}⚠️  Found existing build/ or dist/ directories${NC}"
+    echo "   These may contain stale cached files"
+    echo ""
+    echo "Clean them before building? (recommended: y)"
+    read -r REPLY
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        rm -rf build/ dist/
+        echo -e "${GREEN}✓ Cleaned build artifacts${NC}"
+    fi
+fi
+
+echo -e "${GREEN}✓ Pre-flight checks passed${NC}"
+echo ""
+
 # Check if PKG already exists
 PKG_FILE="dist/GetReceipts-Daemon-${VERSION}.pkg"
 

@@ -98,6 +98,26 @@ fi
 log "Cleaning previous builds..."
 rm -rf "$BUILD_DIR"
 rm -rf "$DIST_DIR/daemon_dist"
+
+# Aggressive Python cache cleaning
+log "Cleaning Python bytecode cache..."
+find "$PROJECT_ROOT/daemon" -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+find "$PROJECT_ROOT/daemon" -type f -name "*.pyc" -delete 2>/dev/null || true
+find "$PROJECT_ROOT/daemon" -type f -name "*.pyo" -delete 2>/dev/null || true
+find "$PROJECT_ROOT/src" -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+find "$PROJECT_ROOT/src" -type f -name "*.pyc" -delete 2>/dev/null || true
+
+# Force PyInstaller cache clear
+log "Clearing PyInstaller cache..."
+rm -rf ~/.pyinstaller_cache 2>/dev/null || true
+rm -rf "$PROJECT_ROOT/.pyinstaller" 2>/dev/null || true
+
+# Kill any running development processes
+log "Killing stray daemon processes..."
+pkill -9 -f "python.*daemon.main" 2>/dev/null || true
+pkill -9 -f "GetReceiptsDaemon" 2>/dev/null || true
+sleep 2
+
 mkdir -p "$BUILD_DIR"
 mkdir -p "$DIST_DIR"
 
@@ -140,6 +160,26 @@ codesign --force --deep --options runtime --timestamp \
 log "Verifying app signature..."
 codesign --verify --deep --strict --verbose=2 "$APP_BUNDLE" || error "Signature verification failed"
 log "✓ App signature verified"
+
+# Verify built daemon version matches expected version
+log "Verifying built daemon version..."
+BUILT_BINARY="$DIST_DIR/daemon_dist/GetReceiptsDaemon.app/Contents/MacOS/GetReceiptsDaemon"
+BUILT_VERSION=$(strings "$BUILT_BINARY" | grep -E "^__version__\s*=\s*['\"]" | sed -E 's/.*["'\'']([0-9.]+)["'\'']/\1/' | head -1)
+
+if [ -z "$BUILT_VERSION" ]; then
+    warning "Could not extract version from binary (may be obfuscated)"
+elif [ "$BUILT_VERSION" != "$VERSION" ]; then
+    error "Version mismatch! Built: $BUILT_VERSION, Expected: $VERSION
+    
+This indicates stale cache. Run:
+    make clean
+    rm -rf build/ dist/
+    find daemon/ -name '__pycache__' -exec rm -rf {} +
+    
+Then rebuild."
+else
+    log "✓ Version verified: $BUILT_VERSION matches $VERSION"
+fi
 
 # Create package root structure
 log "Creating package structure..."

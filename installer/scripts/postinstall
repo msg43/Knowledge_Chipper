@@ -89,24 +89,51 @@ RESTART_SCRIPT="$USER_HOME/Desktop/Restart GetReceipts.command"
 cat > "$RESTART_SCRIPT" << 'EOF'
 #!/bin/bash
 #
-# Restart GetReceipts Daemon
+# Restart GetReceipts Daemon (AGGRESSIVE)
 #
-# This script restarts the GetReceipts daemon process
+# This script forcefully restarts the GetReceipts daemon process
+# by killing all instances and reloading the LaunchAgent
 #
 
 echo "Restarting GetReceipts Daemon..."
+echo ""
 
-# Stop the daemon
-launchctl stop org.getreceipts.daemon 2>/dev/null || true
+# AGGRESSIVE restart instead of gentle stop/start
+echo "1. Killing all daemon processes..."
+pkill -9 -f "python.*daemon" 2>/dev/null || true
+pkill -9 -f "GetReceiptsDaemon" 2>/dev/null || true
+
+# Kill anything on port 8765
+PORT_PID=$(lsof -ti:8765 2>/dev/null)
+if [ -n "$PORT_PID" ]; then
+    echo "   Killing process on port 8765 (PID: $PORT_PID)"
+    kill -9 $PORT_PID 2>/dev/null || true
+fi
+
+sleep 2
+
+echo "2. Unloading LaunchAgent..."
+launchctl bootout gui/$(id -u)/org.getreceipts.daemon 2>/dev/null || true
+launchctl unload ~/Library/LaunchAgents/org.getreceipts.daemon.plist 2>/dev/null || true
+
 sleep 1
 
-# Start the daemon
-launchctl start org.getreceipts.daemon
+echo "3. Loading LaunchAgent fresh..."
+launchctl load ~/Library/LaunchAgents/org.getreceipts.daemon.plist
+
+sleep 3
+
+echo "4. Verifying daemon started..."
+if curl -s http://localhost:8765/api/config >/dev/null 2>&1; then
+    VERSION=$(curl -s http://localhost:8765/api/config | python3 -c "import sys, json; print(json.load(sys.stdin).get('version', 'unknown'))" 2>/dev/null)
+    echo "✅ Daemon restarted successfully! Version: $VERSION"
+else
+    echo "⚠️  Daemon may still be starting... Check http://localhost:8765"
+fi
 
 # Show notification
-osascript -e 'display notification "GetReceipts daemon has been restarted" with title "GetReceipts" sound name "Glass"'
+osascript -e 'display notification "GetReceipts daemon has been restarted" with title "GetReceipts" sound name "Glass"' 2>/dev/null || true
 
-echo "✅ Daemon restarted successfully!"
 echo ""
 echo "The daemon is now running at http://localhost:8765"
 echo "Visit https://getreceipts.org to use it."
@@ -120,14 +147,38 @@ chmod +x "$RESTART_SCRIPT"
 
 echo "Desktop restart button created at: $RESTART_SCRIPT"
 
-# 3. Load and start the LaunchAgent
+# 3. Stop any existing daemon processes (AGGRESSIVE)
+echo "Stopping any running daemon processes..."
+
+# Find and kill any Python processes running daemon
+pkill -9 -f "python.*daemon.main" 2>/dev/null || true
+pkill -9 -f "python.*-m daemon" 2>/dev/null || true
+
+# Find and kill processes on port 8765
+PORT_PID=$(lsof -ti:8765 2>/dev/null)
+if [ -n "$PORT_PID" ]; then
+    echo "Killing process on port 8765 (PID: $PORT_PID)"
+    kill -9 $PORT_PID 2>/dev/null || true
+fi
+
+# Stop existing LaunchAgent
+sudo -u "$CURRENT_USER" launchctl bootout "gui/$(id -u $CURRENT_USER)/org.getreceipts.daemon" 2>/dev/null || true
+sudo -u "$CURRENT_USER" launchctl unload "$LAUNCH_AGENTS_DIR/org.getreceipts.daemon.plist" 2>/dev/null || true
+
+sleep 2
+
+# Verify nothing is listening on port
+if lsof -ti:8765 >/dev/null 2>&1; then
+    echo "⚠️  Warning: Something still bound to port 8765"
+fi
+
 echo "Starting daemon..."
 
 # Load the LaunchAgent as the user (not as root)
 sudo -u "$CURRENT_USER" launchctl load "$LAUNCH_AGENTS_DIR/org.getreceipts.daemon.plist" 2>/dev/null || true
 
 # Give it a moment to start
-sleep 2
+sleep 3
 
 # Check if it's running
 if sudo -u "$CURRENT_USER" launchctl list | grep -q "org.getreceipts.daemon"; then

@@ -9,7 +9,35 @@ All notable changes to this project will be documented in this file.
 ## [1.1.18] - 2026-01-12
 
 ### Summary
-Fixed auto-update system to use PKG installers from Skipthepodcast.com repo. This version includes working automatic updates that will prompt for admin password and install seamlessly.
+Fixed auto-update system to use PKG installers from Skipthepodcast.com repo. This version includes working automatic updates that will prompt for admin password and install seamlessly. Also implemented comprehensive cache prevention to eliminate version mismatch issues.
+
+### Added
+- **Comprehensive Cache Prevention** (multiple files): Implemented safeguards to prevent old daemon code from being cached
+  - **Build script** (`installer/build_pkg.sh`): Aggressive cache cleaning before PyInstaller build
+    - Cleans all `__pycache__` and `.pyc/.pyo` files in daemon/ and src/
+    - Clears PyInstaller cache (~/.pyinstaller_cache)
+    - Kills any running development daemon processes
+    - Post-build version verification to catch cache issues
+  - **Release script** (`scripts/release_daemon.sh`): Pre-flight checks before building
+    - Detects and kills development daemons blocking port 8765
+    - Prompts to clean stale build/ dist/ directories
+    - Prevents building with cached artifacts
+  - **Postinstall script** (`installer/scripts/postinstall`): Aggressive process cleanup
+    - Force-kills all daemon processes (Python and binary)
+    - Kills processes on port 8765
+    - Uses `launchctl bootout` instead of weak `stop` command
+    - Verifies port is free before starting new daemon
+  - **Desktop restart button**: Enhanced with force-kill and version verification
+    - Shows actual daemon version after restart
+    - Uses aggressive process cleanup
+  - **Makefile** (`Makefile`): Enhanced clean target
+    - Prompts to kill development daemon processes
+    - Cleans PyInstaller cache
+    - More thorough bytecode cleanup
+  - **Documentation** (`docs/TROUBLESHOOTING_DAEMON_VERSION.md`): Comprehensive troubleshooting guide
+    - Nuclear clean build procedure
+    - Prevention checklist
+    - Diagnostic commands for version issues
 
 ### Changed
 - **Auto-Update System** (`daemon/services/update_checker.py`): Updated to download PKG installers from Skipthepodcast.com repo
