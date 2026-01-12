@@ -10,5 +10,5 @@ Architecture:
 - All heavy lifting happens locally on user's Mac
 """
 
-__version__ = "1.1.4"
+__version__ = "1.1.5"
 

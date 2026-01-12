@@ -4,7 +4,37 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-## [1.1.4] - 2026-01-12
+## [1.1.5] - 2026-01-12
+
+### Fixed - Critical Logger Import Bug (January 12, 2026)
+
+**Fixed daemon crash on startup due to missing logger import**
+
+The daemon was crashing immediately on startup with `NameError: name 'logger' is not defined` in `daemon/config/settings.py`. This prevented the daemon from starting and caused the website status indicator to remain red.
+
+**What Changed:**
+- Fixed missing `import logging` in `daemon/config/settings.py`
+- Added `logger = logging.getLogger(__name__)` initialization
+- Daemon now starts successfully and responds to health checks
+
+**User Impact:**
+- ✅ Daemon now starts correctly after installation
+- ✅ Website status indicator turns green when daemon is running
+- ✅ All daemon API endpoints now accessible
+
+**Technical Details:**
+- Bug was in lines 145 and 154 of `daemon/config/settings.py`
+- Logger was used but never imported or initialized
+- PyInstaller build succeeded but runtime crashed on first logger call
+- Fix adds proper logging module import and logger initialization
+
+**Changes:**
+- ✅ `daemon/config/settings.py` - Added logging import and logger initialization
+- ✅ `daemon/__init__.py` - Version bumped to 1.1.5
+
+**Note:** Version 1.1.4 was skipped due to this critical bug being discovered before release.
+
+## [1.1.4] - 2026-01-12 (SKIPPED - Critical Bug)
 
 ### Changed - Generic Release Script and Version Update (January 12, 2026)
 
