@@ -47,6 +47,8 @@ Complete inventory of all files in the Knowledge Chipper codebase with descripti
 ### Documentation - Project Status
 
 - `ACTIVE_TODOS.md` - Current active tasks and work in progress
+- `RELEASE_DAEMON_SCRIPT.md` - **NEW (Jan 12, 2026):** Documentation for one-click daemon release automation script: bumps version, builds PKG, creates GitHub release, uploads PKG, commits and pushes to both repos; complete automation of entire release workflow with colored output and progress tracking
+- `ZERO_CLAIMS_DIAGNOSTIC_IMPLEMENTATION.md` - **NEW (Jan 12, 2026):** Comprehensive diagnostic implementation for zero-claims issue: systematic validation at 4 phases (API key, LLM response, prompt template, parsing), hard validation preventing false success, detailed error messages with 6 possible causes and diagnostic steps, complete logging flow for root cause analysis
 - `ALL_FIXES_COMPLETE.md` - Comprehensive list of all bug fixes that have been completed
 - `ALL_IMPLEMENTATION_COMPLETE.md` - List of all major features that have been fully implemented
 - `ALL_TRANSCRIPTION_FIXES_COMPLETE.md` - Comprehensive list of all transcription-related bug fixes completed

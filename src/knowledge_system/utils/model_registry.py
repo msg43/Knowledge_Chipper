@@ -229,12 +229,13 @@ def get_google_models(force_refresh: bool = False) -> list[str]:
             logger.info(f"Fetched {len(gemini_models)} Gemini models from Google API (out of {all_models_count} total models)")
             
             # Sort models to prioritize the best ones (January 2026)
-            # Priority order: Gemini 3 Pro > 2.5 Pro > 2.5 Flash > 3 Flash > others
+            # Only include models confirmed to exist in Google's API
             priority_order = [
-                "gemini-3-pro-preview",      # Best: Deep reasoning, 2M+ context
-                "gemini-2.5-pro",            # Complex coding, creative writing
-                "gemini-2.5-flash",          # Speed and throughput
-                "gemini-3-flash-preview",    # Fast preview
+                "gemini-2.0-flash-exp",      # Latest: Fast, 1M context, experimental
+                "gemini-1.5-pro-latest",     # Most capable, 2M context
+                "gemini-1.5-flash-latest",   # Fast, 1M context
+                "gemini-1.5-pro",            # Stable version
+                "gemini-1.5-flash",          # Stable version
             ]
             
             # Sort: priority models first, then alphabetically

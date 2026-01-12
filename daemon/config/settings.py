@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     # Processing Defaults (user configurable)
     default_whisper_model: Literal["tiny", "base", "small", "medium", "large-v3"] = "medium"
     default_llm_provider: Optional[Literal["openai", "anthropic", "google"]] = "anthropic"
-    default_llm_model: Optional[str] = "claude-sonnet-4-20250514"  # Claude Sonnet 4.5 default
+    default_llm_model: Optional[str] = None  # Will use first validated model from provider API
     auto_upload_enabled: bool = True
     process_full_pipeline: bool = True
 

@@ -550,16 +550,24 @@ class ProcessingService:
                 provider = request.llm_provider or settings.default_llm_provider or "openai"
                 model = request.llm_model or settings.default_llm_model
                 
-                # Default models per provider (cloud-only per plan)
+                # Get validated model from registry (no hardcoded fallbacks)
                 if not model:
-                    if provider == "openai":
-                        model = "gpt-4o"  # GPT-4o - Latest widely available OpenAI model
-                    elif provider == "anthropic":
-                        model = "claude-sonnet-4-20250514"  # Claude Sonnet 4.5
-                    elif provider == "google":
-                        model = "gemini-3-pro-preview"  # Gemini 3 Pro - Best for deep reasoning
-                    else:
-                        model = "gpt-4o"  # fallback to OpenAI
+                    from src.knowledge_system.utils.model_registry import get_provider_models
+                    
+                    validated_models = get_provider_models(provider, force_refresh=False)
+                    
+                    if not validated_models:
+                        raise Exception(
+                            f"No validated models available for {provider}. "
+                            f"Please check:\n"
+                            f"  1. API key is configured for {provider}\n"
+                            f"  2. API key is valid and not expired\n"
+                            f"  3. Account has access to models\n\n"
+                            f"Configure API keys at: http://localhost:8765 or https://getreceipts.org/contribute/settings"
+                        )
+                    
+                    model = validated_models[0]  # Use first validated model from API
+                    logger.info(f"✅ Using validated default model: {model} (from {provider} API)")
                 
                 # Initialize LLM wrapper (provides simple complete(prompt) interface)
                 llm = SimpleLLMWrapper(

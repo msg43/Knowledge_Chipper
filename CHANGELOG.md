@@ -4,7 +4,59 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-## [Unreleased]
+### Changed
+- **Removed ALL Hardcoded Model Fallbacks** (`daemon/services/processing_service.py`, `daemon/config/settings.py`): Now uses only validated models from provider APIs
+  - Removed hardcoded "gpt-4o", "claude-sonnet-4-20250514", "gemini-2.0-flash-exp" fallbacks
+  - Now calls `get_provider_models()` to fetch validated models from provider API
+  - If no validated models available, fails with clear error message
+  - Changed `default_llm_model` from hardcoded value to `None` (uses first validated model)
+  - Prevents invalid model names from being used (root cause of zero-claims issue)
+  - Model list always fresh from provider API, never stale
+
+### Added
+- **Comprehensive Extraction Diagnostics** (multiple files): Systematic validation and logging to diagnose zero-claims issue
+  - Added LLM response preview logging in SimpleLLMWrapper (500 char preview, JSON format detection)
+  - Added prompt validation in ExtractionPass (length check, variable substitution verification, transcript placeholder detection)
+  - Added transcript validation before pipeline execution (empty check, length logging)
+  - Added hard validation preventing false success when zero entities extracted
+  - Added detailed error messages with 6 possible causes and diagnostic steps
+  - Job now fails properly with actionable error if extraction produces no claims/jargon/people
+  - Prevents upload attempts with empty data
+  - Prevents false "success" reporting to user
+- **One-Click Release Script** (`~/Desktop/Release_Daemon.command`): Automated daemon release workflow
+  - Bumps version automatically (increments patch number)
+  - Builds signed & notarized PKG package
+  - Creates GitHub release with tag
+  - Uploads PKG to GitHub
+  - Commits and pushes changes to both Knowledge_Chipper and GetReceipts repos
+  - Complete automation of entire release process
+  - Beautiful colored terminal output with progress tracking
+  - Documentation: `RELEASE_DAEMON_SCRIPT.md`
+- **Episode Page Generation for AB Testing** (`daemon/services/processing_service.py`, `src/knowledge_system/services/file_generation.py`): Automatic full markdown generation after extraction
+  - Each extraction now generates a complete episode page with comprehensive metadata and both summaries
+  - **Metadata Section:** Channel, published date, duration, view count, URL, processing info, LLM used, costs
+  - **Thumbnail:** Embedded YouTube thumbnail image at top of page
+  - **YouTube AI Summary:** YouTube's own AI-generated summary (if available) in separate section
+  - **Executive Summary:** Our AI analysis from Pass 2 synthesis (long-form comprehensive summary)
+  - **Claims:** Grouped by speaker with evidence quotes and YouTube timestamp links
+  - **People, Jargon, Concepts:** All extracted entities with definitions
+  - Uses existing `FileGenerationService._generate_hce_markdown()` for consistent formatting
+  - Saves to `output/summaries/` directory with same format as original code
+  - Enables easy AB testing by comparing outputs from different LLM providers/models
+  - Episode markdown file path stored in job_data for easy access
+
+### Fixed
+- **Debug Messages in Job Status** (`daemon/services/processing_service.py`): Removed debug timestamps and test messages that were showing during extraction
+  - Removed "CODE VERSION 2026-01-09-11:00" message from download status
+  - Removed debug logging statements (logger.critical DEBUG messages)
+  - Removed test database write operations
+  - Cleaned up 30+ lines of debug code
+- **PyQt6 Import in device_auth.py** (`src/knowledge_system/services/device_auth.py`): CRITICAL - Removed PyQt6 dependency causing extraction failures
+  - Issue: device_auth.py still used `from PyQt6.QtCore import QSettings` causing `ModuleNotFoundError: No module named 'PyQt6'`
+  - Impact: All extractions failed in v1.1.18 with "No module named 'PyQt6'" error
+  - Solution: Replaced QSettings with JSON file storage (`~/Library/Application Support/SkipThePodcast/device_auth.json`)
+  - Now 100% GUI-independent - works in daemon-only mode
+  - All device auth functionality preserved (auto-generation, claim codes, linking)
 
 ## [1.1.18] - 2026-01-12
 
@@ -74,8 +126,8 @@ Incremental release with bug fixes and improvements to episode page generation a
 - **Default LLM Provider** (`daemon/config/settings.py`, `daemon/services/processing_service.py`): Updated defaults to latest flagship models
   - Default provider: Anthropic (was OpenAI)
   - Default model: Claude Sonnet 4.5 (`claude-sonnet-4-20250514`)
-  - OpenAI fallback: GPT-4o (latest widely available - GPT-5.2 requires special tier access)
-  - Google fallback: Gemini 3 Pro Preview (best for deep reasoning)
+  - OpenAI fallback: GPT-4o (latest widely available)
+  - Google fallback: Gemini 2.0 Flash Experimental (`gemini-2.0-flash-exp`)
 - **Dynamic Model Fetching** (`src/knowledge_system/utils/model_registry.py`): Model lists now fetched directly from provider APIs
   - **Removed static fallback lists** for OpenAI and Google (became stale immediately)
   - **Anthropic**: Keep curated list (no public models API)
@@ -1648,6 +1700,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+### Changed
+- **Removed ALL Hardcoded Model Fallbacks** (`daemon/services/processing_service.py`, `daemon/config/settings.py`): Now uses only validated models from provider APIs
+  - Removed hardcoded "gpt-4o", "claude-sonnet-4-20250514", "gemini-2.0-flash-exp" fallbacks
+  - Now calls `get_provider_models()` to fetch validated models from provider API
+  - If no validated models available, fails with clear error message
+  - Changed `default_llm_model` from hardcoded value to `None` (uses first validated model)
+  - Prevents invalid model names from being used (root cause of zero-claims issue)
+  - Model list always fresh from provider API, never stale
 
 ### Added
 - **Comprehensive Extraction Diagnostics** (multiple files): Systematic validation and logging to diagnose zero-claims issue
