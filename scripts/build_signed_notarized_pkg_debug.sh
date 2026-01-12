@@ -228,12 +228,10 @@ check_notary_credentials && NOTARY_PROFILE="Skip-the-Podcast-Notary"
 # Check for required environment variables or prompt
 if [ -z "$DEVELOPER_ID_INSTALLER" ]; then
     echo "Finding Developer ID Installer certificate..."
-    # Avoid filtering by codesigning; use full identity list
-    DEVELOPER_ID_INSTALLER=$(security find-identity -v | grep "Developer ID Installer" | head -1 | awk -F'"' '{print $2}')
-    if [ -z "$DEVELOPER_ID_INSTALLER" ]; then
-        print_error "No Developer ID Installer certificate found"
-        exit 1
-    fi
+    # Use the specific working certificate (SHA-1: 773033671956B8F6DD90593740863F2E48AD2024)
+    # This is the October 2025 certificate that passes notarization
+    # Note: We have two installer certificates, and the first one (Sep 2025) has a broken chain
+    DEVELOPER_ID_INSTALLER="773033671956B8F6DD90593740863F2E48AD2024"
     echo "Found: $DEVELOPER_ID_INSTALLER"
 fi
 

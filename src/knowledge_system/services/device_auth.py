@@ -6,18 +6,18 @@ GetReceipts.org integration without user intervention.
 
 Similar to Happy's approach:
 - Auto-generate UUID device_id + secret key on first use
-- Store in QSettings (platform-native, secure)
+- Store in JSON file (platform-independent, no GUI dependency)
 - Silent authentication, user can disable in Settings
 - Device claiming flow for linking to user accounts
 """
 
+import json
 import random
 import secrets
 import string
 import uuid
 from datetime import datetime, timedelta
-
-from PyQt6.QtCore import QSettings
+from pathlib import Path
 
 from ..logger import get_logger
 
@@ -28,8 +28,45 @@ class DeviceAuth:
     """Manages automatic device authentication credentials."""
 
     def __init__(self) -> None:
-        """Initialize with QSettings storage."""
-        self.settings = QSettings("SkipThePodcast", "SkipThePodcast")
+        """Initialize with JSON file storage (no GUI dependency)."""
+        # Use platform-appropriate config directory
+        if Path.home().joinpath("Library").exists():
+            # macOS
+            config_dir = Path.home() / "Library" / "Application Support" / "SkipThePodcast"
+        else:
+            # Linux/Windows fallback
+            config_dir = Path.home() / ".skip_the_podcast"
+        
+        config_dir.mkdir(parents=True, exist_ok=True)
+        self.config_file = config_dir / "device_auth.json"
+        
+        # Load existing settings or create empty dict
+        if self.config_file.exists():
+            try:
+                with open(self.config_file, 'r') as f:
+                    self.settings = json.load(f)
+            except Exception as e:
+                logger.warning(f"Could not load device auth config: {e}")
+                self.settings = {}
+        else:
+            self.settings = {}
+    
+    def _save(self) -> None:
+        """Save settings to JSON file."""
+        try:
+            with open(self.config_file, 'w') as f:
+                json.dump(self.settings, f, indent=2)
+        except Exception as e:
+            logger.error(f"Could not save device auth config: {e}")
+    
+    def _get_value(self, key: str, default=None):
+        """Get a value from settings."""
+        return self.settings.get(key, default)
+    
+    def _set_value(self, key: str, value) -> None:
+        """Set a value in settings and save."""
+        self.settings[key] = value
+        self._save()
 
     def get_credentials(self) -> dict[str, str]:
         """
@@ -41,17 +78,16 @@ class DeviceAuth:
         Returns:
             dict with 'device_id' and 'device_key'
         """
-        device_id = self.settings.value("device/id")
-        device_key = self.settings.value("device/key")
+        device_id = self._get_value("device_id")
+        device_key = self._get_value("device_key")
 
         if not device_id or not device_key:
             # Auto-generate on first use (silent, like Happy)
             device_id = str(uuid.uuid4())
             device_key = secrets.token_urlsafe(32)  # Cryptographically secure
 
-            self.settings.setValue("device/id", device_id)
-            self.settings.setValue("device/key", device_key)
-            self.settings.sync()
+            self._set_value("device_id", device_id)
+            self._set_value("device_key", device_key)
 
             logger.info(f"Generated new device credentials: {device_id[:8]}...")
 
@@ -65,7 +101,7 @@ class DeviceAuth:
             True if auto-upload is enabled (default), False otherwise
         """
         # Default to True (enabled by default, like Happy)
-        return self.settings.value("device/auto_upload", True, type=bool)
+        return self._get_value("auto_upload", True)
 
     def set_enabled(self, enabled: bool) -> None:
         """
@@ -74,8 +110,7 @@ class DeviceAuth:
         Args:
             enabled: True to enable auto-upload, False to disable
         """
-        self.settings.setValue("device/auto_upload", enabled)
-        self.settings.sync()
+        self._set_value("auto_upload", enabled)
         logger.info(f"Auto-upload {'enabled' if enabled else 'disabled'}")
 
     def reset_credentials(self) -> dict[str, str]:
@@ -90,9 +125,8 @@ class DeviceAuth:
         device_id = str(uuid.uuid4())
         device_key = secrets.token_urlsafe(32)
 
-        self.settings.setValue("device/id", device_id)
-        self.settings.setValue("device/key", device_key)
-        self.settings.sync()
+        self._set_value("device_id", device_id)
+        self._set_value("device_key", device_key)
 
         logger.warning(f"Reset device credentials: {device_id[:8]}...")
         return {"device_id": device_id, "device_key": device_key}
@@ -132,12 +166,11 @@ class DeviceAuth:
         Returns:
             Claim code (e.g., "ABCD-12")
         """
-        claim_code = self.settings.value("device/claim_code")
+        claim_code = self._get_value("claim_code")
 
         if not claim_code:
             claim_code = self.generate_claim_code()
-            self.settings.setValue("device/claim_code", claim_code)
-            self.settings.sync()
+            self._set_value("claim_code", claim_code)
             logger.info(f"Generated claim code: {claim_code}")
 
             # Register claim code with Supabase (non-blocking)
@@ -153,8 +186,7 @@ class DeviceAuth:
             New claim code
         """
         claim_code = self.generate_claim_code()
-        self.settings.setValue("device/claim_code", claim_code)
-        self.settings.sync()
+        self._set_value("claim_code", claim_code)
         logger.info(f"Regenerated claim code: {claim_code}")
 
         # Register new claim code with Supabase
@@ -169,7 +201,7 @@ class DeviceAuth:
         Returns:
             User UUID if device is linked, None otherwise
         """
-        return self.settings.value("user/id")
+        return self._get_value("user_id")
 
     def set_user_id(self, user_id: str) -> None:
         """
@@ -181,8 +213,7 @@ class DeviceAuth:
         Args:
             user_id: Supabase user UUID
         """
-        self.settings.setValue("user/id", user_id)
-        self.settings.sync()
+        self._set_value("user_id", user_id)
         logger.info(f"✅ Device linked to user: {user_id[:8]}...")
 
     def is_linked(self) -> bool:
@@ -201,8 +232,9 @@ class DeviceAuth:
         Clears the stored user_id. Device can be re-linked
         with a new claim code.
         """
-        self.settings.remove("user/id")
-        self.settings.sync()
+        if "user_id" in self.settings:
+            del self.settings["user_id"]
+            self._save()
         logger.warning("Device unlinked from user account")
 
     def _register_claim_code(self, claim_code: str) -> None:

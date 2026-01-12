@@ -1649,6 +1649,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **One-Click Release Script** (`~/Desktop/Release_Daemon.command`): Automated daemon release workflow
+  - Bumps version automatically (increments patch number)
+  - Builds signed & notarized PKG package
+  - Creates GitHub release with tag
+  - Uploads PKG to GitHub
+  - Commits and pushes changes to both Knowledge_Chipper and GetReceipts repos
+  - Complete automation of entire release process
+  - Beautiful colored terminal output with progress tracking
+  - Documentation: `RELEASE_DAEMON_SCRIPT.md`
+
+### Fixed
+- **PyQt6 Import in device_auth.py** (`src/knowledge_system/services/device_auth.py`): CRITICAL - Removed PyQt6 dependency causing extraction failures
+  - Issue: device_auth.py still used `from PyQt6.QtCore import QSettings` causing `ModuleNotFoundError: No module named 'PyQt6'`
+  - Impact: All extractions failed in v1.1.18 with "No module named 'PyQt6'" error
+  - Solution: Replaced QSettings with JSON file storage (`~/Library/Application Support/SkipThePodcast/device_auth.json`)
+  - Now 100% GUI-independent - works in daemon-only mode
+  - All device auth functionality preserved (auto-generation, claim codes, linking)
+
 ### Added - Comprehensive User Journey Flowchart (December 29, 2025)
 
 **Master flowchart showing complete end-to-end system flow**

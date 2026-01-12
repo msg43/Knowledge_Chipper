@@ -44,11 +44,20 @@ print_warning() {
 # Check for required environment variables or find certificates
 if [ -z "$DEVELOPER_ID_INSTALLER" ]; then
     echo "Finding Developer ID Installer certificate..."
-    # Check if we have a specific keychain path (from GitHub Actions)
+    # Use the specific working certificate (SHA-1: 773033671956B8F6DD90593740863F2E48AD2024)
+    # This is the October 2025 certificate that passes notarization
+    # Note: We have two installer certificates, and the first one (Sep 2025) has a broken chain
     if [ -n "$RUNNER_TEMP" ] && [ -f "$RUNNER_TEMP/build.keychain" ]; then
-        DEVELOPER_ID_INSTALLER=$(security find-identity -v -p codesigning "$RUNNER_TEMP/build.keychain" | grep "Developer ID Installer" | head -1 | awk -F'"' '{print $2}')
+        # In GitHub Actions, look for the certificate by SHA-1
+        DEVELOPER_ID_INSTALLER="773033671956B8F6DD90593740863F2E48AD2024"
+        # Verify it exists
+        if ! security find-identity -v -p codesigning "$RUNNER_TEMP/build.keychain" | grep -q "$DEVELOPER_ID_INSTALLER"; then
+            # Fallback to name-based search
+            DEVELOPER_ID_INSTALLER=$(security find-identity -v -p codesigning "$RUNNER_TEMP/build.keychain" | grep "Developer ID Installer" | tail -1 | awk -F'"' '{print $2}')
+        fi
     else
-        DEVELOPER_ID_INSTALLER=$(security find-identity -v -p codesigning | grep "Developer ID Installer" | head -1 | awk -F'"' '{print $2}')
+        # Use the working certificate SHA-1 directly
+        DEVELOPER_ID_INSTALLER="773033671956B8F6DD90593740863F2E48AD2024"
     fi
     if [ -z "$DEVELOPER_ID_INSTALLER" ]; then
         print_error "No Developer ID Installer certificate found"
