@@ -6,6 +6,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.1.18] - 2026-01-12
+
+### Summary
+Fixed auto-update system to use PKG installers from Skipthepodcast.com repo. This version includes working automatic updates that will prompt for admin password and install seamlessly.
+
 ### Changed
 - **Auto-Update System** (`daemon/services/update_checker.py`): Updated to download PKG installers from Skipthepodcast.com repo
   - Changed GitHub API URL from `msg43/Knowledge_Chipper` to `msg43/Skipthepodcast.com`
