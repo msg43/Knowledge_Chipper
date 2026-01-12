@@ -4,6 +4,35 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.1.4] - 2026-01-12
+
+### Changed - Generic Release Script and Version Update (January 12, 2026)
+
+**Created reusable release script that works for all future versions**
+
+Added a generic `scripts/release_daemon.sh` that automatically detects the daemon version from `daemon/__init__.py` and handles the complete release process without requiring version-specific scripts.
+
+**What Changed:**
+- Created `scripts/release_daemon.sh` - Generic release script (works for 1.1.4, 1.1.5, 2.0.0, etc.)
+- Daemon version: 1.1.3 → 1.1.4
+- Release process now fully automated and version-agnostic
+
+**User Benefits:**
+- Simpler release process for maintainers
+- No need to create new scripts for each version
+- Consistent release workflow across all versions
+
+**Technical Details:**
+- Script auto-detects version from `daemon/__init__.py`
+- Handles PKG building, git commits, tagging, and GitHub release creation
+- Includes interactive prompts for existing PKG/tags
+- Uses GitHub CLI (`gh`) for release creation
+
+**Changes:**
+- ✅ `daemon/__init__.py` - Version bumped to 1.1.4
+- ✅ `scripts/release_daemon.sh` - New generic release script
+- ✅ `CHANGELOG.md` - Added 1.1.4 release notes
+
 ### Changed - PyInstaller Build Improvements (January 12, 2026)
 
 **Migrated daemon.spec to onedir mode and cleaned up dependencies**
