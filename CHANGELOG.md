@@ -4,6 +4,74 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.1.16] - 2026-01-12
+
+### Summary
+Incremental release with bug fixes and improvements to episode page generation and API key handling.
+
+### Added
+- **Episode Page Generation for AB Testing** (`daemon/services/processing_service.py`, `src/knowledge_system/services/file_generation.py`): Automatic full markdown generation after extraction
+  - Each extraction now generates a complete episode page with comprehensive metadata and both summaries
+  - **Metadata Section:** Channel, published date, duration, view count, URL, processing info, LLM used, costs
+  - **Thumbnail:** Embedded YouTube thumbnail image at top of page
+  - **YouTube AI Summary:** YouTube's own AI-generated summary (if available) in separate section
+  - **Executive Summary:** Our AI analysis from Pass 2 synthesis (long-form comprehensive summary)
+  - **Claims:** Grouped by speaker with evidence quotes and YouTube timestamp links
+  - **People, Jargon, Concepts:** All extracted entities with definitions
+  - Uses existing `FileGenerationService._generate_hce_markdown()` for consistent formatting
+  - Saves to `output/summaries/` directory with same format as original code
+  - Enables easy AB testing by comparing outputs from different LLM providers/models
+  - Episode markdown file path stored in job_data for easy access
+- **Dynamic Model List Refresh** (`daemon/api/routes.py`): Model lists refresh when API keys are saved
+  - When user saves API keys, daemon forces refresh of model lists from provider APIs
+  - Ensures dropdowns show only models accessible with user's API key and account tier
+  - Logs number of models fetched for each provider for transparency
+
+### Changed
+- **Default LLM Provider** (`daemon/config/settings.py`, `daemon/services/processing_service.py`): Updated defaults to latest flagship models
+  - Default provider: Anthropic (was OpenAI)
+  - Default model: Claude Sonnet 4.5 (`claude-sonnet-4-20250514`)
+  - OpenAI fallback: GPT-4o (latest widely available - GPT-5.2 requires special tier access)
+  - Google fallback: Gemini 3 Pro Preview (best for deep reasoning)
+- **Dynamic Model Fetching** (`src/knowledge_system/utils/model_registry.py`): Model lists now fetched directly from provider APIs
+  - **Removed static fallback lists** for OpenAI and Google (became stale immediately)
+  - **Anthropic**: Keep curated list (no public models API)
+    - 4 verified models: Sonnet 4.5 (default), Opus 4.5, Haiku 3.5, Haiku 3
+  - **OpenAI**: Fetch from OpenAI API, keep latest 10 models
+    - Returns real models from user's API key (respects account tier)
+    - No more fake models (gpt-5, o3, o4)
+  - **Google**: Fetch from Google Gemini API
+    - Returns ~32 Gemini models including 2.5 Flash/Pro and 3.0 Preview
+    - Models returned match what user's API key can access
+  - Model lists auto-refresh when API keys are saved
+  - If no API key configured, shows empty list (no stale fallbacks)
+
+### Fixed
+- **False Positive Rate Limit Detection** (`src/knowledge_system/core/llm_adapter.py`): Fixed bug in error detection
+  - Issue: Checking if "rate" in error_string matched "gene**RATE**Content" in Google 404 errors
+  - Symptom: Google 404 "model not found" errors were incorrectly reported as "Rate Limit Exceeded"
+  - Fix: Check for "rate limit" or "quota" or "429" instead of just "rate"
+  - Now correctly distinguishes between rate limits and other errors
+- **Google Model Test Endpoint** (`daemon/api/routes.py`): Fixed API key injection for model testing
+  - Test endpoint now injects API keys from daemon store before testing
+  - Allows Google models to be tested properly (was showing "not configured" even with valid key)
+- **Daemon API Key Configuration** (multiple files): Fixed critical bug where API keys set via web UI weren't being used
+  - Issue: PyInstaller bundled apps don't properly propagate `os.environ` changes across module boundaries
+  - Symptom: Selecting Anthropic in web UI still resulted in "Anthropic API key not configured" errors
+  - Solution: Created daemon API key store (`daemon/services/api_key_store.py`) that stores keys in module-level variables
+  - SimpleLLMWrapper now injects keys from store into environment before creating LLMAdapter
+  - Now API keys work immediately after saving without needing to restart daemon
+- **Anthropic SDK Timeout Calculation** (`src/knowledge_system/core/llm_adapter.py`): Fixed TypeError in Anthropic SDK
+  - Issue: Anthropic SDK crashes when calculating timeout for models not in its hardcoded list
+  - Error: `TypeError: unsupported operand type(s) for *: 'int' and 'NoneType'` at `_calculate_nonstreaming_timeout`
+  - Root cause: SDK's `MODEL_NONSTREAMING_TOKENS.get(model, None)` returns None for unrecognized models
+  - Fix: Pass explicit `timeout=300.0` parameter to bypass SDK's automatic timeout calculation
+  - Now works with any Anthropic model, including new releases not yet in SDK
+- **SimpleLLMWrapper max_tokens** (`daemon/services/simple_llm_wrapper.py`): Added explicit max_tokens parameter
+  - Issue: SimpleLLMWrapper called LLM adapter without max_tokens, causing None values in payload
+  - Fix: Now passes `max_tokens=4096` as reasonable default for claim extraction
+  - Prevents future issues with providers that require max_tokens
+
 ## [1.1.5] - 2026-01-12
 
 ### Fixed - Critical Logger Import Bug (January 12, 2026)

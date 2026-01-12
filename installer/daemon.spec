@@ -5,11 +5,16 @@ PyInstaller Spec for Knowledge_Chipper Daemon
 Creates a standalone executable for the FastAPI daemon.
 This executable can be distributed without requiring Python installation.
 
+Build Mode: ONEDIR (recommended for macOS .app bundles)
+- Faster startup than onefile mode
+- Better compatibility with macOS security
+- Required for PyInstaller 7.0+ with .app bundles
+
 Build command:
     pyinstaller installer/daemon.spec
 
 Output:
-    dist/GetReceiptsDaemon (macOS app bundle)
+    dist/daemon_dist/GetReceiptsDaemon.app (macOS app bundle)
 """
 
 import sys
@@ -105,11 +110,15 @@ a = Analysis(
         'sqlalchemy',
         'sqlite3',
         
-        # Other
+        # LLM APIs
         'openai',
         'anthropic',
-        'pydub',
+        
+        # Data processing
         'numpy',
+        
+        # NOTE: pydub removed - replaced by FFmpegAudioProcessor (audio_utils.py)
+        # See requirements-daemon.txt for rationale
     ],
     hookspath=[],
     hooksconfig={},
@@ -129,6 +138,17 @@ a = Analysis(
         # Exclude development tools
         'IPython',
         'jupyter',
+        
+        # Exclude unused database drivers (reduces warnings)
+        'MySQLdb',
+        'pysqlite2',
+        'psycopg2',
+        'pymysql',
+        'cx_Oracle',
+        
+        # Exclude optional dependencies not needed
+        'tensorboard',
+        'urllib3.contrib.emscripten',
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
@@ -143,21 +163,19 @@ pyz = PYZ(
     cipher=block_cipher,
 )
 
-# EXE: Standalone executable
+# EXE: Standalone executable (ONEDIR mode)
+# NOTE: Changed from ONEFILE to ONEDIR for PyInstaller 7.0 compatibility
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
-    [],
+    [],  # Empty - binaries/data go in COLLECT for onedir mode
+    exclude_binaries=True,  # CRITICAL: Must be True for onedir mode
     name='GetReceiptsDaemon',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
     upx_exclude=[],
-    runtime_tmpdir=None,
     console=False,  # No console window
     disable_windowed_traceback=False,
     argv_emulation=True,  # macOS argv emulation
@@ -166,9 +184,22 @@ exe = EXE(
     entitlements_file=None,
 )
 
-# BUNDLE: macOS app bundle (optional, for nicer integration)
-app = BUNDLE(
+# COLLECT: Gather all files for onedir distribution
+coll = COLLECT(
     exe,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    name='GetReceiptsDaemon',
+)
+
+# BUNDLE: macOS app bundle
+# Now wraps COLLECT instead of EXE (onedir mode)
+app = BUNDLE(
+    coll,  # Changed from exe to coll for onedir mode
     name='GetReceiptsDaemon.app',
     icon=None,  # TODO: Add app icon
     bundle_identifier='org.getreceipts.daemon',
@@ -181,4 +212,3 @@ app = BUNDLE(
         'LSUIElement': True,  # No dock icon
     },
 )
-

@@ -164,46 +164,10 @@ class ModelRegistry:
 
     def _fetch_anthropic_models(self) -> list[str]:
         """Fetch available models from Anthropic API."""
-        try:
-            api_key = (
-                self.settings.api_keys.anthropic_api_key 
-                or self.settings.api_keys.anthropic
-            )
-            if not api_key:
-                logger.info("No Anthropic API key, skipping model fetch")
-                return []
-
-            import requests
-
-            # Anthropic's models list endpoint
-            url = "https://api.anthropic.com/v1/models"
-            headers = {
-                "x-api-key": api_key,
-                "anthropic-version": "2023-06-01",
-            }
-
-            response = requests.get(url, headers=headers, timeout=10)
-            
-            if response.status_code != 200:
-                logger.warning(f"Anthropic API returned status {response.status_code}")
-                return []
-
-            data = response.json()
-            
-            # Extract model IDs from the response
-            claude_models = []
-            if "data" in data:
-                for model in data["data"]:
-                    model_id = model.get("id", "")
-                    # Only include Claude models
-                    if model_id.startswith("claude-"):
-                        claude_models.append(model_id)
-
-            return sorted(claude_models)
-
-        except Exception as e:
-            logger.error(f"Failed to fetch Anthropic models: {e}")
-            return []
+        # NOTE: Anthropic doesn't have a public models API
+        # Return empty list - model_registry.py will provide curated list
+        logger.info("Anthropic: Using curated list from model_registry.py (no public API)")
+        return []
 
     def _fetch_from_openrouter(self) -> dict[str, list[str]]:
         """
@@ -307,17 +271,11 @@ class ModelRegistry:
         models: dict[str, list[str]] = {}
         
         # ============================================
-        # TIER 1: OpenRouter (Primary - Most Comprehensive)
+        # TIER 1: OpenRouter (DISABLED - Returns stale/incorrect models)
         # ============================================
-        try:
-            openrouter_models = self._fetch_from_openrouter()
-            if openrouter_models:
-                models = openrouter_models
-                logger.info("✅ Tier 1: Successfully fetched from OpenRouter")
-                self._save_cache(models)
-                return models
-        except Exception as e:
-            logger.warning(f"⚠️ Tier 1 failed (OpenRouter): {e}")
+        # OpenRouter returns models without proper date suffixes and includes
+        # deprecated models. We use direct provider APIs instead.
+        logger.info("Tier 1: OpenRouter disabled - using direct provider APIs")
         
         # ============================================
         # TIER 2: Individual Provider APIs (Backup)
@@ -370,10 +328,8 @@ class ModelRegistry:
                 "gpt-4-0125-preview",
             ],
             "anthropic": [
-                "claude-3-5-sonnet-20241022",
-                "claude-3-5-haiku-20241022",
-                "claude-3-opus-20240229",
-                "claude-3-5-sonnet-latest",
+                # Return empty - let model_registry.py provide curated list
+                # Anthropic has no public models API
             ],
             "google": [
                 "gemini-2.0-flash-exp",

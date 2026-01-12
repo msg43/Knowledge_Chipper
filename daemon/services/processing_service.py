@@ -591,9 +591,11 @@ class ProcessingService:
                 # Default models per provider (cloud-only per plan)
                 if not model:
                     if provider == "openai":
-                        model = "gpt-4o"
+                        model = "gpt-4o"  # GPT-4o - Latest widely available OpenAI model
                     elif provider == "anthropic":
-                        model = "claude-3-5-sonnet-20241022"
+                        model = "claude-sonnet-4-20250514"  # Claude Sonnet 4.5
+                    elif provider == "google":
+                        model = "gemini-3-pro-preview"  # Gemini 3 Pro - Best for deep reasoning
                     else:
                         model = "gpt-4o"  # fallback to OpenAI
                 
@@ -630,53 +632,75 @@ class ProcessingService:
                     claims_count=result.total_claims,
                 )
 
+                # Save extraction results to database for episode page generation
+                await self._save_extraction_to_database(job_id, job_data, result)
+
+                # Generate full episode markdown file for AB testing
+                episode_file = await self._generate_episode_page(job_id, job_data, result)
+                if episode_file:
+                    job_data["episode_markdown_file"] = str(episode_file)
+                    logger.info(f"✅ Generated episode page: {episode_file}")
+
                 self._mark_stage_complete(job_id, "extract")
 
             # ============================================
             # Stage 4: Upload to GetReceipts
             # ============================================
             if request.auto_upload:
-                await self._update_job(job_id, "uploading", 0.80, "Uploading to GetReceipts.org")
+                await self._update_job(job_id, "uploading", 0.80, "Preparing upload to GetReceipts.org")
 
                 from knowledge_chipper_oauth.getreceipts_uploader import GetReceiptsUploader
                 
-                extraction_result = job_data.get("extraction_result")
-                if not extraction_result:
-                    raise Exception("No extraction results to upload")
-
                 # Prepare session data for upload
-                # Convert extraction result to format expected by uploader
+                # This will extract claims, people, jargon, concepts, etc. from the extraction result
                 session_data = self._prepare_upload_data(job_data)
                 
-                # Initialize uploader with bypass flag from settings
-                uploader = GetReceiptsUploader(bypass_device_auth=settings.bypass_device_auth)
+                # Count total records (claims, people, jargon, concepts, relations)
+                total_records = sum(
+                    len(session_data.get(key, []))
+                    for key in ["claims", "people", "jargon", "concepts", "relations"]
+                )
                 
-                if uploader.is_enabled():
-                    upload_result = await asyncio.to_thread(
-                        uploader.upload_session_data,
-                        session_data,
-                    )
-                    
-                    # Extract episode code from result if available
-                    episode_code = upload_result.get("episode_code")
-                    job_data["episode_code"] = episode_code
-                    
+                if total_records == 0:
+                    logger.info("No data to upload (0 claims, people, jargon, or concepts)")
                     await self._update_job(
                         job_id,
                         "uploading",
                         0.95,
-                        f"Uploaded to GetReceipts (episode: {episode_code or 'N/A'})",
-                        uploaded_to_getreceipts=True,
-                        getreceipts_episode_code=episode_code,
-                    )
-                else:
-                    await self._update_job(
-                        job_id,
-                        "uploading",
-                        0.95,
-                        "Upload skipped (auto-upload disabled)",
+                        "Upload skipped (no extractable data)",
                         uploaded_to_getreceipts=False,
                     )
+                else:
+                    # Initialize uploader with bypass flag from settings
+                    uploader = GetReceiptsUploader(bypass_device_auth=settings.bypass_device_auth)
+                    
+                    if uploader.is_enabled():
+                        logger.info(f"Uploading {total_records} records to GetReceipts")
+                        upload_result = await asyncio.to_thread(
+                            uploader.upload_session_data,
+                            session_data,
+                        )
+                        
+                        # Extract episode code from result if available
+                        episode_code = upload_result.get("episode_code")
+                        job_data["episode_code"] = episode_code
+                        
+                        await self._update_job(
+                            job_id,
+                            "uploading",
+                            0.95,
+                            f"Uploaded to GetReceipts (episode: {episode_code or 'N/A'})",
+                            uploaded_to_getreceipts=True,
+                            getreceipts_episode_code=episode_code,
+                        )
+                    else:
+                        await self._update_job(
+                            job_id,
+                            "uploading",
+                            0.95,
+                            "Upload skipped (auto-upload disabled)",
+                            uploaded_to_getreceipts=False,
+                        )
 
                 self._mark_stage_complete(job_id, "upload")
 
@@ -863,6 +887,187 @@ class ProcessingService:
             "failed": len([j for j in jobs if j.status == "failed"]),
             "cancelled": len([j for j in jobs if j.status == "cancelled"]),
         }
+
+    async def _save_extraction_to_database(self, job_id: str, job_data: dict, result) -> None:
+        """
+        Save extraction results to database so FileGenerationService can access them.
+        
+        Uses the same storage logic as system2_orchestrator_two_pass.py to ensure compatibility.
+        """
+        try:
+            import uuid
+            from datetime import datetime
+            from src.knowledge_system.database.service import DatabaseService
+            from src.knowledge_system.database.models import Summary, MediaSource
+            
+            db_service = DatabaseService()
+            source_id = job_data.get("source_id", "unknown")
+            metadata = job_data.get("metadata", {})
+            
+            # Generate summary ID
+            summary_id = f"summary_{uuid.uuid4().hex[:12]}"
+            
+            # First, create or update the MediaSource with comprehensive metadata
+            with db_service.get_session() as session:
+                media_source = session.query(MediaSource).filter_by(source_id=source_id).first()
+                
+                if not media_source:
+                    media_source = MediaSource(
+                        source_id=source_id,
+                        title=job_data.get("title", "Unknown"),
+                        url=metadata.get("url", ""),
+                        source_type=metadata.get("source_type", "youtube"),
+                    )
+                    session.add(media_source)
+                else:
+                    # Update existing source
+                    media_source.title = job_data.get("title", media_source.title)
+                    media_source.url = metadata.get("url", media_source.url)
+                
+                # Add comprehensive metadata from YouTube
+                if metadata.get("channel"):
+                    media_source.channel = metadata["channel"]
+                if metadata.get("duration_seconds"):
+                    media_source.duration_seconds = metadata["duration_seconds"]
+                if metadata.get("published_at"):
+                    media_source.published_at = metadata["published_at"]
+                if metadata.get("description"):
+                    media_source.description = metadata["description"]
+                if metadata.get("thumbnail_url"):
+                    media_source.thumbnail_url = metadata["thumbnail_url"]
+                if metadata.get("view_count"):
+                    media_source.view_count = metadata["view_count"]
+                if metadata.get("youtube_ai_summary"):
+                    media_source.youtube_ai_summary = metadata["youtube_ai_summary"]
+                
+                session.commit()
+                logger.info(f"✅ Updated MediaSource for {source_id} with comprehensive metadata")
+            
+            # Create Summary record with HCE data JSON
+            with db_service.get_session() as session:
+                # Prepare HCE data JSON from TwoPassResult
+                extraction = result.extraction if hasattr(result, 'extraction') else result
+                synthesis = result.synthesis if hasattr(result, 'synthesis') else None
+                
+                hce_data_json = {
+                    "claims": [
+                        {
+                            "canonical": c.get("claim_text", ""),
+                            "claim_text": c.get("claim_text", ""),
+                            "speaker": c.get("speaker", "Unknown"),
+                            "speaker_confidence": c.get("speaker_confidence", 0),
+                            "speaker_rationale": c.get("speaker_rationale", ""),
+                            "flag_for_review": c.get("flag_for_review", False),
+                            "timestamp": c.get("timestamp", "00:00"),
+                            "evidence_quote": c.get("evidence_quote", ""),
+                            "evidence": c.get("evidence_spans", []),
+                            "claim_type": c.get("evidence_type", "factual"),
+                            "dimensions": c.get("dimensions", {}),
+                            "importance": c.get("importance", 0),
+                            "tier": self._importance_to_tier(c.get("importance", 0)),
+                            "domain": c.get("domain", "general"),
+                        }
+                        for c in (extraction.claims if hasattr(extraction, 'claims') else [])
+                    ],
+                    "jargon": [
+                        {
+                            "term": j.get("term", ""),
+                            "definition": j.get("definition", ""),
+                            "domain": j.get("domain", ""),
+                        }
+                        for j in (extraction.jargon if hasattr(extraction, 'jargon') else [])
+                    ],
+                    "people": [
+                        {
+                            "name": p.get("name", ""),
+                            "description": p.get("description", ""),
+                        }
+                        for p in (extraction.people if hasattr(extraction, 'people') else [])
+                    ],
+                    "concepts": [
+                        {
+                            "name": m.get("name", ""),
+                            "definition": m.get("description", ""),
+                        }
+                        for m in (extraction.mental_models if hasattr(extraction, 'mental_models') else [])
+                    ],
+                    "relations": [],  # Two-pass doesn't extract relations
+                    "contradictions": [],
+                }
+                
+                # Create Summary record
+                summary = Summary(
+                    summary_id=summary_id,
+                    source_id=source_id,
+                    summary_text=synthesis.long_summary if synthesis else "",
+                    summary_type="two_pass",
+                    hce_data_json=hce_data_json,
+                    llm_model=metadata.get("llm_model", "unknown"),
+                    llm_provider=metadata.get("llm_provider", "unknown"),
+                    processing_cost=0.0,
+                    total_tokens=0,
+                    created_at=datetime.utcnow(),
+                )
+                
+                session.add(summary)
+                session.commit()
+                
+                logger.info(f"✅ Saved extraction results to database with summary_id: {summary_id}")
+            
+        except Exception as e:
+            logger.error(f"Failed to save extraction to database: {e}")
+            import traceback
+            logger.error(f"Traceback:\n{traceback.format_exc()}")
+
+    def _importance_to_tier(self, importance: float) -> str:
+        """Convert importance score (0-10) to tier (A/B/C)."""
+        if importance >= 7.0:
+            return "A"
+        elif importance >= 5.0:
+            return "B"
+        else:
+            return "C"
+
+    async def _generate_episode_page(self, job_id: str, job_data: dict, result) -> Optional[Path]:
+        """
+        Generate full episode markdown file with YAML frontmatter, summaries, claims, etc.
+        
+        This creates the same format as the original code for easy AB testing.
+        Uses FileGenerationService._generate_hce_markdown for consistency.
+        """
+        try:
+            from src.knowledge_system.services.file_generation import FileGenerationService
+            from src.knowledge_system.config import get_settings
+            
+            source_id = job_data.get("source_id")
+            if not source_id:
+                logger.warning("No source_id available for episode page generation")
+                return None
+            
+            # Initialize file generation service
+            kc_settings = get_settings()
+            output_dir = Path(kc_settings.paths.output_dir)
+            file_gen = FileGenerationService(output_dir=output_dir)
+            
+            # Generate summary markdown (this uses _generate_hce_markdown internally)
+            # which creates the full episode page with YAML, summaries, claims, people, jargon, concepts
+            episode_file = await asyncio.to_thread(
+                file_gen.generate_summary_markdown,
+                source_id=source_id,
+            )
+            
+            if episode_file:
+                logger.info(f"✅ Generated episode page: {episode_file}")
+                return episode_file
+            else:
+                logger.warning(f"Episode page generation returned None for {source_id}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"Failed to generate episode page: {e}")
+            import traceback
+            logger.error(f"Traceback:\n{traceback.format_exc()}")
+            return None
 
 
 # Global service instance

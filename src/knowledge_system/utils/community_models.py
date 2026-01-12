@@ -139,10 +139,11 @@ class ModelRegistry:
         Returns:
             Dictionary mapping provider names to model lists
         """
-        # Use cache if valid and not forcing refresh
-        if not force_refresh and self._is_cache_valid():
-            logger.info("Using cached model lists")
-            return self._load_cache()
+        # DISABLED: Don't use cache for model lists - always fetch fresh from APIs
+        # Cache becomes stale immediately and returns deprecated models
+        # if not force_refresh and self._is_cache_valid():
+        #     logger.info("Using cached model lists")
+        #     return self._load_cache()
 
         logger.info("Refreshing model lists from official sources")
 
@@ -153,20 +154,9 @@ class ModelRegistry:
         models = {
             "openai": self._fetch_openai_models(),
             "local": self._fetch_ollama_models(),
-            # Preserve Anthropic models from cache (must be manually maintained)
-            "anthropic": existing.get(
-                "anthropic",
-                [
-                    # Default Anthropic models if cache is empty
-                    "claude-3-5-sonnet-20241022",
-                    "claude-3-5-haiku-20241022",
-                    "claude-3-5-sonnet-20240620",
-                    "claude-3-opus-20240229",
-                    "claude-3-sonnet-20240229",
-                    "claude-3-haiku-20240307",
-                    "claude-3-5-sonnet-latest",
-                ],
-            ),
+            # Return empty for Anthropic - let model_registry.py provide curated list
+            # Anthropic has no public models API
+            "anthropic": [],
         }
 
         # Save to cache

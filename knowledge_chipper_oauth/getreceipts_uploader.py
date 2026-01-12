@@ -60,9 +60,9 @@ class GetReceiptsUploader:
                 'device_key': 'bypass'
             }
         else:
-        self.device_auth = get_device_auth()
-        self.credentials = self.device_auth.get_credentials()
-        print(f"🔐 Using device ID: {self.credentials['device_id'][:8]}...")
+            self.device_auth = get_device_auth()
+            self.credentials = self.device_auth.get_credentials()
+            print(f"🔐 Using device ID: {self.credentials['device_id'][:8]}...")
 
     def is_enabled(self) -> bool:
         """Check if auto-upload is enabled"""

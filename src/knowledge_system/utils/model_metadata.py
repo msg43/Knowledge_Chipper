@@ -131,8 +131,8 @@ KNOWN_MODELS = {
         # Claude 4 series
         "claude-opus-4-20250514": ModelMetadata(
             "claude-opus-4-20250514",
-            status=ModelStatus.GATED,
-            note="May require specific plan"
+            status=ModelStatus.PUBLIC,
+            display_name="Claude Opus 4.5"
         ),
         "claude-sonnet-4-20250514": ModelMetadata(
             "claude-sonnet-4-20250514",

@@ -61,7 +61,7 @@ class ProcessRequest(BaseModel):
 
     # Model selection
     whisper_model: Literal["tiny", "base", "small", "medium", "large-v3"] = "medium"
-    llm_provider: Optional[Literal["openai", "anthropic"]] = None
+    llm_provider: Optional[Literal["openai", "anthropic", "google"]] = None
     llm_model: Optional[str] = None
     
     # RSS-specific options

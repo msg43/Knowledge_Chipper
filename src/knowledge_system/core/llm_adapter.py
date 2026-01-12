@@ -382,6 +382,7 @@ class LLMAdapter:
         self, provider: str, model: str, payload: dict[str, Any]
     ) -> dict[str, Any]:
         """Make the actual API call to the provider."""
+        logger.info(f"🎯 _call_provider: provider={provider}, model={model}")
         if provider == "ollama":
             return await self._call_ollama(model, payload)
         elif provider == "openai":
@@ -487,10 +488,13 @@ class LLMAdapter:
 
             settings = get_settings()
             api_key = settings.api_keys.openai_api_key
+            
+            logger.debug(f"OpenAI API key check: {'✅ Found' if api_key else '❌ Not found'}")
 
             if not api_key:
+                logger.error(f"OpenAI API key not found. Checked: settings.api_keys.openai_api_key and OPENAI_API_KEY env var")
                 raise KnowledgeSystemError(
-                    "OpenAI API key not configured in settings.yaml",
+                    "OpenAI API key not configured. Please set OPENAI_API_KEY environment variable or add to settings.yaml",
                     ErrorCode.CONFIGURATION_ERROR,
                 )
 
@@ -544,21 +548,29 @@ class LLMAdapter:
 
             settings = get_settings()
             api_key = settings.api_keys.anthropic_api_key
+            
+            logger.debug(f"Anthropic API key check: {'✅ Found' if api_key else '❌ Not found'}")
 
             if not api_key:
+                logger.error(f"Anthropic API key not found. Checked: settings.api_keys.anthropic_api_key and ANTHROPIC_API_KEY env var")
                 raise KnowledgeSystemError(
-                    "Anthropic API key not configured in settings.yaml",
+                    "Anthropic API key not configured. Please set ANTHROPIC_API_KEY environment variable or add to settings.yaml",
                     ErrorCode.CONFIGURATION_ERROR,
                 )
 
             # Create async client with proper cleanup
             async with AsyncAnthropic(api_key=api_key) as client:
-                # Make API call
+                # Anthropic requires max_tokens - use 4000 if not specified or None
+                max_tokens = payload.get("max_tokens") or 4000
+                
+                # Make API call with explicit timeout to bypass SDK's model recognition
+                # The SDK crashes on unrecognized models when calculating timeout
                 response = await client.messages.create(
                     model=model,
-                    max_tokens=payload.get("max_tokens", 4000),
+                    max_tokens=max_tokens,
                     temperature=payload.get("temperature", 0.7),
                     messages=payload["messages"],
+                    timeout=300.0,  # 5 minutes - bypasses SDK's automatic timeout calculation
                 )
 
                 # Extract text from response
@@ -659,7 +671,13 @@ class LLMAdapter:
             }
 
         except Exception as e:
-            if "rate" in str(e).lower() or "429" in str(e):
+            error_str = str(e).lower()
+            logger.error(f"Google API call failed: {e}")
+            logger.error(f"Error type: {type(e).__name__}")
+            
+            # Check for actual rate limit errors (not false positives like "generateContent")
+            if "429" in error_str or "rate limit" in error_str or "quota" in error_str:
+                logger.warning(f"Detected rate limit error in Google API response")
                 raise  # Let the retry logic handle rate limits
             raise KnowledgeSystemError(
                 f"Google API error: {e}", ErrorCode.LLM_API_ERROR

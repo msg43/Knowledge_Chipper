@@ -50,6 +50,7 @@ Complete inventory of all files in the Knowledge Chipper codebase with descripti
 - `ALL_FIXES_COMPLETE.md` - Comprehensive list of all bug fixes that have been completed
 - `ALL_IMPLEMENTATION_COMPLETE.md` - List of all major features that have been fully implemented
 - `ALL_TRANSCRIPTION_FIXES_COMPLETE.md` - Comprehensive list of all transcription-related bug fixes completed
+- `EPISODE_PAGE_GENERATION_FOR_AB_TESTING.md` - **NEW (Jan 12, 2026):** Automatic generation of full episode markdown files after extraction for AB testing: includes YAML frontmatter, executive summary, claims grouped by speaker, people, jargon, concepts; uses same format as original code; enables easy comparison between different LLM providers/models
 - `DESKTOP_APP_DEPRECATION.md` - **NEW (Jan 11, 2026):** Complete documentation of desktop GUI deprecation: explains shift from desktop app (v4.1.0) to daemon-only (v1.1.1), version number simplification, product naming changes, user migration path, and timeline
 - `DAEMON_DEPENDENCIES_SLIM.md` - **NEW (Jan 11, 2026):** Dependency optimization analysis: reduced from 206 to 34 direct dependencies by removing GUI (PyQt6, streamlit, playwright) and heavy ML (torch, transformers, pyannote.audio). Documents 68% size reduction, 50% faster builds, before/after comparison, and verification steps
 - `DAEMON_AUTOMATION_COMPLETE.md` - **NEW (Jan 11, 2026):** Automated daemon release implementation: GitHub Actions workflow (.github/workflows/daemon-release.yml) triggers on version tags, runs daemon-specific tests only, builds DMG on macOS, publishes to Skipthepodcast.com. Documents test strategy, simplified publish script (single DMG), and complete usage instructions.
@@ -81,6 +82,7 @@ Complete inventory of all files in the Knowledge Chipper codebase with descripti
 - `GUI_SETTINGS_PERSISTENCE_AUDIT.md` - Audit results of GUI settings persistence implementation
 - `IMPLEMENTATION_SUMMARY.md` - High-level summary of major implementation milestones
 - `OUTPUT_DIRECTORY_BUG_FIX.md` - Fix for bug where Summarize tab displayed user-selected output directory but saved files to default location
+- `PYINSTALLER_BUILD_IMPROVEMENTS.md` - **NEW (Jan 12, 2026):** Summary of PyInstaller build improvements: migrated to onedir mode for PyInstaller 7.0 compatibility, removed unused pydub dependency, added database driver excludes, reduced build warnings from ~10 to ~5, improved startup performance
 - `LICENSE` - MIT License for the project
 - `README.md` - Main project documentation with installation, usage, and feature overview
 - `SYSTEM_LIMITS.md` - **NEW (Dec 29, 2025):** Central configuration documentation for all system limits: RSS episodes (9999), upload records (99999), rate limiting (99999/hour), search results (50), with rationale and recommendations for each limit
@@ -146,6 +148,7 @@ Complete inventory of all files in the Knowledge Chipper codebase with descripti
 
 - `docs/FILE_ORGANIZATION.md` - Comprehensive guide to output file organization: explains directory structure (transcripts/, summaries/, moc/, exports/), file naming conventions, relationship between transcript and summary files, database as source of truth, and how to find/regenerate files. Addresses common confusion about where files are saved and why they don't overwrite each other.
 - `docs/PYINSTALLER_ISSUE_ANALYSIS.md` - Comprehensive analysis of PyInstaller compatibility issues with ASGI servers (Uvicorn/Hypercorn). Documents 15+ build attempts, root cause (string-based module imports), and recommended solutions including development daemon setup as working alternative.
+- `docs/PYINSTALLER_ONEDIR_MIGRATION.md` - **NEW (Jan 12, 2026):** PyInstaller onedir migration documentation: explains migration from onefile to onedir mode for PyInstaller 7.0 compatibility, performance benefits, dependency cleanup (removed pydub, excluded unused database drivers), build output changes, verification steps, and rollback plan.
 - `docs/DAEMON_RELEASE_PROCESS.md` - **NEW (Jan 11, 2026):** Complete daemon release workflow documentation: version management (daemon vs app versions), DMG build process, GitHub release automation, stable vs versioned download URLs, GetReceipts.org integration, auto-update system, and troubleshooting guide. Documents switch from PKG to DMG format due to notarization issues.
 - `ARCHITECTURE_WEB_CANONICAL.md` - Complete architecture documentation for web-canonical implementation where GetReceipts Supabase is single source of truth and Knowledge_Chipper acts as ephemeral processor. Documents philosophy, workflows, database schemas, user experience, API endpoints, and rollback instructions.
 - `PROMPT_INVENTORY.md` - Complete catalog of all prompts in the system: ACTIVE two-pass architecture uses 2 core prompts (extraction_pass.txt with refinement injection + synthesis_pass.txt with dynamic length) plus 3 optional question mapper prompts; documents 15 deprecated HCE segment-based prompts; explains architecture comparison, system integration, and migration status. Both active prompts are fully wired up and functional.
@@ -465,6 +468,8 @@ Comprehensive project documentation (128+ files).
 - `link_token_handler.py` - Handles auto-linking device using token from download URL
 - `rss_service.py` - RSS/podcast feed processing service
 - `youtube_matcher.py` - YouTube search and video matching service
+- `simple_llm_wrapper.py` - Synchronous wrapper around LLMAdapter for TwoPassPipeline; converts async LLM calls to sync interface, injects API keys from daemon store into environment
+- `api_key_store.py` - **NEW (Jan 12, 2026):** Module-level API key storage for daemon; stores API keys in memory to work around PyInstaller environment variable propagation issues; provides set_api_key, get_api_key, and load_from_config methods
 
 ---
 
@@ -560,6 +565,10 @@ Contains 196 utility scripts for:
 - Development utilities
 
 Key scripts:
+- `release_daemon.sh` - **NEW (Jan 12, 2026):** Generic daemon release script that auto-detects version from daemon/__init__.py and handles complete release process (PKG build, git commit/tag, GitHub release). Works for all future versions without modification.
+- `complete_release.sh` - Complete release script for daemon + website (version-specific, hardcoded to 1.1.3)
+- `release_daemon_1.1.3.sh` - Version-specific daemon release script (deprecated in favor of generic release_daemon.sh)
+- `publish_release.sh` - Manual release publishing script for GitHub releases
 - `bundle_deno.sh` - Downloads and packages Deno JavaScript runtime for DMG installer (required for yt-dlp YouTube downloads since 2025.11.12)
 - `silent_deno_installer.py` - Python script to install Deno into app bundle for DMG distribution
 - `import_pdf_transcripts_batch.py` - **NEW (Dec 25, 2025):** Batch import PDF transcripts with automatic YouTube video matching, folder scanning, and CSV mapping support

@@ -425,21 +425,47 @@ async def set_api_keys(config: APIKeyConfig):
     File permissions are set to 600 (owner read/write only) for security.
     Keys are automatically loaded on daemon startup.
     """
+    # Load into both environment AND daemon API key store
+    from daemon.services.api_key_store import set_api_key
+    
     if config.openai_api_key:
         os.environ["OPENAI_API_KEY"] = config.openai_api_key
+        set_api_key("openai", config.openai_api_key)
         logger.info("✅ OpenAI API key configured")
     
     if config.anthropic_api_key:
         os.environ["ANTHROPIC_API_KEY"] = config.anthropic_api_key
+        set_api_key("anthropic", config.anthropic_api_key)
         logger.info("✅ Anthropic API key configured")
     
     if config.google_api_key:
         os.environ["GOOGLE_API_KEY"] = config.google_api_key
+        set_api_key("google", config.google_api_key)
         logger.info("✅ Google API key configured")
     
     # Persist API keys to disk
     settings.save_config()
     logger.info("💾 API keys saved to config file")
+    
+    # CRITICAL: Clear the cached Knowledge_Chipper settings so new API keys are picked up
+    # The settings object is cached globally, and we need to force it to reload from env vars
+    try:
+        import src.knowledge_system.config as kc_config
+        kc_config._settings = None  # Clear the cache
+        logger.info("🔄 Cleared Knowledge_Chipper settings cache - will reload with new API keys on next use")
+    except Exception as e:
+        logger.warning(f"Failed to clear Knowledge_Chipper settings cache: {e}")
+    
+    # Force refresh model lists to fetch models available to the user's API keys
+    # This validates the keys AND populates the dropdown with accessible models
+    try:
+        from src.knowledge_system.utils.model_registry import get_provider_models
+        # Clear caches and fetch fresh from APIs
+        for provider in ["openai", "anthropic", "google"]:
+            models = get_provider_models(provider, force_refresh=True)
+            logger.info(f"📋 Refreshed {provider} models: {len(models)} available")
+    except Exception as e:
+        logger.warning(f"Failed to refresh model lists: {e}")
     
     return APIKeyStatus(
         openai_configured=bool(config.openai_api_key or os.environ.get("OPENAI_API_KEY")),
@@ -478,6 +504,14 @@ async def test_model_access(test: ModelAccessTest):
     """
     try:
         from src.knowledge_system.core.llm_adapter import LLMAdapter
+        from daemon.services.api_key_store import get_api_key
+        
+        # Inject API keys from daemon store into environment (for PyInstaller compatibility)
+        for provider_name in ["openai", "anthropic", "google"]:
+            key = get_api_key(provider_name)
+            if key:
+                env_var = f"{provider_name.upper()}_API_KEY"
+                os.environ[env_var] = key
         
         # Check if API key is configured
         key_env_var = {

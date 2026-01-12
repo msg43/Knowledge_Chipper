@@ -31,9 +31,28 @@ class SimpleLLMWrapper:
         self.provider = provider
         self.model = model
         self.temperature = temperature
+        
+        # CRITICAL: Inject API keys from daemon store into environment
+        # PyInstaller apps have issues with os.environ persistence, so we use a module-level store
+        import os
+        from daemon.services.api_key_store import get_api_key
+        
+        # Inject API keys from store into environment for this process
+        for provider_name in ["openai", "anthropic", "google"]:
+            key = get_api_key(provider_name)
+            if key:
+                env_var = f"{provider_name.upper()}_API_KEY"
+                os.environ[env_var] = key
+                logger.info(f"✅ Injected {provider_name} API key into environment")
+        
+        logger.info(f"🔑 API keys in environment:")
+        logger.info(f"  - OPENAI_API_KEY: {'✅ Set' if os.environ.get('OPENAI_API_KEY') else '❌ Not set'}")
+        logger.info(f"  - ANTHROPIC_API_KEY: {'✅ Set' if os.environ.get('ANTHROPIC_API_KEY') else '❌ Not set'}")
+        logger.info(f"  - GOOGLE_API_KEY: {'✅ Set' if os.environ.get('GOOGLE_API_KEY') else '❌ Not set'}")
+        
         self.adapter = LLMAdapter(provider=provider)
         
-        logger.info(f"SimpleLLMWrapper initialized: {provider}/{model}")
+        logger.info(f"🔧 SimpleLLMWrapper initialized: provider={provider}, model={model}, temperature={temperature}")
     
     def complete(self, prompt: str) -> str:
         """
@@ -53,20 +72,27 @@ class SimpleLLMWrapper:
         ]
         
         # Call the async method synchronously
+        logger.info(f"🚀 Calling LLM: provider={self.provider}, model={self.model}")
         try:
             loop = asyncio.get_event_loop()
         except RuntimeError:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
         
-        result = loop.run_until_complete(
-            self.adapter.complete(
-                provider=self.provider,
-                model=self.model,
-                messages=messages,
-                temperature=self.temperature,
+        try:
+            result = loop.run_until_complete(
+                self.adapter.complete(
+                    provider=self.provider,
+                    model=self.model,
+                    messages=messages,
+                    temperature=self.temperature,
+                    max_tokens=4096,  # Reasonable default for claim extraction
+                )
             )
-        )
+            logger.info(f"✅ LLM call successful: {len(result.get('content', ''))} chars")
+        except Exception as e:
+            logger.error(f"❌ LLM call failed: provider={self.provider}, model={self.model}, error={e}")
+            raise
         
         # Extract text content from response dict
         # Response format: {"content": "...", "model": "...", "usage": {...}}

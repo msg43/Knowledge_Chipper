@@ -6,11 +6,15 @@ All settings can be overridden with KC_ prefix environment variables.
 """
 
 import json
+import logging
 import os
 from pathlib import Path
 from typing import Literal, Optional
 
 from pydantic_settings import BaseSettings
+
+# Initialize logger
+logger = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
@@ -24,6 +28,7 @@ class Settings(BaseSettings):
     # CORS - Allow GetReceipts.org to connect
     cors_origins: list[str] = [
         "http://localhost:3000",  # GetReceipts dev
+        "http://localhost:3001",  # GetReceipts dev (alternate port)
         "https://getreceipts.org",  # GetReceipts prod
         "https://www.getreceipts.org",  # GetReceipts www
     ]
@@ -34,8 +39,8 @@ class Settings(BaseSettings):
 
     # Processing Defaults (user configurable)
     default_whisper_model: Literal["tiny", "base", "small", "medium", "large-v3"] = "medium"
-    default_llm_provider: Optional[Literal["openai", "anthropic", "google"]] = "openai"
-    default_llm_model: Optional[str] = "gpt-4o"
+    default_llm_provider: Optional[Literal["openai", "anthropic", "google"]] = "anthropic"
+    default_llm_model: Optional[str] = "claude-sonnet-4-20250514"  # Claude Sonnet 4.5 default
     auto_upload_enabled: bool = True
     process_full_pipeline: bool = True
 
@@ -137,9 +142,11 @@ class Settings(BaseSettings):
             if "process_full_pipeline" in user_config:
                 self.process_full_pipeline = user_config["process_full_pipeline"]
             
-            # Load API keys into environment variables
+            # Load API keys into environment variables AND daemon API key store
             if "api_keys" in user_config:
                 api_keys = user_config["api_keys"]
+                
+                # Load into environment (for compatibility)
                 if api_keys.get("openai"):
                     os.environ["OPENAI_API_KEY"] = api_keys["openai"]
                     logger.info("✅ Loaded OpenAI API key from config")
@@ -149,6 +156,14 @@ class Settings(BaseSettings):
                 if api_keys.get("google"):
                     os.environ["GOOGLE_API_KEY"] = api_keys["google"]
                     logger.info("✅ Loaded Google API key from config")
+                
+                # ALSO load into daemon API key store (works reliably in PyInstaller)
+                try:
+                    from daemon.services.api_key_store import load_from_config
+                    load_from_config(user_config)
+                    logger.info("✅ Loaded API keys into daemon key store")
+                except Exception as e:
+                    logger.warning(f"Failed to load API keys into daemon store: {e}")
                     
         except Exception as e:
             logger.warning(f"Failed to load config: {e}")

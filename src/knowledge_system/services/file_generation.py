@@ -1082,15 +1082,76 @@ class FileGenerationService:
         relations = hce_data.get("relations", [])
         contradictions = hce_data.get("contradictions", [])
 
+        # Add comprehensive metadata to frontmatter
+        if hasattr(video, 'channel') and video.channel:
+            frontmatter['channel'] = video.channel
+        if hasattr(video, 'duration_seconds') and video.duration_seconds:
+            frontmatter['duration_seconds'] = video.duration_seconds
+            # Add human-readable duration
+            hours = video.duration_seconds // 3600
+            minutes = (video.duration_seconds % 3600) // 60
+            seconds = video.duration_seconds % 60
+            if hours > 0:
+                frontmatter['duration'] = f"{hours}h {minutes}m {seconds}s"
+            else:
+                frontmatter['duration'] = f"{minutes}m {seconds}s"
+        if hasattr(video, 'published_at') and video.published_at:
+            frontmatter['published_at'] = video.published_at.isoformat() if hasattr(video.published_at, 'isoformat') else str(video.published_at)
+        if hasattr(video, 'description') and video.description:
+            frontmatter['description'] = video.description[:500]  # First 500 chars
+        if hasattr(video, 'thumbnail_url') and video.thumbnail_url:
+            frontmatter['thumbnail_url'] = video.thumbnail_url
+        if hasattr(video, 'view_count') and video.view_count:
+            frontmatter['view_count'] = video.view_count
+
         # Generate markdown content with proper YAML frontmatter
-        yaml_frontmatter = yaml.dump(frontmatter, default_flow_style=False)
+        yaml_frontmatter = yaml.dump(frontmatter, default_flow_style=False, allow_unicode=True)
 
         markdown_content = f"""---
 {yaml_frontmatter}---
 
-## Executive Summary
+# {video.title}
 
 """
+
+        # Add thumbnail if available
+        if hasattr(video, 'thumbnail_url') and video.thumbnail_url:
+            markdown_content += f"![Thumbnail]({video.thumbnail_url})\n\n"
+
+        # Add metadata section
+        markdown_content += "## Metadata\n\n"
+        if hasattr(video, 'channel') and video.channel:
+            markdown_content += f"**Channel:** {video.channel}\n"
+        if hasattr(video, 'published_at') and video.published_at:
+            pub_date = video.published_at.strftime('%Y-%m-%d') if hasattr(video.published_at, 'strftime') else str(video.published_at)
+            markdown_content += f"**Published:** {pub_date}\n"
+        if hasattr(video, 'duration_seconds') and video.duration_seconds:
+            hours = video.duration_seconds // 3600
+            minutes = (video.duration_seconds % 3600) // 60
+            if hours > 0:
+                markdown_content += f"**Duration:** {hours}h {minutes}m\n"
+            else:
+                markdown_content += f"**Duration:** {minutes}m\n"
+        if hasattr(video, 'view_count') and video.view_count:
+            markdown_content += f"**Views:** {video.view_count:,}\n"
+        markdown_content += f"**URL:** [{video.url}]({video.url})\n"
+        markdown_content += f"**Processed:** {summary.created_at.strftime('%Y-%m-%d %H:%M:%S') if summary.created_at else 'Unknown'}\n"
+        markdown_content += f"**LLM:** {summary.llm_model} ({summary.llm_provider})\n"
+        if summary.processing_cost and summary.processing_cost > 0:
+            markdown_content += f"**Processing Cost:** ${summary.processing_cost:.4f}\n"
+        if summary.total_tokens and summary.total_tokens > 0:
+            markdown_content += f"**Total Tokens:** {summary.total_tokens:,}\n"
+        markdown_content += "\n"
+
+        # Add YouTube AI Summary if available
+        youtube_summary = getattr(video, 'youtube_ai_summary', None) or getattr(video, 'yt_ai_summary', None)
+        if youtube_summary:
+            markdown_content += "## YouTube AI Summary\n\n"
+            markdown_content += f"{youtube_summary}\n\n"
+            markdown_content += "---\n\n"
+
+        # Add our AI summary (Pass 2 synthesis)
+        markdown_content += "## Executive Summary (AI Analysis)\n\n"
 
         # Use summary_text as the executive summary (comprehensive paragraph format)
         if summary.summary_text:
