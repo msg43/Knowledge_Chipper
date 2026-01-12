@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [Unreleased]
+
+### Changed
+- **Auto-Update System** (`daemon/services/update_checker.py`): Updated to download PKG installers from Skipthepodcast.com repo
+  - Changed GitHub API URL from `msg43/Knowledge_Chipper` to `msg43/Skipthepodcast.com`
+  - Now downloads `.pkg` files instead of `.tar.gz` binary archives
+  - Uses macOS `installer` command with admin privileges prompt
+  - PKG postinstall script handles daemon restart automatically
+  - Simpler and more reliable than manual binary replacement
+
 ## [1.1.16] - 2026-01-12
 
 ### Summary

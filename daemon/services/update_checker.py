@@ -4,7 +4,7 @@ Auto-update checker for GetReceipts Daemon.
 Checks GitHub releases for new daemon versions and handles automatic updates.
 - Checks every 24 hours
 - Checks on daemon startup
-- Downloads and installs updates automatically
+- Downloads and installs updates automatically via PKG installer
 - LaunchAgent handles daemon restart
 """
 
@@ -14,6 +14,7 @@ import json
 import logging
 import os
 import shutil
+import subprocess
 import sys
 import tempfile
 from datetime import datetime, timedelta
@@ -24,7 +25,8 @@ from urllib.request import urlopen, urlretrieve
 logger = logging.getLogger(__name__)
 
 # Configuration
-GITHUB_API_URL = "https://api.github.com/repos/msg43/Knowledge_Chipper/releases/latest"
+# NOTE: Daemon releases are published to Skipthepodcast.com repo per user preference
+GITHUB_API_URL = "https://api.github.com/repos/msg43/Skipthepodcast.com/releases/latest"
 CHECK_INTERVAL_HOURS = 24  # Check every 24 hours
 INSTALL_DIR = Path("/Users/Shared/GetReceipts")
 BINARY_NAME = "GetReceiptsDaemon"
@@ -159,9 +161,14 @@ class DaemonUpdateChecker:
             return False
     
     def _install_update_sync(self) -> bool:
-        """Synchronous update installation (runs in thread pool)."""
+        """
+        Synchronous update installation (runs in thread pool).
+        
+        Downloads and installs PKG file from Skipthepodcast.com releases.
+        PKG installer handles complete installation including LaunchAgent restart.
+        """
         try:
-            # Step 1: Find daemon binary in release assets
+            # Step 1: Find daemon PKG in release assets
             data = self._fetch_latest_release()
             if not data:
                 logger.error("Could not fetch release data")
@@ -170,34 +177,35 @@ class DaemonUpdateChecker:
             daemon_asset = None
             for asset in data.get("assets", []):
                 name_lower = asset["name"].lower()
-                if "daemon" in name_lower and (name_lower.endswith(".tar.gz") or name_lower.endswith(".zip")):
+                # Look for PKG files with "daemon" in the name
+                if "daemon" in name_lower and name_lower.endswith(".pkg"):
                     daemon_asset = asset
-                    logger.info(f"Found daemon asset: {asset['name']}")
+                    logger.info(f"Found daemon PKG: {asset['name']}")
                     break
             
             if not daemon_asset:
-                logger.error("No daemon binary found in release assets")
+                logger.error("No daemon PKG found in release assets")
                 logger.info(f"Available assets: {[a['name'] for a in data.get('assets', [])]}")
                 return False
             
             download_url = daemon_asset["browser_download_url"]
             expected_size = daemon_asset["size"]
             
-            logger.info(f"Downloading daemon from: {download_url}")
+            logger.info(f"Downloading daemon PKG from: {download_url}")
             
             # Step 2: Download to temp directory
             temp_dir = Path(tempfile.mkdtemp(prefix="daemon_update_"))
-            archive_path = temp_dir / daemon_asset["name"]
+            pkg_path = temp_dir / daemon_asset["name"]
             
             try:
-                urlretrieve(download_url, archive_path)
+                urlretrieve(download_url, pkg_path)
             except Exception as e:
                 logger.error(f"Download failed: {e}")
                 shutil.rmtree(temp_dir, ignore_errors=True)
                 return False
             
             # Step 3: Verify download
-            actual_size = archive_path.stat().st_size
+            actual_size = pkg_path.stat().st_size
             if actual_size != expected_size:
                 logger.error(f"Download size mismatch: expected {expected_size}, got {actual_size}")
                 shutil.rmtree(temp_dir, ignore_errors=True)
@@ -205,83 +213,76 @@ class DaemonUpdateChecker:
             
             logger.info(f"Download verified ({actual_size} bytes)")
             
-            # Step 4: Extract binary
-            try:
-                if archive_path.suffix == ".gz" or archive_path.name.endswith(".tar.gz"):
-                    import tarfile
-                    with tarfile.open(archive_path, "r:gz") as tar:
-                        tar.extractall(temp_dir)
-                else:
-                    import zipfile
-                    with zipfile.ZipFile(archive_path, "r") as zip_file:
-                        zip_file.extractall(temp_dir)
-            except Exception as e:
-                logger.error(f"Extraction failed: {e}")
-                shutil.rmtree(temp_dir, ignore_errors=True)
-                return False
-            
-            # Step 5: Find extracted binary
-            new_binary = temp_dir / BINARY_NAME
-            if not new_binary.exists():
-                # Check subdirectories
-                for item in temp_dir.rglob(BINARY_NAME):
-                    if item.is_file() and os.access(item, os.X_OK):
-                        new_binary = item
-                        logger.info(f"Found binary at: {new_binary}")
-                        break
-            
-            if not new_binary.exists():
-                logger.error(f"Could not find {BINARY_NAME} in extracted files")
-                logger.info(f"Contents of temp_dir: {list(temp_dir.rglob('*'))}")
-                shutil.rmtree(temp_dir, ignore_errors=True)
-                return False
-            
-            # Step 6: Backup current binary
-            current_binary = INSTALL_DIR / BINARY_NAME
-            backup_binary = INSTALL_DIR / f"{BINARY_NAME}.backup"
-            
-            if current_binary.exists():
-                try:
-                    shutil.copy2(current_binary, backup_binary)
-                    logger.info(f"Backed up current binary to {backup_binary}")
-                except Exception as e:
-                    logger.warning(f"Failed to backup current binary: {e}")
-            
-            # Step 7: Install new binary
-            try:
-                shutil.copy2(new_binary, current_binary)
-                os.chmod(current_binary, 0o755)
-                logger.info(f"Installed new daemon binary: {current_binary}")
-            except Exception as e:
-                logger.error(f"Failed to install new binary: {e}")
-                # Try to restore backup
-                if backup_binary.exists():
-                    try:
-                        shutil.copy2(backup_binary, current_binary)
-                        logger.info("Restored backup binary")
-                    except Exception as restore_error:
-                        logger.error(f"Failed to restore backup: {restore_error}")
-                shutil.rmtree(temp_dir, ignore_errors=True)
-                return False
-            
-            # Step 8: Create update marker for verification after restart
-            marker_file = INSTALL_DIR / ".update_completed"
+            # Step 4: Create update marker BEFORE installation
+            # This lets us verify the update completed after restart
+            marker_file = INSTALL_DIR / ".update_in_progress"
             try:
                 marker_data = {
                     "version": self.latest_version,
                     "timestamp": datetime.now().isoformat(),
-                    "previous_version": self.current_version
+                    "previous_version": self.current_version,
+                    "pkg_path": str(pkg_path)
                 }
                 marker_file.write_text(json.dumps(marker_data, indent=2))
                 logger.info("Created update marker")
             except Exception as e:
                 logger.warning(f"Failed to create update marker: {e}")
             
-            # Step 9: Cleanup
+            # Step 5: Install PKG using macOS installer
+            # Note: This requires sudo, so we use osascript to prompt for password
+            logger.info("Installing PKG (will prompt for administrator password)...")
+            
+            try:
+                # Use osascript to run installer with admin privileges
+                # This will show a macOS password prompt to the user
+                install_cmd = [
+                    "osascript",
+                    "-e",
+                    f'do shell script "installer -pkg \\"{pkg_path}\\" -target /" with administrator privileges'
+                ]
+                
+                result = subprocess.run(
+                    install_cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=300  # 5 minute timeout for user to enter password
+                )
+                
+                if result.returncode != 0:
+                    logger.error(f"PKG installation failed: {result.stderr}")
+                    # Cleanup
+                    shutil.rmtree(temp_dir, ignore_errors=True)
+                    marker_file.unlink(missing_ok=True)
+                    return False
+                
+                logger.info("PKG installation completed successfully")
+                
+            except subprocess.TimeoutExpired:
+                logger.error("PKG installation timed out (user may have cancelled password prompt)")
+                shutil.rmtree(temp_dir, ignore_errors=True)
+                marker_file.unlink(missing_ok=True)
+                return False
+            except Exception as e:
+                logger.error(f"PKG installation error: {e}")
+                shutil.rmtree(temp_dir, ignore_errors=True)
+                marker_file.unlink(missing_ok=True)
+                return False
+            
+            # Step 6: Update marker to completed state
+            try:
+                completed_marker = INSTALL_DIR / ".update_completed"
+                marker_data["completed_timestamp"] = datetime.now().isoformat()
+                completed_marker.write_text(json.dumps(marker_data, indent=2))
+                marker_file.unlink(missing_ok=True)  # Remove in-progress marker
+                logger.info("Updated marker to completed state")
+            except Exception as e:
+                logger.warning(f"Failed to update marker: {e}")
+            
+            # Step 7: Cleanup downloaded PKG
             shutil.rmtree(temp_dir, ignore_errors=True)
             
             logger.info(f"Update to version {self.latest_version} installed successfully")
-            logger.info("Daemon will restart automatically via LaunchAgent")
+            logger.info("PKG postinstall script will restart the daemon automatically")
             return True
             
         except Exception as e:

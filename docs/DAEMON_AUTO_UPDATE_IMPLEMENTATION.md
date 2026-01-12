@@ -19,21 +19,21 @@ The GetReceipts daemon now includes a fully automated update system that keeps i
 ├─────────────────────────────────────────────────────┤
 │                                                       │
 │  1. Periodic Check (Every 24h + Startup)             │
-│     ↓ GitHub API: /repos/msg43/Knowledge_Chipper    │
+│     ↓ GitHub API: /repos/msg43/Skipthepodcast.com   │
 │  2. Version Comparison                               │
-│     ↓ Semantic versioning (1.0.0 → 1.0.1)          │
-│  3. Download Binary                                  │
-│     ↓ GetReceiptsDaemon-{version}-macos.tar.gz     │
+│     ↓ Semantic versioning (1.1.15 → 1.1.16)        │
+│  3. Download PKG Installer                           │
+│     ↓ GetReceipts-Daemon-{version}.pkg              │
 │  4. Verify Integrity                                 │
-│     ↓ File size + checksum validation              │
-│  5. Backup Current Binary                           │
-│     ↓ GetReceiptsDaemon.backup                      │
-│  6. Install New Binary                               │
-│     ↓ Atomic file replacement                       │
-│  7. Exit (LaunchAgent Restarts)                     │
-│     ↓ Zero-downtime restart                         │
+│     ↓ File size validation                          │
+│  5. Create Update Marker                             │
+│     ↓ .update_in_progress                           │
+│  6. Install PKG                                      │
+│     ↓ Prompts for admin password                    │
+│  7. PKG Postinstall Script                           │
+│     ↓ Restarts daemon via LaunchAgent               │
 │  8. Verify New Version                               │
-│     ↓ Check update marker                           │
+│     ↓ Check update marker + version                 │
 │                                                       │
 └─────────────────────────────────────────────────────┘
 ```
@@ -63,7 +63,8 @@ The GetReceipts daemon now includes a fully automated update system that keeps i
 CHECK_INTERVAL_HOURS = 24  # Check every 24 hours
 INSTALL_DIR = Path("/Users/Shared/GetReceipts")
 BINARY_NAME = "GetReceiptsDaemon"
-GITHUB_API_URL = "https://api.github.com/repos/msg43/Knowledge_Chipper/releases/latest"
+# Daemon releases published to Skipthepodcast.com repo
+GITHUB_API_URL = "https://api.github.com/repos/msg43/Skipthepodcast.com/releases/latest"
 ```
 
 ### 2. API Endpoints
