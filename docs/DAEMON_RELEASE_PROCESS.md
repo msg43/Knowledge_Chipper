@@ -53,9 +53,13 @@ This was for the old desktop GUI app which has been replaced by the web-controll
 ### Release Naming
 
 GitHub releases now use the **daemon version**:
-- Release tag: `v1.1.1`
-- DMG filename: `Skip_the_Podcast_Desktop-1.1.1.dmg`
-- Release title: "GetReceipts Daemon v1.1.1"
+- Release tag: `v1.1.3`
+- PKG filename: `GetReceipts-Daemon-1.1.3.pkg`
+- Release title: "GetReceipts Daemon v1.1.3"
+
+**Distribution Format:** Signed & Notarized PKG (as of v1.1.3)
+
+**Download URL:** GitHub's `/releases/latest/download/` automatically points to the latest release's PKG file
 
 ---
 
@@ -81,8 +85,9 @@ git push origin v1.1.2
 
 # 4. GitHub Actions automatically:
 #    - Runs daemon tests
-#    - Builds DMG (271MB, minimal deps)
+#    - Builds signed & notarized PKG
 #    - Publishes to Skipthepodcast.com
+#    - Creates both versioned and stable PKG
 #    - Verifies download URL works
 ```
 
@@ -104,19 +109,24 @@ __version__ = "1.1.2"  # Increment version (semantic versioning)
 - **Minor** (x.1.x): New features, backwards compatible
 - **Patch** (x.x.1): Bug fixes
 
-#### Step 2: Build the DMG
+#### Step 2: Build the PKG
 
-Build the DMG installer using the build script:
+Build the signed & notarized PKG installer:
 
 ```bash
 cd /Users/matthewgreer/Projects/Knowledge_Chipper
-bash scripts/build_macos_app.sh --make-dmg --skip-install
+bash installer/build_pkg.sh
 ```
 
 This creates:
 ```
-dist/Skip_the_Podcast_Desktop-{VERSION}.dmg
+dist/GetReceipts-Daemon-{VERSION}.pkg
 ```
+
+**Requirements:**
+- Developer ID certificates installed
+- App-specific password for notarization (set `APP_PASSWORD` env var)
+- Python virtual environment with dependencies
 
 ### Step 3: Publish to GitHub
 
@@ -127,12 +137,12 @@ bash scripts/publish_release.sh
 ```
 
 This script:
-1. ✅ Reads **daemon version** from `daemon/__init__.py` (e.g., 1.1.1)
-2. ✅ Checks if DMG exists for that version
-3. ✅ Builds DMG if needed
-4. ✅ Creates a git tag in the public repo (e.g., v1.1.1)
-5. ✅ Creates a GitHub release titled "GetReceipts Daemon v1.1.1"
-6. ✅ Uploads versioned DMG: `Skip_the_Podcast_Desktop-1.1.1.dmg`
+1. ✅ Reads **daemon version** from `daemon/__init__.py` (e.g., 1.1.3)
+2. ✅ Checks if PKG exists for that version
+3. ✅ Builds PKG if needed
+4. ✅ Creates a git tag in the public repo (e.g., v1.1.3)
+5. ✅ Creates a GitHub release titled "GetReceipts Daemon v1.1.3"
+6. ✅ Uploads versioned PKG: `GetReceipts-Daemon-1.1.3.pkg`
 
 #### Step 4: Verify Release
 
@@ -142,9 +152,12 @@ https://github.com/msg43/Skipthepodcast.com/releases/latest
 ```
 
 Verify:
-- ✅ DMG file present: `Skip_the_Podcast_Desktop-1.1.2.dmg`
-- ✅ Release title: "GetReceipts Daemon v1.1.2" (not "Skip the Podcast v4.x")
-- ✅ Download URL works (buttons use dynamic detection)
+- ✅ PKG file present: `GetReceipts-Daemon-1.1.3.pkg`
+- ✅ Release title: "GetReceipts Daemon v1.1.3"
+- ✅ Download URL works: `https://github.com/msg43/Skipthepodcast.com/releases/latest/download/GetReceipts-Daemon-1.1.3.pkg`
+- ✅ PKG is signed and notarized (check with `pkgutil --check-signature`)
+
+**Note:** The `/releases/latest/download/` URL automatically redirects to the latest release's asset, so the website always downloads the newest version.
 
 ---
 

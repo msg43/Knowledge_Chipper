@@ -1,0 +1,153 @@
+#!/bin/bash
+#
+# PostInstall Script for GetReceipts Daemon PKG
+#
+# This script runs after the PKG installs files to:
+# 1. Set up the LaunchAgent for auto-start
+# 2. Create desktop restart button
+# 3. Start the daemon immediately
+#
+# Arguments:
+#   $1 = Full path to the installation package
+#   $2 = Full path to the installation destination
+#   $3 = Mountpoint of the destination volume
+#   $4 = Root directory for the system
+
+set -e
+
+# Get the user who is installing (not root, but the actual user)
+CURRENT_USER=$(/usr/bin/stat -f "%Su" /dev/console)
+USER_HOME=$(eval echo ~$CURRENT_USER)
+
+echo "Installing GetReceipts Daemon for user: $CURRENT_USER"
+
+# 1. Install LaunchAgent plist
+echo "Setting up LaunchAgent for auto-start..."
+LAUNCH_AGENTS_DIR="$USER_HOME/Library/LaunchAgents"
+mkdir -p "$LAUNCH_AGENTS_DIR"
+
+# Update the plist to point to the correct app location
+cat > "$LAUNCH_AGENTS_DIR/org.getreceipts.daemon.plist" << 'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>org.getreceipts.daemon</string>
+    
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Applications/GetReceipts Daemon.app/Contents/MacOS/GetReceiptsDaemon</string>
+    </array>
+    
+    <key>RunAtLoad</key>
+    <true/>
+    
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+    
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+    
+    <key>WorkingDirectory</key>
+    <string>/Applications/GetReceipts Daemon.app/Contents/MacOS</string>
+    
+    <key>StandardOutPath</key>
+    <string>/tmp/getreceipts-daemon.stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/getreceipts-daemon.stderr.log</string>
+    
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>KC_PORT</key>
+        <string>8765</string>
+        <key>KC_LOG_LEVEL</key>
+        <string>INFO</string>
+    </dict>
+    
+    <key>ProcessType</key>
+    <string>Background</string>
+    
+    <key>Nice</key>
+    <integer>5</integer>
+</dict>
+</plist>
+EOF
+
+chown "$CURRENT_USER" "$LAUNCH_AGENTS_DIR/org.getreceipts.daemon.plist"
+chmod 644 "$LAUNCH_AGENTS_DIR/org.getreceipts.daemon.plist"
+
+echo "LaunchAgent installed to: $LAUNCH_AGENTS_DIR/org.getreceipts.daemon.plist"
+
+# 2. Create desktop restart button
+echo "Creating desktop restart button..."
+RESTART_SCRIPT="$USER_HOME/Desktop/Restart GetReceipts.command"
+
+cat > "$RESTART_SCRIPT" << 'EOF'
+#!/bin/bash
+#
+# Restart GetReceipts Daemon
+#
+# This script restarts the GetReceipts daemon process
+#
+
+echo "Restarting GetReceipts Daemon..."
+
+# Stop the daemon
+launchctl stop org.getreceipts.daemon 2>/dev/null || true
+sleep 1
+
+# Start the daemon
+launchctl start org.getreceipts.daemon
+
+# Show notification
+osascript -e 'display notification "GetReceipts daemon has been restarted" with title "GetReceipts" sound name "Glass"'
+
+echo "✅ Daemon restarted successfully!"
+echo ""
+echo "The daemon is now running at http://localhost:8765"
+echo "Visit https://getreceipts.org to use it."
+echo ""
+echo "Press any key to close..."
+read -n 1
+EOF
+
+chown "$CURRENT_USER" "$RESTART_SCRIPT"
+chmod +x "$RESTART_SCRIPT"
+
+echo "Desktop restart button created at: $RESTART_SCRIPT"
+
+# 3. Load and start the LaunchAgent
+echo "Starting daemon..."
+
+# Load the LaunchAgent as the user (not as root)
+sudo -u "$CURRENT_USER" launchctl load "$LAUNCH_AGENTS_DIR/org.getreceipts.daemon.plist" 2>/dev/null || true
+
+# Give it a moment to start
+sleep 2
+
+# Check if it's running
+if sudo -u "$CURRENT_USER" launchctl list | grep -q "org.getreceipts.daemon"; then
+    echo "✅ GetReceipts Daemon started successfully!"
+else
+    echo "⚠️  Daemon will start on next login"
+fi
+
+# 4. Show completion notification
+sudo -u "$CURRENT_USER" osascript -e 'display notification "GetReceipts Daemon has been installed and started. Visit getreceipts.org to use it." with title "Installation Complete" sound name "Glass"' 2>/dev/null || true
+
+echo ""
+echo "=============================================="
+echo "GetReceipts Daemon Installation Complete!"
+echo "=============================================="
+echo ""
+echo "The daemon is now running at: http://localhost:8765"
+echo "Desktop shortcut created: ~/Desktop/Restart GetReceipts.command"
+echo ""
+echo "Visit https://getreceipts.org to start using it!"
+echo ""
+
+exit 0

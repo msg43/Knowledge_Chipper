@@ -4,6 +4,85 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.1.3] - 2026-01-12
+
+### Changed - PKG Distribution with Auto-Install (January 12, 2026)
+
+**Switched from DMG to PKG distribution for easier installation**
+
+Daemon is now distributed as a signed & notarized PKG installer that automatically handles all setup, eliminating the need for manual drag-and-drop installation.
+
+**What Changed:**
+- Distribution format: DMG → PKG
+- Installation: Manual drag-and-drop → Automatic PKG installer
+- Desktop shortcut: Automatically created during installation
+- LaunchAgent: Automatically configured for auto-start on login
+- Restart control: Desktop button created at `~/Desktop/Restart GetReceipts.command`
+
+**User Benefits:**
+- One-click installation (double-click PKG, follow prompts)
+- No manual setup required
+- Daemon auto-starts on login
+- Easy restart via desktop button
+- Fully signed and notarized by Apple
+
+**Technical Details:**
+- Uses working installer certificate (SHA: 773033671956B8F6DD90593740863F2E48AD2024)
+- Postinstall script handles all configuration
+- Both versioned and stable PKG URLs available
+- Website updated to download PKG instead of DMG
+
+**Changes:**
+- ✅ `daemon/__init__.py` - Bumped version to 1.1.3
+- ✅ `installer/build_pkg.sh` - New PKG build script with signing & notarization
+- ✅ `installer/scripts/postinstall` - Postinstall script for auto-setup
+- ✅ `.github/workflows/daemon-release.yml` - Updated to build PKG instead of DMG
+- ✅ `GetReceipts/src/components/daemon-installer.tsx` - Updated to download PKG
+- ✅ `GetReceipts/src/components/daemon-status-indicator.tsx` - Updated to download PKG
+- ✅ `docs/DAEMON_RELEASE_PROCESS.md` - Documented PKG build process
+
+**Download URL:**
+- Latest (auto-redirects): `https://github.com/msg43/Skipthepodcast.com/releases/latest/download/GetReceipts-Daemon-1.1.3.pkg`
+
+GitHub's `/releases/latest/download/` automatically points to the latest release, so the website always downloads the newest version.
+
+### Fixed - PKG Notarization Certificate Issue (January 11, 2026)
+
+**Root Cause Identified and Fixed**
+
+Resolved PKG notarization failures caused by having two Developer ID Installer certificates in keychain, with build tools defaulting to the one with a broken certificate chain.
+
+**Problem:**
+- All PKG files rejected with "binary is not signed with a valid Developer ID certificate"
+- ZIP files worked fine (different certificate)
+- Warning: "unable to build chain to self-signed root"
+
+**Root Cause:**
+- Two Developer ID Installer certificates with same name
+- Certificate 1 (Sep 2025): Broken chain, fails notarization
+- Certificate 2 (Oct 2025): Valid chain, passes notarization
+- Build scripts defaulted to first (broken) certificate
+
+**Solution:**
+- Updated build scripts to explicitly use working certificate by SHA-1 hash
+- Created diagnostic tools to identify and fix the issue
+- Documented complete root cause analysis
+
+**Changes:**
+- ✅ `scripts/build_signed_notarized_pkg.sh` - Use working certificate explicitly
+- ✅ `scripts/build_signed_notarized_pkg_debug.sh` - Use working certificate explicitly
+- ✅ `scripts/fix_installer_certificate.sh` - New diagnostic/fix tool
+- ✅ `docs/PKG_NOTARIZATION_FIX.md` - Quick reference guide
+- ✅ `docs/NOTARIZATION_ROOT_CAUSE_ANALYSIS.md` - Complete analysis
+- ✅ `scripts/diagnose_notarization_root_cause.sh` - Comprehensive diagnostic tool
+
+**Verification:**
+- Test PKG with working cert: ✅ Accepted by Apple
+- Test PKG with broken cert: ❌ Rejected by Apple
+- All future PKG builds will use working certificate
+
+**Apple Case Reference:** 102789234714
+
 ## [1.1.2] - 2026-01-11
 
 ### Added - Automated Daemon Releases via GitHub Actions (January 11, 2026)

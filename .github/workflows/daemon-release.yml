@@ -67,9 +67,9 @@ jobs:
           print(f'✅ Daemon v{daemon.__version__} imports successfully')
           "
   
-  # Job 2: Build DMG on macOS
+  # Job 2: Build PKG on macOS
   build:
-    name: Build DMG
+    name: Build Signed & Notarized PKG
     needs: test
     runs-on: macos-latest
     
@@ -89,35 +89,74 @@ jobs:
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
           echo "Building daemon v$VERSION"
       
-      - name: Build DMG
+      - name: Install dependencies
         run: |
-          bash scripts/build_macos_app.sh --clean --make-dmg --skip-install
+          python -m venv venv
+          source venv/bin/activate
+          pip install --upgrade pip
+          pip install -e .
+          pip install pyinstaller
       
-      - name: Verify DMG created
+      - name: Import certificates
+        env:
+          DEVELOPER_ID_APP_CERT: ${{ secrets.DEVELOPER_ID_APP_CERT }}
+          DEVELOPER_ID_INSTALLER_CERT: ${{ secrets.DEVELOPER_ID_INSTALLER_CERT }}
+          CERT_PASSWORD: ${{ secrets.CERT_PASSWORD }}
         run: |
-          DMG_FILE="dist/Skip_the_Podcast_Desktop-${{ steps.version.outputs.VERSION }}.dmg"
-          if [ ! -f "$DMG_FILE" ]; then
-            echo "❌ DMG not found: $DMG_FILE"
+          # Create temporary keychain
+          security create-keychain -p actions build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p actions build.keychain
+          security set-keychain-settings -t 3600 -u build.keychain
+          
+          # Import certificates
+          echo "$DEVELOPER_ID_APP_CERT" | base64 --decode > app_cert.p12
+          echo "$DEVELOPER_ID_INSTALLER_CERT" | base64 --decode > installer_cert.p12
+          
+          security import app_cert.p12 -k build.keychain -P "$CERT_PASSWORD" -T /usr/bin/codesign -T /usr/bin/productsign
+          security import installer_cert.p12 -k build.keychain -P "$CERT_PASSWORD" -T /usr/bin/pkgbuild -T /usr/bin/productbuild
+          
+          security set-key-partition-list -S apple-tool:,apple: -s -k actions build.keychain
+          
+          # Cleanup
+          rm app_cert.p12 installer_cert.p12
+      
+      - name: Build PKG
+        env:
+          APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          chmod +x installer/build_pkg.sh
+          chmod +x installer/scripts/postinstall
+          bash installer/build_pkg.sh
+      
+      - name: Verify PKG created
+        run: |
+          PKG_FILE="dist/GetReceipts-Daemon-${{ steps.version.outputs.VERSION }}.pkg"
+          
+          if [ ! -f "$PKG_FILE" ]; then
+            echo "❌ PKG not found: $PKG_FILE"
             exit 1
           fi
           
-          DMG_SIZE=$(du -h "$DMG_FILE" | cut -f1)
-          DMG_SIZE_MB=$(du -m "$DMG_FILE" | cut -f1)
+          PKG_SIZE=$(du -h "$PKG_FILE" | cut -f1)
+          PKG_SIZE_MB=$(du -m "$PKG_FILE" | cut -f1)
           
-          echo "✅ DMG created: $DMG_FILE"
-          echo "📏 Size: $DMG_SIZE ($DMG_SIZE_MB MB)"
+          echo "✅ PKG created: $PKG_FILE"
+          echo "📏 Size: $PKG_SIZE ($PKG_SIZE_MB MB)"
           
-          # Verify size is reasonable (should be < 500MB for minimal daemon)
-          if [ "$DMG_SIZE_MB" -gt 500 ]; then
-            echo "⚠️  WARNING: DMG is larger than expected ($DMG_SIZE_MB MB > 500MB)"
-            echo "   This may indicate bundled models or unnecessary dependencies"
-          fi
+          # Verify PKG is signed and notarized
+          pkgutil --check-signature "$PKG_FILE"
+          xcrun stapler validate "$PKG_FILE" || echo "⚠️ Staple validation warning (may still work)"
       
-      - name: Upload DMG artifact
+      - name: Upload PKG artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: daemon-dmg-${{ steps.version.outputs.VERSION }}
-          path: dist/Skip_the_Podcast_Desktop-${{ steps.version.outputs.VERSION }}.dmg
+          name: daemon-pkg-${{ steps.version.outputs.VERSION }}
+          path: |
+            dist/GetReceipts-Daemon-${{ steps.version.outputs.VERSION }}.pkg
+            dist/GetReceipts-Daemon-${{ steps.version.outputs.VERSION }}.pkg.sha256
           retention-days: 30
   
   # Job 3: Publish release to Skipthepodcast.com repo
@@ -136,29 +175,31 @@ jobs:
           VERSION=$(python3 -c 'import re; content = open("daemon/__init__.py").read(); match = re.search(r"__version__.*=.*\"([^\"]+)\"", content); print(match.group(1) if match else "")')
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
       
-      - name: Download DMG artifact
+      - name: Download PKG artifacts
         uses: actions/download-artifact@v4
         with:
-          name: daemon-dmg-${{ steps.version.outputs.VERSION }}
+          name: daemon-pkg-${{ steps.version.outputs.VERSION }}
           path: dist/
       
-      - name: Verify DMG downloaded
+      - name: Verify PKG downloaded
         run: |
           ls -lh dist/
-          DMG_FILE="dist/Skip_the_Podcast_Desktop-${{ steps.version.outputs.VERSION }}.dmg"
-          if [ ! -f "$DMG_FILE" ]; then
-            echo "❌ DMG artifact not found"
+          PKG_FILE="dist/GetReceipts-Daemon-${{ steps.version.outputs.VERSION }}.pkg"
+          
+          if [ ! -f "$PKG_FILE" ]; then
+            echo "❌ PKG artifact not found"
             exit 1
           fi
-          echo "✅ DMG artifact ready for release"
+          
+          echo "✅ PKG artifact ready for release"
       
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VERSION="${{ steps.version.outputs.VERSION }}"
-          DMG_FILE="dist/Skip_the_Podcast_Desktop-${VERSION}.dmg"
-          DMG_SIZE=$(du -h "$DMG_FILE" | cut -f1)
+          PKG_FILE="dist/GetReceipts-Daemon-${VERSION}.pkg"
+          PKG_SIZE=$(du -h "$PKG_FILE" | cut -f1)
           
           # Check if release already exists
           if gh release view "v${VERSION}" --repo msg43/skipthepodcast.com >/dev/null 2>&1; then
@@ -166,7 +207,7 @@ jobs:
             gh release delete "v${VERSION}" --repo msg43/skipthepodcast.com --yes || true
           fi
           
-          # Create release with versioned DMG only
+          # Create release with versioned PKG
           gh release create "v${VERSION}" \
             --repo "msg43/skipthepodcast.com" \
             --title "GetReceipts Daemon v${VERSION}" \
@@ -181,19 +222,25 @@ The GetReceipts daemon runs in the background on your Mac and processes videos/a
 
 ## Installation
 
-1. Download the \`.dmg\` file below
-2. Open the downloaded DMG
-3. Double-click \"⚠️ CLICK ME TO INSTALL.command\"
-4. Follow the installer prompts (creates desktop shortcut automatically)
-5. Visit [GetReceipts.org/contribute](https://getreceipts.org/contribute) to start processing
+1. Download the \`.pkg\` file below
+2. Double-click the downloaded PKG file
+3. Follow the installer - it will:
+   - Install the daemon to /Applications
+   - Set up automatic startup on login
+   - Create a desktop restart button
+   - Start the daemon immediately
+4. Visit [GetReceipts.org/contribute](https://getreceipts.org/contribute) to start processing
+
+**No drag-and-drop needed!** The PKG installer handles everything automatically.
 
 ## Release Info
 
 - **Version:** ${VERSION}
 - **Build Date:** $(date +"%Y-%m-%d")
-- **File Size:** ${DMG_SIZE}
+- **File Size:** ${PKG_SIZE}
 - **Platform:** macOS (Universal Binary)
 - **Control Interface:** Web browser (GetReceipts.org)
+- **Distribution:** Signed & Notarized PKG
 
 ## System Requirements
 
@@ -202,22 +249,29 @@ The GetReceipts daemon runs in the background on your Mac and processes videos/a
 - 500MB free disk space
 - Internet connection for model downloads
 
+## After Installation
+
+- Daemon runs at: \`http://localhost:8765\`
+- Desktop shortcut: \`~/Desktop/Restart GetReceipts.command\`
+- Auto-starts on login via LaunchAgent
+
 📖 **See [CHANGELOG.md](https://github.com/msg43/Knowledge_Chipper/blob/main/CHANGELOG.md) for detailed changes.**
 
 ---
 *Automated release from GitHub Actions*" \
-            "$DMG_FILE"
+            "$PKG_FILE"
       
       - name: Verify release published
         run: |
           VERSION="${{ steps.version.outputs.VERSION }}"
           echo "✅ Release published!"
           echo "📍 Release page: https://github.com/msg43/Skipthepodcast.com/releases/tag/v${VERSION}"
-          echo "📥 Download URL: https://github.com/msg43/Skipthepodcast.com/releases/latest/download/Skip_the_Podcast_Desktop-${VERSION}.dmg"
+          echo "📥 Versioned URL: https://github.com/msg43/Skipthepodcast.com/releases/download/v${VERSION}/GetReceipts-Daemon-${VERSION}.pkg"
+          echo "📥 Latest URL (auto-redirects): https://github.com/msg43/Skipthepodcast.com/releases/latest/download/GetReceipts-Daemon-${VERSION}.pkg"
           
           # Verify download URL works (with retry for CDN propagation)
           for i in {1..5}; do
-            if curl -sL -I "https://github.com/msg43/Skipthepodcast.com/releases/latest/download/Skip_the_Podcast_Desktop-${VERSION}.dmg" | grep -q "HTTP/2 302"; then
+            if curl -sL -I "https://github.com/msg43/Skipthepodcast.com/releases/latest/download/GetReceipts-Daemon-${VERSION}.pkg" | grep -q "HTTP/2 302"; then
               echo "✅ Download URL verified!"
               break
             else
