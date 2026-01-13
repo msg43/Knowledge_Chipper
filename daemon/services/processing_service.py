@@ -680,10 +680,10 @@ class ProcessingService:
                 # This will extract claims, people, jargon, concepts, etc. from the extraction result
                 session_data = self._prepare_upload_data(job_data)
                 
-                # Count total records (claims, people, jargon_terms, concepts, relations)
+                # Count total records (media_sources, claims, people, jargon_terms, concepts)
                 total_records = sum(
                     len(session_data.get(key, []))
-                    for key in ["claims", "people", "jargon_terms", "concepts", "relations"]
+                    for key in ["media_sources", "claims", "people", "jargon_terms", "concepts"]
                 )
                 
                 if total_records == 0:
@@ -772,13 +772,19 @@ class ProcessingService:
         metadata = job_data.get("metadata", {})
         
         # Build session data from extraction result
+        # NOTE: API expects "media_sources" not "episodes"
         session_data = {
-            "episodes": [{
+            "media_sources": [{
                 "source_id": source_id,
+                "source_type": "youtube",  # Required field
                 "title": metadata.get("title", "Unknown"),
-                "channel": metadata.get("channel", "Unknown"),
                 "url": metadata.get("url", ""),
+                "uploader": metadata.get("channel", metadata.get("uploader", "Unknown")),
+                "uploader_id": metadata.get("uploader_id", ""),
                 "duration_seconds": metadata.get("duration_seconds", 0),
+                "upload_date": metadata.get("upload_date", ""),
+                "thumbnail_url": metadata.get("thumbnail_url", ""),
+                "description": metadata.get("description", "")[:2000] if metadata.get("description") else "",
             }],
             "claims": [],
             "people": [],

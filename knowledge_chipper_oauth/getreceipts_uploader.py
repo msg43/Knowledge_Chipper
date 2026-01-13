@@ -14,6 +14,7 @@ Author: GetReceipts.org Team
 License: MIT
 """
 
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -23,6 +24,9 @@ import requests
 # Add parent directory to path to import device_auth
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from knowledge_system.services.device_auth import get_device_auth
+
+# Default API URL - can be overridden by environment variable
+DEFAULT_API_URL = "https://getreceipts.org/api/knowledge-chipper"
 
 
 class GetReceiptsUploader:
@@ -35,21 +39,36 @@ class GetReceiptsUploader:
     3. Handles all data types (episodes, claims, evidence, knowledge artifacts)
 
     Architecture: Web-canonical with ephemeral local
+    
+    Environment Variables:
+        GETRECEIPTS_BASE_URL: Override the base URL (e.g., http://localhost:3000)
     """
 
     def __init__(
         self,
-        api_base_url: str = "https://getreceipts.org/api/knowledge-chipper",
+        api_base_url: str | None = None,
         bypass_device_auth: bool = False,
     ):
         """
         Initialize the uploader with automatic device authentication
 
         Args:
-            api_base_url: Base URL for GetReceipts API endpoints
+            api_base_url: Base URL for GetReceipts API endpoints.
+                         If None, uses GETRECEIPTS_BASE_URL env var or default.
             bypass_device_auth: If True, skip device authentication (uses anonymous upload)
         """
-        self.api_base_url = api_base_url
+        # Priority: explicit arg > env var > default
+        if api_base_url:
+            self.api_base_url = api_base_url
+        else:
+            env_base = os.environ.get("GETRECEIPTS_BASE_URL")
+            if env_base:
+                # Env var is just the base URL, we need to add the API path
+                self.api_base_url = f"{env_base.rstrip('/')}/api/knowledge-chipper"
+                print(f"📍 Using GETRECEIPTS_BASE_URL: {self.api_base_url}")
+            else:
+                self.api_base_url = DEFAULT_API_URL
+        
         self.bypass_device_auth = bypass_device_auth
         
         if bypass_device_auth:
