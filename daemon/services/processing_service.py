@@ -680,10 +680,10 @@ class ProcessingService:
                 # This will extract claims, people, jargon, concepts, etc. from the extraction result
                 session_data = self._prepare_upload_data(job_data)
                 
-                # Count total records (claims, people, jargon, concepts, relations)
+                # Count total records (claims, people, jargon_terms, concepts, relations)
                 total_records = sum(
                     len(session_data.get(key, []))
-                    for key in ["claims", "people", "jargon", "concepts", "relations"]
+                    for key in ["claims", "people", "jargon_terms", "concepts", "relations"]
                 )
                 
                 if total_records == 0:
@@ -782,7 +782,7 @@ class ProcessingService:
             }],
             "claims": [],
             "people": [],
-            "jargon": [],
+            "jargon_terms": [],  # API expects 'jargon_terms' not 'jargon'
             "concepts": [],
         }
         
@@ -791,7 +791,7 @@ class ProcessingService:
         # extraction.extraction is the ExtractionResult
         if hasattr(extraction, "extraction") and extraction.extraction:
             claims = extraction.extraction.claims or []
-            for claim in claims:
+            for i, claim in enumerate(claims):
                 claim_text = claim.get("claim_text", "")
                 # Validate claim_text: must be between 1-10000 characters for Supabase
                 if not claim_text or len(claim_text) < 1:
@@ -801,42 +801,71 @@ class ProcessingService:
                     logger.warning(f"Truncating claim text from {len(claim_text)} to 10000 chars")
                     claim_text = claim_text[:10000]
                 
+                # Generate claim_id for Supabase deduplication
+                claim_id = f"claim_{source_id}_{i:03d}"
+                
+                # Map importance (0-10) to importance_score (0-1) for Supabase
+                importance_raw = claim.get("importance", 5)
+                importance_score = min(1.0, max(0.0, importance_raw / 10.0))
+                
+                # Map claim fields to Supabase schema
                 session_data["claims"].append({
+                    "claim_id": claim_id,  # Required for upsert
                     "source_id": source_id,
-                    "canonical": claim_text,  # Server expects 'canonical' not 'claim_text'
-                    "claim_text": claim_text,  # Keep for backwards compatibility
-                    "importance": claim.get("importance", 5),
-                    "evidence_type": claim.get("evidence_type", "claim"),
-                    "flagged": claim.get("flagged", False),
+                    "canonical": claim_text,
+                    "claim_type": claim.get("claim_type", claim.get("evidence_type", "factual")),
+                    "domain": claim.get("domain", ""),
+                    "importance_score": importance_score,
+                    "speaker": claim.get("speaker", "Unknown"),
+                    # Don't include columns that don't exist in Supabase schema
                 })
             
-            # Add people
+            # Add people - match Supabase 'people' table schema
             people = extraction.extraction.people or []
-            for person in people:
+            for i, person in enumerate(people):
                 if isinstance(person, dict):
+                    name = person.get("name", "")
+                    if not name:
+                        continue
+                    # Generate person_id for deduplication
+                    person_id = f"person_{source_id}_{i:03d}"
                     session_data["people"].append({
-                        "source_id": source_id,
-                        "name": person.get("name", ""),
+                        "person_id": person_id,
+                        "name": name,
+                        "normalized_name": name.lower().strip(),
+                        "description": person.get("context", person.get("description", "")),
                     })
             
-            # Add jargon
+            # Add jargon - match Supabase 'jargon_terms' table schema
             jargon = extraction.extraction.jargon or []
-            for term in jargon:
+            for i, term in enumerate(jargon):
                 if isinstance(term, dict):
-                    session_data["jargon"].append({
-                        "source_id": source_id,
-                        "term": term.get("term", ""),
+                    term_text = term.get("term", "")
+                    if not term_text:
+                        continue
+                    # Generate jargon_id for deduplication
+                    jargon_id = f"jargon_{source_id}_{i:03d}"
+                    session_data["jargon_terms"].append({
+                        "jargon_id": jargon_id,
+                        "term": term_text,
                         "definition": term.get("definition", ""),
+                        "domain": term.get("domain", ""),
                     })
             
-            # Add mental_models as concepts
+            # Add mental_models as concepts - match Supabase 'concepts' table schema
             mental_models = extraction.extraction.mental_models or []
-            for model in mental_models:
+            for i, model in enumerate(mental_models):
                 if isinstance(model, dict):
+                    name = model.get("name", "")
+                    if not name:
+                        continue
+                    # Generate concept_id for deduplication
+                    concept_id = f"concept_{source_id}_{i:03d}"
                     session_data["concepts"].append({
-                        "source_id": source_id,
-                        "name": model.get("name", ""),
-                        "definition": model.get("description", ""),
+                        "concept_id": concept_id,
+                        "name": name,
+                        "description": model.get("description", ""),
+                        "definition": model.get("definition", model.get("implications", "")),
                     })
         
         return session_data
