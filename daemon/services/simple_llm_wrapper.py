@@ -50,6 +50,12 @@ class SimpleLLMWrapper:
         logger.info(f"  - ANTHROPIC_API_KEY: {'✅ Set' if os.environ.get('ANTHROPIC_API_KEY') else '❌ Not set'}")
         logger.info(f"  - GOOGLE_API_KEY: {'✅ Set' if os.environ.get('GOOGLE_API_KEY') else '❌ Not set'}")
         
+        # CRITICAL: Force reload settings to pick up the newly-injected environment variables
+        # The Settings object caches on first load, so we must reload after setting env vars
+        from src.knowledge_system.config import get_settings
+        get_settings(reload=True)
+        logger.info("🔄 Reloaded settings to pick up injected API keys")
+        
         self.adapter = LLMAdapter(provider=provider)
         
         logger.info(f"🔧 SimpleLLMWrapper initialized: provider={provider}, model={model}, temperature={temperature}")
@@ -86,7 +92,7 @@ class SimpleLLMWrapper:
                     model=self.model,
                     messages=messages,
                     temperature=self.temperature,
-                    max_tokens=4096,  # Reasonable default for claim extraction
+                    max_tokens=16384,  # Large enough for full extraction from long transcripts
                 )
             )
             

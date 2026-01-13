@@ -294,18 +294,58 @@ class ExtractionPass:
         """Parse LLM response into ExtractionResult."""
         # Try to extract JSON from response
         try:
-            # Look for JSON block
+            json_str = response.strip()
+            
+            # Look for JSON block - handle missing closing fence gracefully
             if "```json" in response:
                 json_start = response.index("```json") + 7
-                json_end = response.index("```", json_start)
-                json_str = response[json_start:json_end].strip()
+                # Try to find closing fence, but if not found, use rest of response
+                try:
+                    json_end = response.index("```", json_start)
+                    json_str = response[json_start:json_end].strip()
+                except ValueError:
+                    # No closing fence - likely truncated response, use everything after opening
+                    logger.warning("No closing ``` found - response may be truncated, using rest of response")
+                    json_str = response[json_start:].strip()
             elif "```" in response:
                 json_start = response.index("```") + 3
-                json_end = response.index("```", json_start)
-                json_str = response[json_start:json_end].strip()
-            else:
-                # Assume entire response is JSON
-                json_str = response.strip()
+                try:
+                    json_end = response.index("```", json_start)
+                    json_str = response[json_start:json_end].strip()
+                except ValueError:
+                    logger.warning("No closing ``` found - using rest of response")
+                    json_str = response[json_start:].strip()
+            
+            # Handle case where response might have trailing text after JSON
+            # Try to find the outermost JSON object
+            if json_str.startswith('{'):
+                # Find matching closing brace by counting braces
+                brace_count = 0
+                json_end_idx = 0
+                in_string = False
+                escape_next = False
+                
+                for i, char in enumerate(json_str):
+                    if escape_next:
+                        escape_next = False
+                        continue
+                    if char == '\\':
+                        escape_next = True
+                        continue
+                    if char == '"' and not escape_next:
+                        in_string = not in_string
+                        continue
+                    if not in_string:
+                        if char == '{':
+                            brace_count += 1
+                        elif char == '}':
+                            brace_count -= 1
+                            if brace_count == 0:
+                                json_end_idx = i + 1
+                                break
+                
+                if json_end_idx > 0:
+                    json_str = json_str[:json_end_idx]
             
             data = json.loads(json_str)
             
@@ -330,6 +370,28 @@ class ExtractionPass:
             )
         
         except (json.JSONDecodeError, ValueError) as e:
+            logger.warning(f"Initial JSON parse failed: {e}")
+            logger.info("Attempting to repair truncated JSON...")
+            
+            # Try to repair truncated JSON by finding last complete objects
+            repaired_data = self._repair_truncated_json(json_str)
+            
+            if repaired_data and (repaired_data.get('claims') or repaired_data.get('jargon') 
+                                   or repaired_data.get('people') or repaired_data.get('mental_models')):
+                logger.info(f"✅ Successfully repaired truncated JSON!")
+                logger.info(f"  - Claims: {len(repaired_data.get('claims', []))}")
+                logger.info(f"  - Jargon: {len(repaired_data.get('jargon', []))}")
+                logger.info(f"  - People: {len(repaired_data.get('people', []))}")
+                logger.info(f"  - Mental Models: {len(repaired_data.get('mental_models', []))}")
+                
+                return ExtractionResult(
+                    claims=repaired_data.get('claims', []),
+                    jargon=repaired_data.get('jargon', []),
+                    people=repaired_data.get('people', []),
+                    mental_models=repaired_data.get('mental_models', []),
+                    metadata={"repaired": True, "original_error": str(e)},
+                )
+            
             logger.error(f"Failed to parse extraction response: {e}")
             logger.error(f"Response preview: {response[:1000]}...")
             logger.error(f"Full response length: {len(response)} chars")
@@ -342,6 +404,71 @@ class ExtractionPass:
                     "response_length": len(response)
                 }
             )
+    
+    def _repair_truncated_json(self, json_str: str) -> dict:
+        """
+        Attempt to repair truncated JSON by extracting complete objects.
+        
+        When LLM output is truncated mid-JSON, we try to salvage what we can
+        by finding the last complete object in each array.
+        """
+        import re
+        
+        result = {
+            'claims': [],
+            'jargon': [],
+            'people': [],
+            'mental_models': [],
+        }
+        
+        # Try to extract each array separately
+        for key in result.keys():
+            # Pattern to find the array: "claims": [...] or "claims":[...]
+            pattern = rf'"{key}"\s*:\s*\['
+            match = re.search(pattern, json_str)
+            
+            if match:
+                array_start = match.end()
+                # Find objects in this array by looking for complete {...} patterns
+                # We'll parse object by object
+                depth = 0
+                obj_start = -1
+                in_string = False
+                escape_next = False
+                
+                for i in range(array_start, len(json_str)):
+                    char = json_str[i]
+                    
+                    if escape_next:
+                        escape_next = False
+                        continue
+                    if char == '\\':
+                        escape_next = True
+                        continue
+                    if char == '"' and not escape_next:
+                        in_string = not in_string
+                        continue
+                    
+                    if not in_string:
+                        if char == '{':
+                            if depth == 0:
+                                obj_start = i
+                            depth += 1
+                        elif char == '}':
+                            depth -= 1
+                            if depth == 0 and obj_start >= 0:
+                                # Found a complete object
+                                obj_str = json_str[obj_start:i+1]
+                                try:
+                                    obj = json.loads(obj_str)
+                                    result[key].append(obj)
+                                except json.JSONDecodeError:
+                                    pass  # Skip malformed objects
+                                obj_start = -1
+                        elif char == ']':
+                            break  # End of array
+        
+        return result
     
     def _validate_and_repair(self, result: ExtractionResult) -> ExtractionResult:
         """Validate and repair extraction result."""

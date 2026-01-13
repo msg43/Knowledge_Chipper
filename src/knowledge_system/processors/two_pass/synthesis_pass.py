@@ -351,18 +351,55 @@ class SynthesisPass:
         """Parse LLM response into SynthesisResult."""
         # Try to extract JSON from response
         try:
-            # Look for JSON block
+            json_str = response.strip()
+            
+            # Look for JSON block - handle missing closing fence gracefully
             if "```json" in response:
                 json_start = response.index("```json") + 7
-                json_end = response.index("```", json_start)
-                json_str = response[json_start:json_end].strip()
+                try:
+                    json_end = response.index("```", json_start)
+                    json_str = response[json_start:json_end].strip()
+                except ValueError:
+                    # No closing fence - likely truncated, use rest of response
+                    logger.warning("No closing ``` found in synthesis - using rest of response")
+                    json_str = response[json_start:].strip()
             elif "```" in response:
                 json_start = response.index("```") + 3
-                json_end = response.index("```", json_start)
-                json_str = response[json_start:json_end].strip()
-            else:
-                # Assume entire response is JSON
-                json_str = response.strip()
+                try:
+                    json_end = response.index("```", json_start)
+                    json_str = response[json_start:json_end].strip()
+                except ValueError:
+                    logger.warning("No closing ``` found - using rest of response")
+                    json_str = response[json_start:].strip()
+            
+            # Handle trailing text after JSON by finding matching closing brace
+            if json_str.startswith('{'):
+                brace_count = 0
+                json_end_idx = 0
+                in_string = False
+                escape_next = False
+                
+                for i, char in enumerate(json_str):
+                    if escape_next:
+                        escape_next = False
+                        continue
+                    if char == '\\':
+                        escape_next = True
+                        continue
+                    if char == '"' and not escape_next:
+                        in_string = not in_string
+                        continue
+                    if not in_string:
+                        if char == '{':
+                            brace_count += 1
+                        elif char == '}':
+                            brace_count -= 1
+                            if brace_count == 0:
+                                json_end_idx = i + 1
+                                break
+                
+                if json_end_idx > 0:
+                    json_str = json_str[:json_end_idx]
             
             data = json.loads(json_str)
             

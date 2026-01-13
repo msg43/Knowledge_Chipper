@@ -792,9 +792,19 @@ class ProcessingService:
         if hasattr(extraction, "extraction") and extraction.extraction:
             claims = extraction.extraction.claims or []
             for claim in claims:
+                claim_text = claim.get("claim_text", "")
+                # Validate claim_text: must be between 1-10000 characters for Supabase
+                if not claim_text or len(claim_text) < 1:
+                    logger.warning(f"Skipping claim with empty text")
+                    continue
+                if len(claim_text) > 10000:
+                    logger.warning(f"Truncating claim text from {len(claim_text)} to 10000 chars")
+                    claim_text = claim_text[:10000]
+                
                 session_data["claims"].append({
                     "source_id": source_id,
-                    "claim_text": claim.get("claim_text", ""),
+                    "canonical": claim_text,  # Server expects 'canonical' not 'claim_text'
+                    "claim_text": claim_text,  # Keep for backwards compatibility
                     "importance": claim.get("importance", 5),
                     "evidence_type": claim.get("evidence_type", "claim"),
                     "flagged": claim.get("flagged", False),
