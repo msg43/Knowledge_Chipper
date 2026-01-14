@@ -1,6 +1,7 @@
 # Release Daemon Script
 
 **Created:** January 12, 2026  
+**Updated:** January 13, 2026  
 **Location:** `~/Desktop/Release_Daemon.command`  
 **Purpose:** One-click daemon release automation
 
@@ -9,9 +10,9 @@
 This script automates the entire daemon release process:
 
 1. **Bumps version** - Increments patch version (e.g., 1.1.18 → 1.1.19)
-2. **Builds DMG** - Creates macOS installer package
+2. **Builds PKG** - Creates signed & notarized macOS installer package
 3. **Creates GitHub release** - Tags and creates release on Skipthepodcast.com repo
-4. **Uploads DMG** - Attaches DMG to GitHub release
+4. **Uploads PKG** - Attaches PKG to GitHub release
 5. **Commits Knowledge_Chipper** - Commits version bump and changes
 6. **Pushes Knowledge_Chipper** - Pushes to main branch
 7. **Commits GetReceipts** - Commits any sync changes
@@ -43,13 +44,13 @@ This script automates the entire daemon release process:
 
 ### Optional (Recommended)
 
-- **GitHub CLI (`gh`)** - For automatic DMG upload
+- **GitHub CLI (`gh`)** - For automatic PKG upload
   ```bash
   brew install gh
   gh auth login
   ```
   
-  Without `gh`, you'll need to manually upload the DMG to the GitHub release.
+  Without `gh`, you'll need to manually upload the PKG to the GitHub release.
 
 ## What It Changes
 
@@ -57,7 +58,7 @@ This script automates the entire daemon release process:
 
 **In Knowledge_Chipper:**
 - `daemon/__init__.py` - Version number bumped
-- `dist/GetReceiptsDaemon-{version}-macos.dmg` - New DMG created
+- `dist/GetReceipts-Daemon-{version}.pkg` - New PKG created (signed & notarized)
 - Git tag `v{version}` created
 - All uncommitted changes committed and pushed
 
@@ -94,13 +95,13 @@ git push origin main
    New version: 1.1.19
    ✓ Version bumped to 1.1.19
 
-🔨 Step 2: Building DMG package...
-   This may take 2-3 minutes...
-   ✓ DMG built successfully
+🔨 Step 2: Building PKG package...
+   This will take 15-20 minutes (includes Apple notarization)...
+   ✓ PKG built successfully
 
 📦 Step 3: Creating GitHub release...
    ✓ Tag v1.1.19 pushed to GitHub
-   ✓ DMG uploaded to GitHub Release
+   ✓ PKG uploaded to GitHub Release
 
 💾 Step 4: Committing changes in Knowledge_Chipper...
    ✓ Changes committed in Knowledge_Chipper
@@ -121,19 +122,19 @@ git push origin main
 ╚══════════════════════════════════════════════════════════════════════════════╝
 
   Version: v1.1.19
-  DMG: dist/GetReceiptsDaemon-1.1.19-macos.dmg
+  PKG: dist/GetReceipts-Daemon-1.1.19.pkg
   GitHub Release: https://github.com/msg43/Skipthepodcast.com/releases/tag/v1.1.19
 
   ✓ Version bumped
-  ✓ DMG built
+  ✓ PKG built and notarized
   ✓ GitHub release created
-  ✓ DMG uploaded
+  ✓ PKG uploaded
   ✓ Knowledge_Chipper committed and pushed
   ✓ GetReceipts committed and pushed
 
 Next steps:
   1. Verify release at: https://github.com/msg43/Skipthepodcast.com/releases
-  2. Test daemon installation from DMG
+  2. Test daemon installation from PKG
   3. Users will auto-update to v1.1.19 within 24 hours
 ```
 
@@ -147,10 +148,11 @@ The script uses `set -e` to exit immediately on any error. If something fails:
 
 ### Common Issues
 
-**"DMG build failed"**
-- Check `installer/build_dmg.sh` output
+**"PKG build failed"**
+- Check `installer/build_pkg.sh` output
 - Ensure PyInstaller is installed: `pip install pyinstaller`
 - Check for Python syntax errors in daemon code
+- Verify Apple notarization credentials (APP_PASSWORD)
 
 **"Git push failed"**
 - Ensure you're authenticated with GitHub
@@ -159,7 +161,7 @@ The script uses `set -e` to exit immediately on any error. If something fails:
 
 **"gh command not found"**
 - Install GitHub CLI: `brew install gh`
-- Or manually upload DMG at: https://github.com/msg43/Skipthepodcast.com/releases
+- Or manually upload PKG at: https://github.com/msg43/Skipthepodcast.com/releases
 
 **"Permission denied"**
 - Make sure script is executable: `chmod +x ~/Desktop/Release_Daemon.command`
@@ -167,10 +169,11 @@ The script uses `set -e` to exit immediately on any error. If something fails:
 ## Safety Features
 
 - ✅ **Version validation** - Won't overwrite existing releases
-- ✅ **DMG verification** - Checks DMG exists before uploading
+- ✅ **PKG verification** - Checks PKG exists before uploading
 - ✅ **Git safety** - Only commits if there are changes
 - ✅ **Exit on error** - Stops immediately if any step fails
 - ✅ **Colored output** - Easy to spot errors and success
+- ✅ **Pre-flight checks** - Detects running dev daemon, stale build artifacts
 
 ## Manual Override
 
@@ -182,10 +185,11 @@ cd /Users/matthewgreer/Projects/Knowledge_Chipper
 # Edit daemon/__init__.py manually
 ```
 
-### Just build DMG
+### Just build PKG
 ```bash
 cd /Users/matthewgreer/Projects/Knowledge_Chipper
-bash installer/build_dmg.sh
+export APP_PASSWORD="your-notarization-password"
+bash installer/build_pkg.sh
 ```
 
 ### Just create release
@@ -193,7 +197,7 @@ bash installer/build_dmg.sh
 cd /Users/matthewgreer/Projects/Knowledge_Chipper
 git tag -a v1.1.19 -m "Release v1.1.19"
 git push origin v1.1.19
-gh release create v1.1.19 dist/GetReceiptsDaemon-1.1.19-macos.dmg \
+gh release create v1.1.19 dist/GetReceipts-Daemon-1.1.19.pkg \
   --repo msg43/Skipthepodcast.com \
   --title "Daemon v1.1.19" \
   --notes "Release notes here"
@@ -207,39 +211,29 @@ gh release create v1.1.19 dist/GetReceiptsDaemon-1.1.19-macos.dmg \
 └─────────────────┬───────────────────────┘
                   ▼
 ┌─────────────────────────────────────────┐
-│ 2. Increment patch (1.1.18 → 1.1.19)   │
+│ 2. Pre-flight checks (dev daemon, cache)│
 └─────────────────┬───────────────────────┘
                   ▼
 ┌─────────────────────────────────────────┐
-│ 3. Update __init__.py with new version │
+│ 3. Run installer/build_pkg.sh           │
+│    (includes Apple notarization)        │
 └─────────────────┬───────────────────────┘
                   ▼
 ┌─────────────────────────────────────────┐
-│ 4. Run installer/build_dmg.sh           │
+│ 4. Commit changes in Knowledge_Chipper  │
 └─────────────────┬───────────────────────┘
                   ▼
 ┌─────────────────────────────────────────┐
-│ 5. Create and push git tag v1.1.19     │
+│ 5. Push Knowledge_Chipper to main       │
 └─────────────────┬───────────────────────┘
                   ▼
 ┌─────────────────────────────────────────┐
-│ 6. Upload DMG to GitHub Release         │
+│ 6. Create and push git tag v{version}   │
 └─────────────────┬───────────────────────┘
                   ▼
 ┌─────────────────────────────────────────┐
-│ 7. Commit changes in Knowledge_Chipper  │
-└─────────────────┬───────────────────────┘
-                  ▼
-┌─────────────────────────────────────────┐
-│ 8. Push Knowledge_Chipper to main       │
-└─────────────────┬───────────────────────┘
-                  ▼
-┌─────────────────────────────────────────┐
-│ 9. Commit changes in GetReceipts        │
-└─────────────────┬───────────────────────┘
-                  ▼
-┌─────────────────────────────────────────┐
-│ 10. Push GetReceipts to main            │
+│ 7. Upload PKG to GitHub Release         │
+│    (via gh CLI)                         │
 └─────────────────┬───────────────────────┘
                   ▼
 ┌─────────────────────────────────────────┐
@@ -284,7 +278,7 @@ git push origin main
 1. **Always review CHANGELOG.md** before releasing
 2. **Test the daemon** locally before releasing
 3. **Check GitHub Actions** are passing
-4. **Verify the DMG** installs and runs correctly
+4. **Verify the PKG** installs and runs correctly
 5. **Monitor auto-update** within 24 hours of release
 
 ## Troubleshooting
@@ -326,12 +320,13 @@ git branch
 ## Related Documentation
 
 - `docs/DAEMON_RELEASE_PROCESS.md` - Manual release process
-- `installer/build_dmg.sh` - DMG build script
+- `installer/build_pkg.sh` - PKG build script (signed & notarized)
 - `scripts/release_daemon.sh` - Generic release script
 - `CHANGELOG.md` - Version history
 
 ---
 
-**Last Updated:** January 12, 2026  
-**Script Version:** 1.0  
-**Status:** ✅ Ready for production use
+**Last Updated:** January 13, 2026  
+**Script Version:** 1.1  
+**Status:** ✅ Ready for production use  
+**Distribution Format:** Signed & Notarized PKG

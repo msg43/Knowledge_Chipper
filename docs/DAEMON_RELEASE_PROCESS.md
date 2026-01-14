@@ -1,13 +1,13 @@
 # Daemon Release Process
 
-**Last Updated:** January 11, 2026  
-**Current Version:** 1.1.1
+**Last Updated:** January 13, 2026  
+**Current Version:** See `daemon/__init__.py`
 
 ---
 
 ## Overview
 
-The GetReceipts daemon (formerly "Skip the Podcast Desktop") is released as a **DMG installer** to the public repository at `https://github.com/msg43/Skipthepodcast.com`. 
+The GetReceipts daemon (formerly "Skip the Podcast Desktop") is released as a **signed & notarized PKG installer** to the public repository at `https://github.com/msg43/Skipthepodcast.com`. 
 
 **Architecture Change (January 2026):**
 - ❌ **Old:** Desktop app with GUI (PyQt6) - **DEPRECATED**
@@ -23,10 +23,10 @@ The daemon is the only component users need. All interaction happens through the
 
 **As of January 2026**, there is only **one version number** that matters:
 
-**Daemon Version** (in `daemon/__init__.py`): **1.1.1**
+**Daemon Version** (in `daemon/__init__.py`)
 - The background service/API
 - Used for GitHub release tags (e.g., v1.1.0)
-- Used for DMG filenames
+- Used for PKG filenames (e.g., `GetReceipts-Daemon-1.1.3.pkg`)
 - Reported by daemon's `/health` endpoint
 - Used by auto-update checker
 
@@ -37,7 +37,7 @@ daemon/__init__.py
 ```
 
 ```python
-__version__ = "1.1.1"
+__version__ = "X.Y.Z"  # Update this for each release
 ```
 
 ### Legacy Application Version (DEPRECATED)
@@ -52,14 +52,14 @@ This was for the old desktop GUI app which has been replaced by the web-controll
 
 ### Release Naming
 
-GitHub releases now use the **daemon version**:
+GitHub releases use the **daemon version**:
 - Release tag: `v1.1.3`
 - PKG filename: `GetReceipts-Daemon-1.1.3.pkg`
 - Release title: "GetReceipts Daemon v1.1.3"
 
-**Distribution Format:** Signed & Notarized PKG (as of v1.1.3)
+**Distribution Format:** Signed & Notarized PKG
 
-**Download URL:** GitHub's `/releases/latest/download/` automatically points to the latest release's PKG file
+**Download URL:** `https://github.com/msg43/Skipthepodcast.com/releases/latest/download/GetReceipts-Daemon-X.Y.Z.pkg`
 
 ---
 
@@ -176,15 +176,17 @@ The daemon release process is **fully automated** via GitHub Actions. When you p
 ```mermaid
 flowchart LR
     A[Push version tag] --> B[Run Tests]
-    B --> C[Build DMG]
-    C --> D[Publish Release]
-    D --> E[Verify Download]
+    B --> C[Build PKG]
+    C --> D[Notarize]
+    D --> E[Publish Release]
+    E --> F[Verify Download]
 ```
 
 **Jobs:**
 1. **Test** (Ubuntu) - Run daemon API tests (~30 seconds)
-2. **Build** (macOS) - Create DMG with minimal deps (~10 minutes)
-3. **Publish** (macOS) - Upload to Skipthepodcast.com (~1 minute)
+2. **Build** (macOS) - Create signed PKG (~5 minutes)
+3. **Notarize** (macOS) - Apple notarization (~10-15 minutes)
+4. **Publish** (macOS) - Upload to Skipthepodcast.com (~1 minute)
 
 ### Using Automation
 
@@ -232,8 +234,9 @@ Test locally before pushing tag:
 # Run daemon tests
 make test-daemon
 
-# Build DMG locally
-bash scripts/build_macos_app.sh --clean --make-dmg --skip-install
+# Build PKG locally
+export APP_PASSWORD="your-notarization-password"
+bash installer/build_pkg.sh
 
 # Verify everything works before tagging
 ```
@@ -256,11 +259,16 @@ bash scripts/build_macos_app.sh --clean --make-dmg --skip-install
 
 ## Download URLs
 
-### Stable URL (Always Latest)
+### Latest Release URL
 
-This URL always points to the latest release:
+This URL always points to the latest release page:
 ```
-https://github.com/msg43/Skipthepodcast.com/releases/latest/download/Skip_the_Podcast_Desktop.dmg
+https://github.com/msg43/Skipthepodcast.com/releases/latest
+```
+
+**Versioned Download URL:**
+```
+https://github.com/msg43/Skipthepodcast.com/releases/download/v1.1.3/GetReceipts-Daemon-1.1.3.pkg
 ```
 
 **Used by:**
@@ -268,54 +276,30 @@ https://github.com/msg43/Skipthepodcast.com/releases/latest/download/Skip_the_Po
 - Daemon auto-update system
 - Installation scripts
 
-### Versioned URL
-
-For specific versions:
-```
-https://github.com/msg43/Skipthepodcast.com/releases/download/v1.0.0/Skip_the_Podcast_Desktop-1.0.0.dmg
-```
-
 ---
 
 ## GetReceipts.org Integration
 
-All download links on GetReceipts.org use the **stable DMG URL**:
+Download links on GetReceipts.org point to the GitHub releases page:
 
-### Updated Files (January 11, 2026)
-
-1. **`src/components/daemon-status-indicator.tsx`**
-   ```typescript
-   window.location.href = "https://github.com/msg43/Skipthepodcast.com/releases/latest/download/Skip_the_Podcast_Desktop.dmg";
-   ```
-
-2. **`src/components/daemon-installer.tsx`**
-   ```typescript
-   window.location.href = "https://github.com/msg43/Skipthepodcast.com/releases/latest/download/Skip_the_Podcast_Desktop.dmg";
-   ```
-
-3. **`src/app/api/download/generate-link-token/route.ts`**
-   ```typescript
-   const downloadUrl = `https://github.com/msg43/Skipthepodcast.com/releases/latest/download/Skip_the_Podcast_Desktop.dmg?link_token=${token}`;
-   ```
-
-4. **`src/components/settings-form.tsx`**
-   ```typescript
-   window.open("https://github.com/msg43/Skipthepodcast.com/releases/latest", "_blank");
-   ```
+```typescript
+window.open("https://github.com/msg43/Skipthepodcast.com/releases/latest", "_blank");
+```
 
 ---
 
-## Why DMG Instead of PKG?
+## Why PKG Instead of DMG?
 
-**Historical Context:**
+**Current Distribution (January 2026):**
 
-We initially used PKG installers but encountered notarization issues that were resolved for DMG but persisted for PKG. Therefore, we switched to DMG as the primary distribution format.
+We use signed & notarized PKG installers for the following benefits:
 
-**Benefits of DMG:**
-- ✅ Simpler installation (drag-and-drop)
-- ✅ No notarization issues
-- ✅ Better user experience
-- ✅ Easier to verify contents before installation
+**Benefits of PKG:**
+- ✅ One-click installation (no drag-and-drop needed)
+- ✅ Automatic setup of LaunchAgent (auto-start on login)
+- ✅ Desktop restart button created automatically
+- ✅ Professional installer experience
+- ✅ Signed and notarized by Apple
 
 ---
 
@@ -336,12 +320,11 @@ The daemon checks for updates in two scenarios:
    - Compares current version with latest release
 
 2. **Download Update**
-   - Downloads `Skip_the_Podcast_Desktop.dmg` from stable URL
+   - Downloads latest PKG from GitHub releases
    - Verifies integrity
 
 3. **Install Update**
-   - Extracts app from DMG
-   - Replaces current installation
+   - Runs PKG installer
    - LaunchAgent automatically restarts daemon
 
 ### Configuration
@@ -350,7 +333,7 @@ Auto-update settings in daemon:
 ```python
 # daemon/services/update_checker.py
 CHECK_INTERVAL_HOURS = 24  # Check every 24 hours
-GITHUB_REPO = "msg43/Knowledge_Chipper"  # Checks releases here
+GITHUB_REPO = "msg43/Skipthepodcast.com"  # Checks releases here
 ```
 
 ---
@@ -413,12 +396,12 @@ Restarting the daemon will:
 
 ### Issue: Download link returns 404
 
-**Cause:** Release not published or DMG file missing
+**Cause:** Release not published or PKG file missing
 
 **Solution:**
 1. Check release exists: `https://github.com/msg43/Skipthepodcast.com/releases/latest`
-2. Verify both DMG files are uploaded
-3. Re-run publish script if needed
+2. Verify PKG file is uploaded
+3. Re-run release script if needed: `bash scripts/release_daemon.sh`
 
 ### Issue: Version mismatch
 
@@ -426,7 +409,7 @@ Restarting the daemon will:
 
 **Solution:**
 1. Update `daemon/__init__.py` with correct version
-2. Rebuild DMG
+2. Rebuild PKG: `bash installer/build_pkg.sh`
 3. Re-publish release
 
 ### Issue: Old version still downloading
@@ -437,24 +420,30 @@ Restarting the daemon will:
 - Wait 5-10 minutes for CDN to update
 - Use versioned URL for immediate access
 
+### Issue: Notarization fails
+
+**Cause:** Missing or invalid Apple credentials
+
+**Solution:**
+1. Verify `APP_PASSWORD` environment variable is set
+2. Check Apple Developer certificate is valid
+3. Review notarization log for specific errors
+
 ---
 
 ## Release Checklist
 
 Before publishing a new daemon release:
 
-- [ ] Update version in `daemon/__init__.py` (e.g., 1.1.1)
+- [ ] Update version in `daemon/__init__.py`
 - [ ] Update CHANGELOG.md with release notes
 - [ ] Test daemon locally
-- [ ] Run `bash scripts/build_macos_app.sh --make-dmg --skip-install`
-- [ ] Verify DMG mounts and app launches
-- [ ] Check daemon reports correct version: `curl http://localhost:8765/health`
-- [ ] Run `bash scripts/publish_release.sh`
+- [ ] Run `bash scripts/release_daemon.sh` (handles everything automatically)
 - [ ] Verify release on GitHub:
-  - [ ] Tagged as v1.1.1 (daemon version)
-  - [ ] Title is "GetReceipts Daemon v1.1.1"
-  - [ ] Both DMG files uploaded (versioned + stable)
-- [ ] Test download from GetReceipts.org
+  - [ ] Tagged correctly (e.g., v1.1.3)
+  - [ ] Title is "GetReceipts Daemon v1.1.3"
+  - [ ] PKG file uploaded
+- [ ] Test download from GitHub releases page
 - [ ] Verify daemon auto-update detects new version
 
 **Note:** Only the daemon version matters now. The old pyproject.toml version (4.1.0) is deprecated.
@@ -463,24 +452,25 @@ Before publishing a new daemon release:
 
 ## Quick Reference
 
-### Build DMG
+### One-Click Release (Recommended)
 ```bash
-bash scripts/build_macos_app.sh --make-dmg --skip-install
+bash scripts/release_daemon.sh
 ```
 
-### Publish Release
+### Build PKG Only
 ```bash
-bash scripts/publish_release.sh
+export APP_PASSWORD="your-notarization-password"
+bash installer/build_pkg.sh
 ```
 
 ### Check Current Daemon Version
 ```bash
-python3 -c "import sys; sys.path.insert(0, 'daemon'); from daemon import __version__; print(__version__)"
+python3 -c "from daemon import __version__; print(__version__)"
 ```
 
 ### Test Download URL
 ```bash
-curl -I https://github.com/msg43/Skipthepodcast.com/releases/latest/download/Skip_the_Podcast_Desktop.dmg
+curl -I https://github.com/msg43/Skipthepodcast.com/releases/latest
 ```
 
 ---
@@ -488,6 +478,8 @@ curl -I https://github.com/msg43/Skipthepodcast.com/releases/latest/download/Ski
 ## Related Documentation
 
 - `docs/DAEMON_AUTO_UPDATE_IMPLEMENTATION.md` - Auto-update system details
+- `RELEASE_DAEMON_SCRIPT.md` - One-click release script documentation
 - `CHANGELOG.md` - Version history
 - `README.md` - User-facing documentation
-- `scripts/publish_release.sh` - Release automation script
+- `scripts/release_daemon.sh` - Release automation script
+- `installer/build_pkg.sh` - PKG build script
