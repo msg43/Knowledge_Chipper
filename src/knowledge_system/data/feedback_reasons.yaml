@@ -6,40 +6,49 @@
 #
 # Structure: entity_type -> verdict -> reason_key: "Human Label"
 
-schema_version: "1.0.0"
+schema_version: "1.1.0"
 
 claim:
   reject:
-    trivial: "Trivial/Common Knowledge"
-    too_vague: "Too Vague"
-    topic_only: "Just a Topic, Not a Claim"
-    hallucination: "Not in Text"
+    trivial: "Trivial / Common Knowledge"
+    too_vague: "Too Vague / Lack of Detail"
+    topic_only: "Just a Topic (Not a specific claim)"
+    hallucination: "Not supported by source text"
+    duplicate: "Duplicate of another claim"
   accept:
-    novel_insight: "Novel Insight"
-    high_utility: "High Utility"
-    core_argument: "Core Argument"
+    novel_insight: "Novel / Surprising Insight"
+    high_utility: "Actionable / Practical Utility"
+    core_argument: "Core Argument of the source"
+    counter_intuitive: "Challenges conventional wisdom"
 
 person:
   reject:
-    title_role: "Title/Role, Not Name"
-    group_org: "Group/Org, Not Person"
-    common_noun: "Common Noun"
+    title_role: "Title or Role, not a Name"
+    group_org: "Group or Organization, not a Person"
+    common_noun: "Common Noun classified as Person"
+    fictional: "Metaphorical / Fictional character"
   accept:
-    key_speaker: "Speaker/Host"
-    cited_expert: "Cited Authority"
+    key_speaker: "Primary Speaker / Host"
+    cited_expert: "Cited Authority / Expert"
+    subject: "Subject of the discussion"
 
 jargon:
   reject:
-    common_word: "Common Word"
-    proper_noun: "Proper Noun, Not Term"
+    common_word: "Common dictionary word (not jargon)"
+    proper_noun: "Proper Noun (Name/Place), not a term"
+    phrase: "Generic phrase, not a specific term"
     is_concept: "This is a Mental Model (Concept)"
   accept:
-    domain_term: "Domain Terminology"
+    domain_term: "Domain-specific Terminology"
+    acronym: "Useful Acronym / Abbreviation"
+    neologism: "New term coined by speaker"
 
 concept:
   reject:
-    generic: "Too Generic"
-    is_jargon: "This is Jargon, Not Concept"
+    generic: "Too generic / broad"
+    is_jargon: "Better classified as Jargon"
+    descriptive: "Descriptive phrase, not a model"
   accept:
-    framework: "Framework/Model"
-    heuristic: "Heuristic"
+    framework: "Framework / Structured Approach"
+    heuristic: "Heuristic / Rule of Thumb"
+    metaphor: "Useful Metaphor / Analogy"

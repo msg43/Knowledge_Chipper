@@ -39,7 +39,8 @@ class FeedbackExample:
     user_notes: str = ""
     source_id: str = ""  # Episode/source reference
     created_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
-    is_golden: bool = False  # True if from golden_feedback.json
+    is_golden: bool = False  # True if from golden_feedback.json (cold start)
+    is_shared: bool = False  # True if from GetReceipts sync (replicated to all users)
 
 
 @dataclass
@@ -302,7 +303,8 @@ class TasteEngine:
             "user_notes": feedback.user_notes,
             "source_id": feedback.source_id,
             "created_at": feedback.created_at,
-            "is_golden": feedback.is_golden
+            "is_golden": feedback.is_golden,
+            "is_shared": feedback.is_shared
         }
         
         # Add to collection
@@ -384,23 +386,55 @@ class TasteEngine:
         """Get statistics about the feedback store."""
         total = self._collection.count()
         
-        # Count by verdict
+        # Count by verdict and source type
         try:
             accepts = len(self._collection.get(where={"verdict": "accept"})["ids"])
             rejects = len(self._collection.get(where={"verdict": "reject"})["ids"])
             golden = len(self._collection.get(where={"is_golden": True})["ids"])
+            shared = len(self._collection.get(where={"is_shared": True})["ids"])
         except Exception:
-            accepts = rejects = golden = 0
+            accepts = rejects = golden = shared = 0
         
         return {
             "total_examples": total,
             "accepts": accepts,
             "rejects": rejects,
             "golden_examples": golden,
-            "user_examples": total - golden,
+            "shared_examples": shared,
+            "local_examples": total - golden - shared,
             "persist_dir": str(self.persist_dir),
             "embedding_model": self.EMBEDDING_MODEL
         }
+    
+    def has_example(self, entity_text: str, entity_type: str, verdict: str) -> bool:
+        """
+        Check if an example with this text/type/verdict already exists.
+        
+        Used to prevent duplicates when syncing shared feedback.
+        
+        Args:
+            entity_text: The entity text to check.
+            entity_type: The entity type (claim, person, etc.).
+            verdict: The verdict (accept/reject).
+            
+        Returns:
+            True if an exact match exists, False otherwise.
+        """
+        try:
+            results = self._collection.get(
+                where={
+                    "$and": [
+                        {"entity_type": entity_type},
+                        {"verdict": verdict}
+                    ]
+                },
+                include=["documents"]
+            )
+            # Check if exact text exists
+            return entity_text in (results.get("documents") or [])
+        except Exception as e:
+            logger.warning(f"Failed to check for existing example: {e}")
+            return False
     
     def clear(self):
         """Clear all examples (for testing)."""

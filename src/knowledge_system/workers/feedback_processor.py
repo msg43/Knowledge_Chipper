@@ -144,16 +144,32 @@ class FeedbackProcessor:
         except json.JSONDecodeError as e:
             raise ValueError(f"Invalid JSON: {e}")
         
+        entity_text = data.get('entity_text', '')
+        entity_type = data.get('entity_type', 'claim')
+        verdict = data.get('verdict', 'reject')
+        
+        # Check for duplicates before adding
+        if self.taste_engine.has_example(entity_text, entity_type, verdict):
+            logger.debug(f"Skipping duplicate feedback: {entity_text[:50]}...")
+            # Mark as processed even though we skipped it (to avoid reprocessing)
+            cursor.execute("""
+                UPDATE pending_feedback
+                SET processed_at = ?
+                WHERE id = ?
+            """, (datetime.utcnow().isoformat(), item['id']))
+            return
+        
         # Create FeedbackExample from data
         feedback = FeedbackExample(
-            entity_type=data.get('entity_type', 'claim'),
-            entity_text=data.get('entity_text', ''),
-            verdict=data.get('verdict', 'reject'),
+            entity_type=entity_type,
+            entity_text=entity_text,
+            verdict=verdict,
             reason_category=data.get('reason_category', 'other'),
             user_notes=data.get('user_notes', ''),
             source_id=data.get('source_id', ''),
             created_at=data.get('created_at', datetime.utcnow().isoformat()),
-            is_golden=False
+            is_golden=False,
+            is_shared=data.get('is_shared', False)  # From GetReceipts sync
         )
         
         # Add to TasteEngine (this calculates embedding)

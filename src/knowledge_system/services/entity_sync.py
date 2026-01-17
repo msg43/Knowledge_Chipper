@@ -347,7 +347,13 @@ class EntitySyncService:
         response.raise_for_status()
         
         data = response.json()
-        return data.get("feedback", [])
+        feedback_items = data.get("feedback", [])
+        
+        # Mark all fetched items as shared (from admin, replicated to all users)
+        for item in feedback_items:
+            item["is_shared"] = True
+        
+        return feedback_items
     
     def _queue_feedback_items(self, items: list[dict]) -> int:
         """

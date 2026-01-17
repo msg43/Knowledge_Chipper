@@ -210,21 +210,34 @@ class ExtractionPass:
             transcript=transcript,
         )
         
-        # Inject synced refinements from GetReceipts.org (legacy system)
-        prompt = self._inject_refinements(prompt)
+        # DEPRECATED: Static refinements (controlled by config flag)
+        # Default is disabled - use TasteEngine dynamic injection instead
+        try:
+            from daemon.config.settings import settings
+            if settings.enable_static_refinements:
+                prompt = self._inject_refinements(prompt)
+        except ImportError:
+            # Daemon settings not available (e.g., running standalone)
+            pass
         
-        # Inject dynamic examples from TasteEngine (new Dynamic Learning System)
+        # Inject dynamic examples from TasteEngine (the unified feedback system)
         prompt = self._inject_dynamic_examples(prompt, transcript, metadata)
+        
+        # Inject RAE context (channel-specific jargon registry + claim history)
+        prompt = self._inject_rae_context(prompt, metadata)
         
         return prompt
     
     def _inject_refinements(self, prompt: str) -> str:
         """
-        Inject synced refinements from GetReceipts.org into the prompt.
+        DEPRECATED: Use TasteEngine dynamic injection instead.
         
+        This method is disabled by default (enable_static_refinements=False).
+        Will be removed in a future version once TasteEngine is mature.
+        
+        Injects synced refinements from GetReceipts.org into the prompt.
         Refinements are bad_example XML patterns that teach the LLM to avoid
-        previously-identified extraction mistakes (e.g., extracting "US President" 
-        as a person instead of "Joe Biden").
+        previously-identified extraction mistakes.
         
         Args:
             prompt: The base extraction prompt
@@ -402,6 +415,85 @@ class ExtractionPass:
             logger.debug(f"TasteEngine not available - skipping dynamic injection: {e}")
         except Exception as e:
             logger.warning(f"Could not inject dynamic examples: {e}")
+        
+        return prompt
+    
+    def _inject_rae_context(self, prompt: str, metadata: dict) -> str:
+        """
+        Inject RAE context (jargon registry + claim history) from channel.
+        
+        This is the SECOND injection layer (static refinements are deprecated):
+        1. Dynamic examples (vector-similar feedback from TasteEngine)
+        2. RAE context (channel-specific jargon + claims) ← THIS METHOD
+        
+        Args:
+            prompt: The extraction prompt (already has dynamic examples)
+            metadata: Source metadata with channel_id
+            
+        Returns:
+            Prompt with RAE context injected
+        """
+        try:
+            from ...services.rae_service import get_rae_service
+            import asyncio
+            
+            channel_id = metadata.get('channel_id')
+            
+            if not channel_id:
+                logger.debug("No channel_id in metadata - skipping RAE context")
+                return prompt
+            
+            rae_service = get_rae_service()
+            
+            # Fetch channel history (async)
+            history = asyncio.run(rae_service.fetch_channel_history(channel_id))
+            
+            if not history.get('jargon_registry') and not history.get('top_claims'):
+                logger.debug("No RAE context available for this channel")
+                return prompt
+            
+            # Build jargon registry section (STRICT)
+            jargon_section = rae_service.build_jargon_registry_section(
+                history.get('jargon_registry', [])
+            )
+            
+            # Build claims context section (EVOLUTION)
+            claims_section = rae_service.build_claims_context_section(
+                history.get('top_claims', {})
+            )
+            
+            rae_context = jargon_section + claims_section
+            
+            if not rae_context.strip():
+                logger.debug("RAE context is empty after building")
+                return prompt
+            
+            # Insert before EXTRACTION INSTRUCTIONS section
+            if "# EXTRACTION INSTRUCTIONS" in prompt:
+                prompt = prompt.replace(
+                    "# EXTRACTION INSTRUCTIONS",
+                    rae_context + "\n\n# EXTRACTION INSTRUCTIONS"
+                )
+                jargon_count = len(history.get('jargon_registry', []))
+                claims_count = sum(len(c) for c in history.get('top_claims', {}).values())
+                logger.info(
+                    f"✅ RAE context injected: "
+                    f"{jargon_count} jargon terms, "
+                    f"{claims_count} claims"
+                )
+            elif "# OUTPUT FORMAT" in prompt:
+                prompt = prompt.replace(
+                    "# OUTPUT FORMAT",
+                    rae_context + "\n\n# OUTPUT FORMAT"
+                )
+                logger.info("✅ RAE context injected (fallback position)")
+            else:
+                logger.warning("Could not find insertion point for RAE context")
+        
+        except ImportError as e:
+            logger.debug(f"RAE service not available: {e}")
+        except Exception as e:
+            logger.warning(f"Could not inject RAE context: {e}")
         
         return prompt
     

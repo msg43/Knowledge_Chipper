@@ -94,13 +94,13 @@ The daemon automatically keeps itself up-to-date by checking GitHub releases eve
 - Podcaster-provided PDF transcripts
 
 **2. Automatic Processing** (local daemon)
-Two-pass extraction pipeline:
+Two-pass extraction pipeline with RAE (Retrieval-Augmented Extraction):
 
 ```
-URL Input → Fetch Metadata → Fetch Transcript → Extract & Score → Synthesize Summary
-    ↓            ↓                 ↓                    ↓                  ↓
- YouTube    YT Metadata      YouTube API         Pass 1: Extract    Pass 2: Synthesize
- Playlist    + AI Summary    (or Whisper)      (whole document)   (long summary)
+URL Input → Fetch Metadata → Fetch Transcript → RAE Context → Extract & Score → Evolution Detection → Synthesize
+    ↓            ↓                 ↓                  ↓              ↓                  ↓                  ↓
+ YouTube    YT Metadata      YouTube API      Channel History  Pass 1: Extract  Pass 1.5c: Detect  Pass 2: Synthesize
+ Playlist    + AI Summary    (or Whisper)    (if same channel) (whole document)  Duplicates/Evolve  (long summary)
 ```
 
 *Speaker attribution is inferred during extraction using LLM context analysis.*
@@ -112,6 +112,7 @@ URL Input → Fetch Metadata → Fetch Transcript → Extract & Score → Synthe
 - 🔄 **Automatic fallback** - Re-run with Whisper if transcript quality is low
 - ⚡ **Batch processing** - Handle multiple items simultaneously
 - 📈 **Progress tracking** - Real-time status updates in web interface
+- 🔄 **RAE System (NEW)** - Channel-specific jargon consistency and claim evolution tracking
 
 **3. Auto-Upload to GetReceipts**
 - Processed claims automatically sync to [GetReceipts.org](https://getreceipts.org)
@@ -202,6 +203,73 @@ When you process new content, the two-pass extraction system automatically:
 ```
 
 This closes the learning loop - your web corrections automatically improve all future extractions!
+
+---
+
+## RAE: Retrieval-Augmented Extraction (January 2026)
+
+**NEW:** When processing multiple episodes from the same channel, the system now uses **RAE (Retrieval-Augmented Extraction)** to enforce consistency and track evolution.
+
+### What RAE Does
+
+**1. Jargon Consistency (Strict Registry)**
+- First episode defines "dopamine" → stored in registry
+- Future episodes fetch registry → LLM must use same definition
+- Prevents 50 different definitions of the same term
+
+**2. Claim Evolution Tracking**
+- Detects duplicate claims (≥95% similar) → skips re-extraction
+- Detects evolutions (85-94% similar) → links to previous version
+- Detects contradictions (85-94% + negation) → flags explicitly
+
+**3. Contradiction Exposure**
+```
+Episode 1-5: "Dopamine is a reward molecule" (repeated 5 times)
+    ↓
+RAE: Duplicate detected → extraction count tracked, not re-extracted
+    ↓
+Episode 6: "Dopamine is NOT a reward molecule" (contradiction)
+    ↓
+RAE: Contradiction flagged → both versions stored and linked
+    ↓
+Web UI: "Speaker changed position on June 8, 2024"
+```
+
+### How It Works
+
+**Pre-Extraction (Prompt Injection):**
+```
+1. Desktop fetches channel history from GetReceipts
+2. Jargon registry injected into prompt (strict consistency)
+3. Top 50 claims injected into prompt (evolution context)
+4. LLM extracts with awareness of channel history
+```
+
+**Post-Extraction (Evolution Detection):**
+```
+1. Calculate similarity to all historical claims
+2. Classify: novel / duplicate / evolution / contradiction
+3. Filter duplicates (don't store again)
+4. Link evolutions and flag contradictions
+5. Upload to GetReceipts with evolution metadata
+```
+
+### Benefits
+
+✅ **No Redundancy** - Same claim not extracted 10 times  
+✅ **Consistent Terminology** - Jargon definitions stable across series  
+✅ **Track Position Changes** - See when speakers change their minds  
+✅ **Evidence-Based** - Every version has timestamps and quotes  
+✅ **Automatic** - No configuration needed, activates when `channel_id` present  
+
+### Performance
+
+- **Overhead:** +3-8 seconds per episode
+- **ROI:** High for series (10+ episodes), low for one-off videos
+- **Network:** 1 HTTP request to fetch channel history
+- **Computation:** Semantic similarity using TasteEngine embeddings
+
+---
 
 ### Dynamic Learning System (January 2026)
 

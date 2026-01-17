@@ -307,6 +307,53 @@ class TwoPassPipeline:
                 logger.warning(f"Pass 1.5b (truth critic) failed: {e} - continuing without validation")
                 stats['truth_critic_error'] = str(e)
         
+        # Pass 1.5c: Claim Evolution Detection (RAE)
+        if metadata.get('channel_id'):
+            logger.info("=" * 60)
+            logger.info("PASS 1.5c: CLAIM EVOLUTION DETECTION (RAE)")
+            logger.info("=" * 60)
+            
+            pass15c_start = time.time()
+            try:
+                from ..claim_evolution_detector import get_claim_evolution_detector
+                
+                detector = get_claim_evolution_detector()
+                enhanced_claims = asyncio.get_event_loop().run_until_complete(
+                    detector.analyze_claims(
+                        new_claims=extraction_result.claims,
+                        channel_id=metadata.get('channel_id', ''),
+                        episode_date=metadata.get('upload_date', '')
+                    )
+                )
+                
+                # Replace claims with enhanced version
+                extraction_result.claims = enhanced_claims
+                
+                stats['evolution_detection_time_seconds'] = time.time() - pass15c_start
+                
+                # Count evolution statuses
+                evolution_stats = {
+                    'novel': len([c for c in enhanced_claims if c.get('evolution_status') == 'novel']),
+                    'duplicate': len([c for c in extraction_result.claims if c.get('evolution_status') == 'duplicate']),
+                    'evolution': len([c for c in enhanced_claims if c.get('evolution_status') == 'evolution']),
+                    'contradiction': len([c for c in enhanced_claims if c.get('evolution_status') == 'contradiction']),
+                }
+                stats['evolution_stats'] = evolution_stats
+                
+                logger.info(
+                    f"Pass 1.5c complete: "
+                    f"{evolution_stats['novel']} novel, "
+                    f"{evolution_stats['duplicate']} duplicates (skipped), "
+                    f"{evolution_stats['evolution']} evolutions, "
+                    f"{evolution_stats['contradiction']} contradictions "
+                    f"({stats['evolution_detection_time_seconds']:.1f}s)"
+                )
+            except Exception as e:
+                logger.warning(f"Pass 1.5c (evolution detection) failed: {e} - continuing without evolution tracking")
+                stats['evolution_detection_error'] = str(e)
+        else:
+            logger.debug("No channel_id in metadata - skipping evolution detection")
+        
         # Pass 2: Synthesis
         logger.info("=" * 60)
         logger.info("PASS 2: SYNTHESIS")

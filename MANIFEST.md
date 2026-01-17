@@ -25,7 +25,7 @@ Complete inventory of all files in the Knowledge Chipper codebase with descripti
 - `pyrightconfig.json` - Pyright static type checker configuration with strict type checking rules
 - `pytest.ini` - Pytest configuration for main test suite (markers, coverage, warnings)
 - `pytest.ini.gui_testing` - Separate pytest configuration for GUI tests with xvfb support
-- `requirements.txt` - Production Python dependencies with pinned versions; **UPDATED (Jan 2026):** Added chromadb>=0.4.0 for Dynamic Learning vector storage
+- `requirements.txt` - Production Python dependencies with pinned versions; **UPDATED (Jan 2026):** Added chromadb>=0.4.0 for Dynamic Learning vector storage, httpx>=0.25.0 for RAE async HTTP calls
 - `requirements-dev.txt` - Development dependencies (testing, linting, type checking tools)
 
 ### Build and Deployment
@@ -46,6 +46,8 @@ Complete inventory of all files in the Knowledge Chipper codebase with descripti
 ### Documentation - Project Status
 
 - `ACTIVE_TODOS.md` - Current active tasks and work in progress
+- `RAE_IMPLEMENTATION_COMPLETE.md` - **NEW (Jan 17, 2026):** Complete RAE (Retrieval-Augmented Extraction) implementation: enforces jargon consistency across channel episodes via strict registry, tracks claim evolution with duplicate detection (≥95% similar), exposes contradictions explicitly (85-94% similar + negation), integrates seamlessly with Dynamic Learning System as second prompt injection layer
+- `RAE_QUICK_START.md` - **NEW (Jan 17, 2026):** Quick start guide for RAE system: automatic activation when channel_id present, jargon strict registry usage, claim evolution tracking examples, API reference, troubleshooting, performance characteristics
 - `RELEASE_DAEMON_SCRIPT.md` - **UPDATED (Jan 13, 2026):** Documentation for one-click daemon release automation script: bumps version, builds signed & notarized PKG, creates GitHub release, uploads PKG, commits and pushes to repos; complete automation of entire release workflow with colored output, pre-flight checks, and progress tracking
 - `ZERO_CLAIMS_DIAGNOSTIC_IMPLEMENTATION.md` - **NEW (Jan 12, 2026):** Comprehensive diagnostic implementation for zero-claims issue: systematic validation at 4 phases (API key, LLM response, prompt template, parsing), hard validation preventing false success, detailed error messages with 6 possible causes and diagnostic steps, complete logging flow for root cause analysis
 - `HARDCODED_FALLBACKS_REMOVED.md` - **NEW (Jan 12, 2026):** Removal of all hardcoded model fallbacks: replaced hardcoded gpt-4o/claude-sonnet/gemini fallbacks with validated model registry lookups, changed default_llm_model to None, updated Google priority list to confirmed models only, ensures only provider-API-validated models are used, prevents invalid model names causing zero-claims failures
@@ -881,6 +883,7 @@ Media processing and transformation.
 - `html.py` - HTML document processing
 - `pdf.py` - PDF document processing
 - `pdf_transcript_processor.py` - **NEW (Dec 25, 2025):** PDF transcript processor with speaker label parsing, timestamp extraction, quality scoring, and YouTube video matching for podcaster-provided transcripts
+- `claim_evolution_detector.py` - **NEW (Jan 17, 2026):** Post-extraction claim evolution detector for RAE system; calculates semantic similarity using TasteEngine embeddings, classifies claims as novel/duplicate/evolution/contradiction, filters duplicates (≥95% similar), links evolutions (85-94% similar), flags contradictions (negation + overlap), provides detailed statistics
 - `registry.py` - Processor registry for dynamic processor selection
 - `rss_processor.py` - RSS feed processing
 - `unified_batch_processor.py` - Unified batch processor for multiple files
@@ -955,8 +958,8 @@ See PROCESSORS/TWO_PASS/ for the active system.
 **ENHANCED (January 2026):** "Sandwich" validation with Taste Filter (Pass 1.5a) and Truth Critic (Pass 1.5b).
 
 - `__init__.py` - Two-pass module initialization and public API exports
-- `pipeline.py` - TwoPassPipeline orchestrator: coordinates extraction → taste filter → truth critic → synthesis passes; **ENHANCED (Jan 2026):** integrates Pass 1.5a (TasteFilter) and Pass 1.5b (TruthCritic) with configurable enable flags
-- `extraction_pass.py` - Pass 1: Extract and score all entities from complete document in one API call; **ENHANCED (Jan 2026):** automatically injects synced refinements from GetReceipts.org AND dynamic few-shot examples from TasteEngine based on context aggregate (Tags, Categories, Summaries, Title - excluding Description)
+- `pipeline.py` - TwoPassPipeline orchestrator: coordinates extraction → taste filter → truth critic → synthesis passes; **ENHANCED (Jan 2026):** integrates Pass 1.5a (TasteFilter) and Pass 1.5b (TruthCritic) with configurable enable flags; **ENHANCED (Jan 17, 2026):** Added Pass 1.5c (ClaimEvolutionDetector) for RAE-based duplicate/contradiction detection when channel_id present
+- `extraction_pass.py` - Pass 1: Extract and score all entities from complete document in one API call; **ENHANCED (Jan 2026):** automatically injects synced refinements from GetReceipts.org AND dynamic few-shot examples from TasteEngine based on context aggregate (Tags, Categories, Summaries, Title - excluding Description); **ENHANCED (Jan 17, 2026):** Added _inject_rae_context() method as second injection layer for channel-specific jargon registry and claim history
 - `synthesis_pass.py` - Pass 2: Generate world-class long summary from Pass 1 results; **ENHANCED (Jan 2026):** dynamically calculates synthesis length (5 paragraphs to 2 pages) based on content duration and claim density
 - `taste_filter.py` - **NEW (Jan 2026):** Pass 1.5a: Vector-based "Taste Filter" for style validation; auto-discards entities >0.95 similarity to rejected examples, flags 0.80-0.95 as suspicious, boosts >0.95 similarity to accepted examples (+2.0 importance)
 - `truth_critic.py` - **NEW (Jan 2026):** Pass 1.5b: LLM-based "Truth Critic" for logic validation; selectively reviews high-importance entities (≥7.0, max 10/run) for factual accuracy and correct categorization; uses "Reasoning First" prompt strategy with entity-local context extraction
@@ -1022,7 +1025,8 @@ High-level service layer.
 - `prompt_sync.py` - **NEW (Dec 2025):** Syncs approved prompt refinements from GetReceipts.org to local files; refinements are bad_example entries that prevent previously-identified extraction mistakes; **ACTIVE (Jan 2026):** now automatically injected into extraction prompts by extraction_pass.py
 - `entity_sync.py` - **NEW (Jan 2, 2026):** UNIFIED sync service for ALL entity types (NO REDUNDANCY); handles batch sync (extraction: claims/jargon/people/concepts) and individual sync (predictions, health tracking); uses existing GetReceiptsUploader infrastructure; web-canonical pattern with device authentication; convenience methods for health entities (sync_health_intervention, sync_health_metric, sync_health_issue); **UPDATED (Jan 2026):** Added `sync_feedback_from_web()` method for async feedback sync to pending queue
 - `feedback_config.py` - **NEW (Jan 2026):** Singleton configuration loader for entity-specific feedback reasons from `data/feedback_reasons.yaml`; provides `get_reasons(entity_type, verdict)` method for dynamic UI generation and prompt injection; graceful fallback to minimal defaults if config missing
-- `taste_engine.py` - **NEW (Jan 2026):** Core Dynamic Learning component using ChromaDB for semantic feedback storage; handles embedding generation (sentence-transformers all-MiniLM-L6-v2), cold start via versioned golden set, automatic backup on startup (keeps last 5), and similarity queries for Taste Filter and prompt injection; validates reason_category against feedback_config
+- `taste_engine.py` - **NEW (Jan 2026):** Core Dynamic Learning component using ChromaDB for semantic feedback storage; handles embedding generation (sentence-transformers all-MiniLM-L6-v2), cold start via versioned golden set, automatic backup on startup (keeps last 5), and similarity queries for Taste Filter and prompt injection; validates reason_category against feedback_config; **UPDATED (Jan 17, 2026):** Added is_shared field to distinguish golden/shared/local feedback, has_example() for duplicate prevention, enhanced stats tracking
+- `rae_service.py` - **NEW (Jan 17, 2026):** Retrieval-Augmented Extraction (RAE) service for channel-specific knowledge injection; fetches jargon registry and claim history from GetReceipts API; builds strict registry section for jargon consistency enforcement and evolution context section for claim duplicate/contradiction detection; singleton pattern with production/development API switching
 - `queue_snapshot_service.py` - Queue snapshot service for pipeline status
 - `session_based_scheduler.py` - Session-based download scheduler for anti-bot; includes authentication failure checkpoint methods (Dec 2025) for save/resume on 401/403/bot detection
 - `speaker_learning_service.py` - Speaker learning and adaptation service
@@ -1137,6 +1141,7 @@ Key test files:
 - `test_taste_filter.py` - **NEW (Jan 2026):** TasteFilter integration tests: discard/flag/boost thresholds, entity type filtering, statistics tracking
 - `test_truth_critic.py` - **NEW (Jan 2026):** TruthCritic unit tests: entity selection, context extraction, LLM verdict parsing, type override handling
 - `test_feedback_processor.py` - **NEW (Jan 2026):** FeedbackProcessor integration tests: queue processing, ChromaDB updates, error handling, worker lifecycle
+- `test_rae_integration.py` - **NEW (Jan 17, 2026):** RAE system end-to-end tests: RAEService initialization and singleton, channel history fetching, jargon registry formatting, claims context formatting, ClaimEvolutionDetector similarity calculation, contradiction detection, prompt injection integration
 - `test_question_mapper.py` - Question mapper system tests (14 tests, all passing)
 - `test_database_imports.py` - Database export validation
 - `test_basic.py` - Basic functionality tests

@@ -42,6 +42,7 @@ python-multipart>=0.0.6
 # HTTP requests
 requests>=2.31.0
 aiohttp>=3.8.0
+httpx>=0.25.0  # For RAE service async HTTP calls
 
 # Data processing
 pandas>=2.0.0

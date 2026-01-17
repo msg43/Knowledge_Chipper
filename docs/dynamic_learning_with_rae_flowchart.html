@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic Learning System + RAE Integration</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #2d3748;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }
+        .subtitle {
+            color: #718096;
+            font-size: 1.1em;
+            margin-bottom: 30px;
+        }
+        .diagram-section {
+            margin-bottom: 50px;
+            background: #f7fafc;
+            padding: 25px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+        .diagram-section h2 {
+            color: #2d3748;
+            margin-top: 0;
+            font-size: 1.8em;
+        }
+        .diagram-section p {
+            color: #4a5568;
+            line-height: 1.6;
+            margin-bottom: 20px;
+        }
+        .mermaid {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+        .legend {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .legend-box {
+            width: 30px;
+            height: 30px;
+            border-radius: 4px;
+            border: 2px solid #e2e8f0;
+        }
+        .existing { background: #bee3f8; }
+        .new { background: #9ae6b4; }
+        .integration { background: #fbd38d; }
+        .legend-label {
+            font-weight: 500;
+            color: #2d3748;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-top: 30px;
+        }
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .stat-number {
+            font-size: 2.5em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .stat-label {
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧠 Dynamic Learning System + RAE Integration</h1>
+        <p class="subtitle">Complete architecture showing how Retrieval-Augmented Extraction (RAE) integrates with the Dynamic Learning System</p>
+
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-box existing"></div>
+                <span class="legend-label">Existing System (Jan 2026)</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-box new"></div>
+                <span class="legend-label">New RAE Components</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-box integration"></div>
+                <span class="legend-label">Integration Points</span>
+            </div>
+        </div>
+
+        <div class="diagram-section">
+            <h2>📊 Complete System Architecture</h2>
+            <p>This diagram shows the entire extraction pipeline from input to output, including all validation layers and feedback loops.</p>
+            <div class="mermaid">
+flowchart TD
+    subgraph Input[📥 Input Processing]
+        NewEp[New Episode from Channel]
+        ExtractMeta[Extract Metadata]
+        ChannelID[channel_id detected]
+    end
+    
+    subgraph ExistingDLS[🎯 Existing Dynamic Learning System]
+        TasteEngine[(TasteEngine<br/>ChromaDB)]
+        GoldenSet[Golden Feedback Set]
+        FeedbackConfig[feedback_reasons.yaml]
+        WebFeedback[Web UI Feedback]
+        FeedbackQueue[(pending_feedback)]
+        FeedbackWorker[Feedback Processor]
+    end
+    
+    subgraph NewRAE[🆕 NEW: RAE System]
+        RAEService[RAE Service]
+        ChannelAPI[GET /api/channels/id/history]
+        JargonReg[Jargon Registry]
+        ClaimHist[Claim History Top 50]
+    end
+    
+    subgraph PromptBuilding[🔨 Prompt Building - extraction_pass.py]
+        BasePrompt[Base Prompt Template]
+        Layer1[Layer 1: inject_dynamic_examples<br/>TasteEngine RAG]
+        Layer2[Layer 2: inject_rae_context<br/>Channel knowledge]
+        FinalPrompt[Final Enhanced Prompt]
+    end
+    
+    subgraph Extraction[🤖 LLM Extraction Pipeline]
+        Pass1[Pass 1: Extraction<br/>Extract all entities]
+        Pass15a[Pass 1.5a: Taste Filter<br/>Vector style validation]
+        Pass15b[Pass 1.5b: Truth Critic<br/>LLM logic validation]
+        Pass15c[Pass 1.5c: Evolution Detector<br/>Duplicate/Contradiction]
+        Pass2[Pass 2: Synthesis<br/>Generate summary]
+    end
+    
+    subgraph Output[📤 Output & Storage]
+        LocalDB[(Local SQLite)]
+        Upload[Upload to GetReceipts]
+        WebDB[(GetReceipts PostgreSQL)]
+    end
+    
+    NewEp --> ExtractMeta
+    ExtractMeta --> ChannelID
+    
+    ChannelID --> RAEService
+    RAEService --> ChannelAPI
+    ChannelAPI --> JargonReg
+    ChannelAPI --> ClaimHist
+    
+    BasePrompt --> Layer1
+    GoldenSet --> TasteEngine
+    FeedbackConfig --> TasteEngine
+    TasteEngine --> Layer1
+    
+    Layer1 --> Layer2
+    JargonReg --> Layer2
+    ClaimHist --> Layer2
+    
+    Layer2 --> FinalPrompt
+    
+    FinalPrompt --> Pass1
+    Pass1 --> Pass15a
+    TasteEngine --> Pass15a
+    
+    Pass15a --> Pass15b
+    Pass15b --> Pass15c
+    TasteEngine --> Pass15c
+    
+    Pass15c --> Pass2
+    Pass2 --> LocalDB
+    LocalDB --> Upload
+    Upload --> WebDB
+    
+    WebDB --> WebFeedback
+    WebFeedback --> FeedbackQueue
+    FeedbackQueue --> FeedbackWorker
+    FeedbackWorker --> TasteEngine
+    
+    WebDB --> ChannelAPI
+    
+    style ExistingDLS fill:#bee3f8,stroke:#2c5282,stroke-width:3px
+    style NewRAE fill:#9ae6b4,stroke:#276749,stroke-width:3px
+    style Layer2 fill:#fbd38d,stroke:#744210,stroke-width:3px
+    style Pass15c fill:#fbd38d,stroke:#744210,stroke-width:3px
+    style RAEService fill:#9ae6b4,stroke:#276749,stroke-width:2px
+    style ChannelAPI fill:#9ae6b4,stroke:#276749,stroke-width:2px
+            </div>
+        </div>
+
+        <div class="diagram-section">
+            <h2>🔄 Two-Layer Prompt Injection System</h2>
+            <p>Shows how two different knowledge sources are injected into the extraction prompt in sequence. (Note: Static refinements are now deprecated.)</p>
+            <div class="mermaid">
+flowchart LR
+    subgraph Sources[Knowledge Sources]
+        S1[TasteEngine Feedback<br/>Golden + Shared + Local]
+        S2[Channel History<br/>from RAE Service]
+    end
+    
+    subgraph Injection[Sequential Injection]
+        Base[Base Prompt<br/>Template]
+        L1[+ Layer 1<br/>Dynamic Examples]
+        L2[+ Layer 2<br/>RAE Context]
+        Final[Final Prompt<br/>Ready for LLM]
+    end
+    
+    S1 --> L1
+    Base --> L1
+    
+    S2 --> L2
+    L1 --> L2
+    
+    L2 --> Final
+    
+    style S1 fill:#bee3f8,stroke:#2c5282
+    style S2 fill:#9ae6b4,stroke:#276749
+    style L2 fill:#fbd38d,stroke:#744210
+    style Final fill:#fef5e7,stroke:#f39c12,stroke-width:3px
+            </div>
+        </div>
+
+        <div class="diagram-section">
+            <h2>🛡️ Four-Stage Validation Pipeline</h2>
+            <p>Complete validation system combining style, logic, and evolution detection.</p>
+            <div class="mermaid">
+flowchart TD
+    Input[Extracted Entities<br/>from Pass 1]
+    
+    subgraph Validation[Validation Stages]
+        Stage1[Pass 1.5a: Taste Filter<br/>Vector Similarity]
+        Stage2[Pass 1.5b: Truth Critic<br/>LLM Reasoning]
+        Stage3[Pass 1.5c: Evolution Detector<br/>Similarity Analysis]
+        Stage4[Pass 2: Synthesis<br/>Summary Generation]
+    end
+    
+    subgraph Results[Validation Results]
+        AutoDiscard[Auto-Discard<br/>95%+ similar to reject]
+        Flagged[Flagged for Review<br/>80-95% similar]
+        Approved[Approved<br/>Pass all checks]
+        Duplicate[Duplicate<br/>95%+ similar to existing]
+        Evolution[Evolution<br/>85-94% similar]
+        Contradiction[Contradiction<br/>Detected & Flagged]
+    end
+    
+    Input --> Stage1
+    Stage1 --> AutoDiscard
+    Stage1 --> Flagged
+    Stage1 --> Stage2
+    
+    Stage2 --> Approved
+    Stage2 --> Flagged
+    
+    Approved --> Stage3
+    
+    Stage3 --> Duplicate
+    Stage3 --> Evolution
+    Stage3 --> Contradiction
+    Stage3 --> Stage4
+    
+    style Stage1 fill:#bee3f8,stroke:#2c5282
+    style Stage2 fill:#bee3f8,stroke:#2c5282
+    style Stage3 fill:#fbd38d,stroke:#744210,stroke-width:3px
+    style Contradiction fill:#fed7d7,stroke:#c53030
+    style Evolution fill:#fef5e7,stroke:#f39c12
+            </div>
+        </div>
+
+        <div class="diagram-section">
+            <h2>🔁 Feedback Loop - Continuous Learning</h2>
+            <p>How user corrections on the web automatically improve future extractions.</p>
+            <div class="mermaid">
+flowchart TD
+    subgraph Desktop[💻 Desktop Processing]
+        Extract[Extract Entities]
+        Validate[Validate with<br/>TasteEngine]
+        Upload[Upload to Web]
+    end
+    
+    subgraph Web[🌐 GetReceipts.org]
+        Review[User Reviews Entities]
+        Accept[Accept Good Entities]
+        Reject[Reject Bad Entities]
+        Reason[Select Rejection Reason]
+        Queue[(Feedback Queue)]
+    end
+    
+    subgraph Learning[🧠 Learning System]
+        Worker[Feedback Processor<br/>Background Worker]
+        Embed[Generate Embeddings]
+        Store[(TasteEngine<br/>ChromaDB)]
+        Sync[Sync to Desktop]
+    end
+    
+    subgraph NextTime[⏭️ Next Extraction]
+        Query[Query Similar Examples]
+        Inject[Inject into Prompt]
+        Better[Better Extraction]
+    end
+    
+    Extract --> Validate
+    Validate --> Upload
+    Upload --> Review
+    
+    Review --> Accept
+    Review --> Reject
+    Reject --> Reason
+    
+    Accept --> Queue
+    Reason --> Queue
+    
+    Queue --> Worker
+    Worker --> Embed
+    Embed --> Store
+    Store --> Sync
+    
+    Sync --> Query
+    Query --> Inject
+    Inject --> Better
+    Better -.->|Improves| Extract
+    
+    style Store fill:#bee3f8,stroke:#2c5282,stroke-width:3px
+    style Better fill:#9ae6b4,stroke:#276749,stroke-width:3px
+            </div>
+        </div>
+
+        <div class="diagram-section">
+            <h2>📚 RAE Jargon Registry - Strict Consistency</h2>
+            <p>How jargon definitions are enforced across episodes from the same channel.</p>
+            <div class="mermaid">
+flowchart TD
+    subgraph Episode1[Episode 1]
+        E1Extract[Extract: dopamine = reward molecule]
+        E1Store[Store in Registry]
+    end
+    
+    subgraph Episode2[Episode 2-5]
+        E2Fetch[Fetch Registry]
+        E2Check{Same term<br/>different definition?}
+        E2Match[Use Registry Definition]
+        E2Conflict[Flag Conflict]
+    end
+    
+    subgraph Episode6[Episode 6]
+        E6Fetch[Fetch Registry]
+        E6New[New Definition:<br/>dopamine = motivation]
+        E6Flag[Flag as Contradiction]
+        E6Extract[Extract Both Versions]
+    end
+    
+    Registry[(Jargon Registry<br/>Per Channel)]
+    
+    E1Extract --> E1Store
+    E1Store --> Registry
+    
+    Registry --> E2Fetch
+    E2Fetch --> E2Check
+    E2Check -->|Match| E2Match
+    E2Check -->|Conflict| E2Conflict
+    
+    Registry --> E6Fetch
+    E6Fetch --> E6New
+    E6New --> E6Flag
+    E6Flag --> E6Extract
+    
+    style Registry fill:#9ae6b4,stroke:#276749,stroke-width:3px
+    style E6Flag fill:#fed7d7,stroke:#c53030
+    style E2Match fill:#c6f6d5,stroke:#22543d
+            </div>
+        </div>
+
+        <div class="diagram-section">
+            <h2>🔄 Claim Evolution Tracking</h2>
+            <p>How the system tracks when speakers repeat or contradict previous claims.</p>
+            <div class="mermaid">
+flowchart TD
+    NewClaim[New Claim Extracted]
+    
+    subgraph Analysis[Similarity Analysis]
+        Fetch[Fetch Channel History]
+        Compare[Compare to All<br/>Previous Claims]
+        Calculate[Calculate Similarity<br/>Using Embeddings]
+    end
+    
+    subgraph Classification[Classification]
+        Check{Similarity Score}
+        Novel[Novel Claim<br/>Less than 85%]
+        Dup[Duplicate<br/>95% or higher]
+        Evo[Evolution<br/>85-94%]
+        CheckContra{Contradicts?}
+        Contra[Contradiction<br/>Flag & Extract]
+        Similar[Similar<br/>Link to Previous]
+    end
+    
+    subgraph Output[Output]
+        Skip[Skip Extraction<br/>Already Exists]
+        Link[Link to Previous<br/>Track Evolution]
+        Flag[Flag Contradiction<br/>Expose Change]
+        Store[Store as Novel]
+    end
+    
+    NewClaim --> Fetch
+    Fetch --> Compare
+    Compare --> Calculate
+    Calculate --> Check
+    
+    Check -->|Less than 85%| Novel
+    Check -->|95%+| Dup
+    Check -->|85-94%| Evo
+    
+    Novel --> Store
+    Dup --> Skip
+    
+    Evo --> CheckContra
+    CheckContra -->|Yes| Contra
+    CheckContra -->|No| Similar
+    
+    Contra --> Flag
+    Similar --> Link
+    
+    style Contra fill:#fed7d7,stroke:#c53030,stroke-width:3px
+    style Flag fill:#fed7d7,stroke:#c53030
+    style Evo fill:#fef5e7,stroke:#f39c12
+    style Calculate fill:#fbd38d,stroke:#744210
+            </div>
+        </div>
+
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-number">2</div>
+                <div class="stat-label">Prompt Injection Layers</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">4</div>
+                <div class="stat-label">Validation Stages</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">2</div>
+                <div class="stat-label">Feedback Loops</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">∞</div>
+                <div class="stat-label">Continuous Learning</div>
+            </div>
+        </div>
+
+        <div class="diagram-section">
+            <h2>📋 System Summary</h2>
+            <h3>Existing Dynamic Learning System (January 2026)</h3>
+            <ul>
+                <li><strong>TasteEngine</strong>: ChromaDB vector storage with sentence-transformers</li>
+                <li><strong>Unified Feedback</strong>: Golden + Shared (from web) + Local examples with duplicate prevention</li>
+                <li><strong>Taste Filter (Pass 1.5a)</strong>: Vector-based style validation</li>
+                <li><strong>Truth Critic (Pass 1.5b)</strong>: LLM-based logic validation</li>
+                <li><strong>Dynamic Prompt Injection</strong>: RAG-based few-shot learning</li>
+                <li><strong>Feedback Processor</strong>: Async background worker for web feedback</li>
+                <li><strong>Static Refinements</strong>: DEPRECATED (disabled by default, flag: enable_static_refinements=False)</li>
+            </ul>
+            
+            <h3>New RAE Components (Proposed)</h3>
+            <ul>
+                <li><strong>RAE Service</strong>: Fetches channel history from GetReceipts API</li>
+                <li><strong>Jargon Registry</strong>: Strict consistency enforcement for terminology</li>
+                <li><strong>Claim History</strong>: Evolution context for duplicate/contradiction detection</li>
+                <li><strong>Evolution Detector (Pass 1.5c)</strong>: Post-extraction similarity analysis</li>
+                <li><strong>Second Injection Layer</strong>: Channel-specific knowledge injection (static refinements deprecated)</li>
+            </ul>
+            
+            <h3>Integration Benefits</h3>
+            <ul>
+                <li>✅ <strong>Reuses TasteEngine</strong> for embeddings (no duplicate infrastructure)</li>
+                <li>✅ <strong>Extends existing pipeline</strong> (adds Pass 1.5c after 1.5b)</li>
+                <li>✅ <strong>Complements feedback loop</strong> (channel history + user feedback)</li>
+                <li>✅ <strong>No conflicts</strong> (operates on different data sources)</li>
+                <li>✅ <strong>Unified architecture</strong> (consistent with Dynamic Learning design)</li>
+                <li>✅ <strong>Simplified injection</strong> (2 layers instead of 3, static refinements deprecated)</li>
+                <li>✅ <strong>Shared feedback sync</strong> (TasteEngine handles golden + shared + local with is_shared flag)</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'default',
+            flowchart: {
+                useMaxWidth: true,
+                htmlLabels: true,
+                curve: 'basis'
+            }
+        });
+    </script>
+</body>
+</html>
