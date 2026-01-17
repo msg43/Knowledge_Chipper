@@ -484,8 +484,14 @@ Comprehensive project documentation (128+ files).
 
 - `daemon.spec` - PyInstaller spec file for building standalone executable
 - `org.getreceipts.daemon.plist` - LaunchAgent for auto-starting daemon on login
+- `create_desktop_shortcut.sh` - **UPDATED (Jan 17, 2026):** Creates macOS .app bundle on desktop for daemon control; provides GUI dialogs for start/stop/restart with status checking and notifications
 - `install.sh` - Post-install script (copies daemon, installs LaunchAgent, creates shortcut)
 - `build_dmg.sh` - **ENHANCED (Jan 8, 2026):** Build script to create .dmg installer; now also packages daemon binary separately as GetReceiptsDaemon-{version}-macos.tar.gz for auto-update system
+- `build_pkg.sh` - **UPDATED (Jan 17, 2026):** Build signed & notarized PKG installer; now bundles create_desktop_shortcut.sh into PKG for proper desktop app creation during installation
+
+### installer/scripts/
+
+- `postinstall` - **UPDATED (Jan 17, 2026):** PKG postinstall script; now calls create_desktop_shortcut.sh to create proper .app bundle instead of basic .command file; sets up LaunchAgent, starts daemon, creates desktop control app
 
 ---
 

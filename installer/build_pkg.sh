@@ -187,8 +187,12 @@ PKG_ROOT="$BUILD_DIR/package_root"
 mkdir -p "$PKG_ROOT/Applications"
 cp -R "$APP_BUNDLE" "$PKG_ROOT/Applications/GetReceipts Daemon.app"
 
-# Ensure postinstall script is executable
+# Copy create_desktop_shortcut.sh into scripts directory for inclusion in PKG
+cp "$SCRIPT_DIR/create_desktop_shortcut.sh" "$SCRIPT_DIR/scripts/create_desktop_shortcut.sh"
+
+# Ensure scripts are executable
 chmod +x "$SCRIPT_DIR/scripts/postinstall"
+chmod +x "$SCRIPT_DIR/scripts/create_desktop_shortcut.sh"
 
 # Build the PKG
 log "Building PKG with pkgbuild..."
@@ -248,7 +252,7 @@ cat > "$BUILD_DIR/resources/welcome.html" << 'EOF'
     <ul>
         <li>Installs the daemon to /Applications</li>
         <li>Sets up automatic startup on login</li>
-        <li>Creates a desktop restart button</li>
+        <li>Creates a desktop control app for starting/stopping the daemon</li>
         <li>Starts the daemon immediately</li>
     </ul>
     <p>After installation, visit <strong>getreceipts.org</strong> to start using it!</p>
@@ -272,7 +276,8 @@ cat > "$BUILD_DIR/resources/conclusion.html" << 'EOF'
     <p><strong>What's next:</strong></p>
     <ul>
         <li>The daemon is now running at <strong>http://localhost:8765</strong></li>
-        <li>A restart button has been created on your Desktop</li>
+        <li>A control app has been created on your Desktop (GetReceipts Daemon.app)</li>
+        <li>Double-click it to start, stop, or restart the daemon</li>
         <li>The daemon will start automatically on login</li>
     </ul>
     <p>Visit <strong><a href="https://getreceipts.org">getreceipts.org</a></strong> to start processing videos!</p>
@@ -341,6 +346,7 @@ fi
 # Cleanup
 log "Cleaning up build artifacts..."
 rm -rf "$BUILD_DIR"
+rm -f "$SCRIPT_DIR/scripts/create_desktop_shortcut.sh"
 
 # Final summary
 echo ""

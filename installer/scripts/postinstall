@@ -82,70 +82,21 @@ chmod 644 "$LAUNCH_AGENTS_DIR/org.getreceipts.daemon.plist"
 
 echo "LaunchAgent installed to: $LAUNCH_AGENTS_DIR/org.getreceipts.daemon.plist"
 
-# 2. Create desktop restart button
-echo "Creating desktop restart button..."
-RESTART_SCRIPT="$USER_HOME/Desktop/Restart GetReceipts.command"
+# 2. Create desktop shortcut using the dedicated script
+echo "Creating desktop shortcut..."
 
-cat > "$RESTART_SCRIPT" << 'EOF'
-#!/bin/bash
-#
-# Restart GetReceipts Daemon (AGGRESSIVE)
-#
-# This script forcefully restarts the GetReceipts daemon process
-# by killing all instances and reloading the LaunchAgent
-#
+# The create_desktop_shortcut.sh script is bundled in the same directory during PKG build
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SHORTCUT_SCRIPT="$SCRIPT_DIR/create_desktop_shortcut.sh"
 
-echo "Restarting GetReceipts Daemon..."
-echo ""
-
-# AGGRESSIVE restart instead of gentle stop/start
-echo "1. Killing all daemon processes..."
-pkill -9 -f "python.*daemon" 2>/dev/null || true
-pkill -9 -f "GetReceiptsDaemon" 2>/dev/null || true
-
-# Kill anything on port 8765
-PORT_PID=$(lsof -ti:8765 2>/dev/null)
-if [ -n "$PORT_PID" ]; then
-    echo "   Killing process on port 8765 (PID: $PORT_PID)"
-    kill -9 $PORT_PID 2>/dev/null || true
-fi
-
-sleep 2
-
-echo "2. Unloading LaunchAgent..."
-launchctl bootout gui/$(id -u)/org.getreceipts.daemon 2>/dev/null || true
-launchctl unload ~/Library/LaunchAgents/org.getreceipts.daemon.plist 2>/dev/null || true
-
-sleep 1
-
-echo "3. Loading LaunchAgent fresh..."
-launchctl load ~/Library/LaunchAgents/org.getreceipts.daemon.plist
-
-sleep 3
-
-echo "4. Verifying daemon started..."
-if curl -s http://localhost:8765/api/config >/dev/null 2>&1; then
-    VERSION=$(curl -s http://localhost:8765/api/config | python3 -c "import sys, json; print(json.load(sys.stdin).get('version', 'unknown'))" 2>/dev/null)
-    echo "✅ Daemon restarted successfully! Version: $VERSION"
+if [ -f "$SHORTCUT_SCRIPT" ]; then
+    # Run the shortcut creation script as the actual user
+    sudo -u "$CURRENT_USER" SUDO_USER="$CURRENT_USER" bash "$SHORTCUT_SCRIPT"
+    echo "Desktop shortcut created successfully"
 else
-    echo "⚠️  Daemon may still be starting... Check http://localhost:8765"
+    echo "⚠️  Warning: create_desktop_shortcut.sh not found at $SHORTCUT_SCRIPT"
+    echo "   Skipping desktop shortcut creation"
 fi
-
-# Show notification
-osascript -e 'display notification "GetReceipts daemon has been restarted" with title "GetReceipts" sound name "Glass"' 2>/dev/null || true
-
-echo ""
-echo "The daemon is now running at http://localhost:8765"
-echo "Visit https://getreceipts.org to use it."
-echo ""
-echo "Press any key to close..."
-read -n 1
-EOF
-
-chown "$CURRENT_USER" "$RESTART_SCRIPT"
-chmod +x "$RESTART_SCRIPT"
-
-echo "Desktop restart button created at: $RESTART_SCRIPT"
 
 # 3. Stop any existing daemon processes (AGGRESSIVE)
 echo "Stopping any running daemon processes..."
@@ -196,7 +147,7 @@ echo "GetReceipts Daemon Installation Complete!"
 echo "=============================================="
 echo ""
 echo "The daemon is now running at: http://localhost:8765"
-echo "Desktop shortcut created: ~/Desktop/Restart GetReceipts.command"
+echo "Desktop shortcut created: ~/Desktop/GetReceipts Daemon.app"
 echo ""
 echo "Visit https://getreceipts.org to start using it!"
 echo ""

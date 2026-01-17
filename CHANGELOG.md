@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- **PKG Installer Desktop Shortcut** (`installer/scripts/postinstall`, `installer/build_pkg.sh`): Fixed PKG installer to create proper desktop control app
+  - Postinstall script now calls `create_desktop_shortcut.sh` instead of creating basic `.command` file
+  - Build script now bundles `create_desktop_shortcut.sh` into PKG for availability during installation
+  - Users now get `GetReceipts Daemon.app` on desktop with GUI dialogs for start/stop/restart
+  - Replaced terminal-based restart script with proper macOS app bundle with icon and notifications
+  - Updated installer welcome/conclusion HTML to describe desktop control app functionality
+
 ### Changed
 - **Removed ALL Hardcoded Model Fallbacks** (`daemon/services/processing_service.py`, `daemon/config/settings.py`): Now uses only validated models from provider APIs
   - Removed hardcoded "gpt-4o", "claude-sonnet-4-20250514", "gemini-2.0-flash-exp" fallbacks

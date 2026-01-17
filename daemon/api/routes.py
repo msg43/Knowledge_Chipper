@@ -1314,6 +1314,54 @@ async def get_table_data(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/database/tables")
+async def get_all_tables():
+    """
+    Get all tables with counts, last modified timestamps, and sample data.
+    
+    Used by GetReceipts.org admin database viewer for side-by-side comparison.
+    Returns format compatible with web viewer API expectations.
+    """
+    try:
+        summary = database_viewer.get_database_summary()
+        tables = {}
+        
+        # For each table, get count, last modified, and sample rows
+        for table_info in summary.get("tables", []):
+            table_name = table_info["name"]
+            
+            # Get sample data (first 10 rows)
+            table_data = database_viewer.get_records(table_name, limit=10, offset=0)
+            
+            # Try to determine last modified from sample data
+            last_modified = "Unknown"
+            if table_data.get("records"):
+                first_record = table_data["records"][0]
+                # Check common timestamp fields
+                for ts_field in ["updated_at", "created_at", "processed_at", "fetched_at", "inserted_at"]:
+                    if ts_field in first_record and first_record[ts_field]:
+                        last_modified = first_record[ts_field]
+                        break
+            
+            tables[table_name] = {
+                "count": table_info["row_count"],
+                "lastModified": last_modified,
+                "sample": table_data.get("records", []),
+            }
+        
+        return {
+            "tables": tables,
+            "daemonInfo": {
+                "dbPath": summary.get("database_path", "Unknown"),
+                "dbSize": f"{summary.get('database_size_mb', 0)} MB",
+                "lastBackup": summary.get("last_modified", "Unknown"),
+            }
+        }
+    except Exception as e:
+        logger.exception("Failed to get all tables")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ============================================
 # YouTube Matching
 # ============================================
