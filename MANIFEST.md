@@ -31,13 +31,12 @@ Complete inventory of all files in the Knowledge Chipper codebase with descripti
 ### Build and Deployment
 
 - `Makefile` - Build automation for common development tasks (test, lint, format, install, test-daemon)
-- `Makefile.hce` - Build automation specific to HCE (Hybrid Claim Extraction) system
 - `SkipThePodcast.pkgproj` - Packages.app project file for building macOS .dmg installer
 - `launch_gui.command` - Shell script to launch GUI application on macOS with proper environment setup
 
 ### GitHub Actions Workflows
 
-- `.github/workflows/daemon-release.yml` - **NEW (Jan 11, 2026):** Automated daemon release workflow: triggers on version tags (v*.*.*), runs daemon API tests, builds DMG on macOS runner, publishes to Skipthepodcast.com repo. Includes version verification, DMG size checks, and download URL validation. Only tests daemon functionality (no GUI/HCE/diarization) to avoid false failures.
+- `.github/workflows/daemon-release.yml` - **NEW (Jan 11, 2026):** Automated daemon release workflow: triggers on version tags (v*.*.*), runs daemon API tests, builds DMG on macOS runner, publishes to Skipthepodcast.com repo. Includes version verification, DMG size checks, and download URL validation. Only tests daemon functionality (no GUI or deprecated features) to avoid false failures.
 - `.github/workflows/smoke-test.yml` - Lightweight smoke test on every push: Python syntax validation, basic imports, YAML validation
 - `.github/workflows/build-and-sign.yml` - Legacy build workflow (TEMPORARILY DISABLED) - being updated for daemon architecture
 - `.github/workflows/automated-gui-tests.yml` - GUI test automation (deprecated with GUI)
@@ -154,7 +153,7 @@ Complete inventory of all files in the Knowledge Chipper codebase with descripti
 - `docs/PYINSTALLER_ONEDIR_MIGRATION.md` - **NEW (Jan 12, 2026):** PyInstaller onedir migration documentation: explains migration from onefile to onedir mode for PyInstaller 7.0 compatibility, performance benefits, dependency cleanup (removed pydub, excluded unused database drivers), build output changes, verification steps, and rollback plan.
 - `docs/DAEMON_RELEASE_PROCESS.md` - **UPDATED (Jan 13, 2026):** Complete daemon release workflow documentation: version management (daemon only), signed & notarized PKG build process, GitHub release automation, download URLs, GetReceipts.org integration, auto-update system, and troubleshooting guide.
 - `ARCHITECTURE_WEB_CANONICAL.md` - Complete architecture documentation for web-canonical implementation where GetReceipts Supabase is single source of truth and Knowledge_Chipper acts as ephemeral processor. Documents philosophy, workflows, database schemas, user experience, API endpoints, and rollback instructions.
-- `PROMPT_INVENTORY.md` - Complete catalog of all prompts in the system: ACTIVE two-pass architecture uses 2 core prompts (extraction_pass.txt with refinement injection + synthesis_pass.txt with dynamic length) plus 3 optional question mapper prompts; documents 15 deprecated HCE segment-based prompts; explains architecture comparison, system integration, and migration status. Both active prompts are fully wired up and functional.
+- `PROMPT_INVENTORY.md` - Complete catalog of all prompts in the system: ACTIVE two-pass architecture uses 2 core prompts (extraction_pass.txt with refinement injection + synthesis_pass.txt with dynamic length) plus 3 optional question mapper prompts; documents 15 deprecated segment-based prompts; explains architecture comparison, system integration, and migration status. Both active prompts are fully wired up and functional.
 - `VESTIGIAL_CODE_ANALYSIS.md` - Comprehensive analysis of unused/vestigial code from pre-unified-pipeline architecture, including old extraction modules (people.py, glossary.py, concepts.py, skim.py), unused prompt files (judge_high/low variants), and unimplemented features (relations, contradictions). Documents architecture evolution and provides removal recommendations.
 - `VESTIGIAL_CODE_REMOVAL_COMPLETE.md` - Completion documentation for vestigial code cleanup: moved 4 old extraction modules and 12 unused prompt files to _deprecated/, updated __init__.py, verified all imports still work. Includes before/after architecture comparison, verification tests, and rollback plan.
 - `VESTIGIAL_PROMPT_PICKER_REMOVED.md` - Documentation of removal of non-functional prompt file picker from Summarization tab
@@ -168,7 +167,7 @@ Complete inventory of all files in the Knowledge Chipper codebase with descripti
 - `DOWNLOAD_FIXES_SUMMARY.md` - Summary of all download-related bug fixes
 - `HALLUCINATION_AND_DEFAULT_MODEL_COMPLETE.md` - Completion doc for hallucination prevention and model changes
 - `HALLUCINATION_PREVENTION_COMPLETE.md` - Documentation of Whisper hallucination prevention implementation
-- `HCE_FIXES_SUMMARY.md` - Summary of all HCE (Hybrid Claim Extraction) system fixes
+- `HCE_FIXES_SUMMARY.md` - Summary of all extraction system fixes (legacy document)
 - `HOW_TO_TEST.md` - Comprehensive testing guide for all system components
 - `INTRODUCTION_TAB_CONTROL_IMPLEMENTATION.md` - Implementation of user-controllable Introduction tab visibility
 - `MULTI_SOURCE_DEDUPLICATION_COMPLETE.md` - Completion doc for multi-source deduplication system
@@ -190,7 +189,7 @@ Complete inventory of all files in the Knowledge Chipper codebase with descripti
 - `ROBUST_LLM_FALLBACK_SYSTEM.md` - November 10, 2025 enhancement: 5-tier fallback system that uses ANY available Ollama model rather than failing. Priority: (1) Preferred models, (2) Any Qwen, (3) Any Llama, (4) Any instruct model, (5) Any model. Ensures speaker attribution never fails when models are installed, with transparent logging of which tier is used
 - `SPEAKER_ATTRIBUTION_DEBUG_GUIDE.md` - Comprehensive debug guide for speaker attribution issues: explains why SPEAKER_01 labels appear instead of real names, documents model name mismatch problem, provides diagnostic steps and solutions for ensuring MVP LLM (Gwen/Qwen) is properly detected and used with CSV mappings
 - `SPEAKER_ATTRIBUTION_MODEL_NAME_FIX.md` - November 10, 2025 fix for model name mismatch: installation scripts pulled "qwen2.5:7b" but code expected "qwen2.5:7b-instruct". Documents Ollama's behavior of stripping -instruct suffix when storing models, updated MVP_MODEL_ALTERNATIVES to match actual Ollama names, removed fuzzy matching logic
-- `SUMMARY_FORMAT_CODE_PATH_CONSOLIDATION.md` - November 10, 2025 elimination of duplicate summary generation code path. Removed generate_summary_markdown_from_pipeline() which was creating inconsistent formats with bugs. Unified pipeline now uses standard generate_summary_markdown() → _generate_hce_markdown() for ONE consistent format. Includes before/after comparison and explanation of why duplicate code paths are problematic
+- `SUMMARY_FORMAT_CODE_PATH_CONSOLIDATION.md` - November 10, 2025 elimination of duplicate summary generation code path. Removed generate_summary_markdown_from_pipeline() which was creating inconsistent formats with bugs. Unified pipeline now uses standard generate_summary_markdown() for ONE consistent format. Includes before/after comparison and explanation of why duplicate code paths are problematic
 - `SCHEMA_MIGRATION_COMPLETION.md` - November 10, 2025 completion of incomplete episode-centric to claim-centric schema migration. Fixed 10 remaining references to old schema (video_id → source_id, get_video() → get_source()) across system2_orchestrator.py, file_generation.py, and speaker_processor.py. Documents root cause analysis, verification process, and lessons learned about incremental migrations
 - `TRANSCRIPTION_TO_SUMMARIZATION_WORKFLOW.md` - November 10, 2025 enhancement for seamless transcription-to-summarization workflow. When clicking "Summarize Transcript" after transcription, the system now automatically: (1) switches to Database mode, (2) checks boxes for all transcribed sources, (3) immediately starts summarization. Leverages database-first architecture where rich segments (timestamps, speakers, metadata) are used instead of parsing markdown files. Documents implementation, benefits, and user experience improvements
 - `TRANSCRIPT_DISPLAY_FIX_NOV_2025.md` - Fix for duplicate titles in Obsidian (removed redundant H1 heading) and improved filename readability (preserved spaces instead of underscores)
@@ -351,7 +350,7 @@ Comprehensive project documentation (128+ files).
 - `CLAIM_CENTRIC_ARCHITECTURE.md` - Documentation of claim-centric database architecture
 - `DATABASE_ARCHITECTURE.md` - Database schema and design documentation
 - `DATABASE_CENTRIC_ARCHITECTURE.md` - Database-first design principles and implementation
-- `HCE_ARCHITECTURE.md` - Hybrid Claim Extraction (HCE) system architecture
+- `HCE_ARCHITECTURE.md` - Legacy extraction system architecture (deprecated)
 - `PIPELINE_ARCHITECTURE.md` - Processing pipeline architecture and flow
 - `DATABASE_PATTERNS.md` - Common database access patterns and best practices
 - `CLARIFICATIONS_ON_ARCHITECTURE.md` - Architectural clarifications and decisions
@@ -612,7 +611,7 @@ Core orchestration and processing coordination.
 - `checkpoint_manager.py` - Checkpoint management for resumable processing
 - `connected_processing_coordinator.py` - Coordinates connected processing stages with audio preservation and staging
 - `dynamic_parallelization.py` - Dynamic parallelization system for optimal resource usage based on hardware specs
-- `enhanced_hce_pipeline.py` - Enhanced HCE pipeline with dynamic parallelization
+- `enhanced_hce_pipeline.py` - Legacy extraction pipeline (deprecated)
 - `intelligent_processing_coordinator.py` - Intelligent coordinator with adaptive strategies for the entire processing pipeline
 - `llm_adapter.py` - LLM provider abstraction layer (OpenAI, Anthropic, **Google Gemini**, Ollama) with advanced features like rate limiting, cost tracking, and hardware-aware concurrency
 - `parallel_processor.py` - Parallel processing integration for multi-core systems
@@ -621,7 +620,7 @@ Core orchestration and processing coordination.
 - `staging_location_examples.py` - Example code for audio staging locations
 - `system2_logger.py` - Structured logging for System 2 processing
 - `system2_orchestrator.py` - Main orchestrator for System 2 processing with job management
-- `system2_orchestrator_mining.py` - Mining integration for System 2 using UnifiedHCEPipeline
+- `system2_orchestrator_mining.py` - Legacy mining integration (deprecated)
 - `usage_example.py` - Usage examples for connected processing
 
 ### DATABASE/
@@ -632,11 +631,11 @@ Database models, migrations, and service layer.
 - `models.py` - SQLAlchemy models for all database tables, defining the comprehensive schema including Question* models and ReviewQueueItem; **UPDATED (Jan 2, 2026):** Added Prediction, PredictionHistory, and PredictionEvidence models for personal forecasting system; **UPDATED (Dec 22, 2025):** Added speaker attribution fields (Claim.speaker, JargonTerm.introduced_by, Concept.advocated_by), added web-based claim merging fields (Claim.cluster_id, Claim.is_canonical_instance), removed Segment.speaker (deprecated)
 - `service.py` - Database service layer with high-level operations including question management methods and prediction CRUD methods (Jan 2, 2026); includes extraction checkpoint methods (Dec 2025) for auth failure recovery persistence
 - `review_queue_service.py` - Service for managing review queue items: load/save/update pending items for bulk review workflow persistence across sessions
-- `claim_store.py` - Claim-centric storage operations for the HCE system; **UPDATED (Dec 22, 2025):** Added _extract_speaker_from_claim_data() method to populate claims.speaker from Pass 1 LLM inference (priority) or segments.speaker (fallback)
+- `claim_store.py` - Claim-centric storage operations; **UPDATED (Dec 22, 2025):** Added _extract_speaker_from_claim_data() method to populate claims.speaker from Pass 1 LLM inference (priority) or segments.speaker (fallback)
 - `speaker_models.py` - Speaker and voice fingerprint models, re-exported from the unified models.py for backward compatibility
 - `system2_models.py` - System 2 processing job and checkpoint models for orchestration and LLM tracking
 - `alembic_migrations.py` - Alembic migration management
-- `apply_hce_migrations.py` - Apply HCE-specific database migrations
+- `apply_hce_migrations.py` - Apply legacy database migrations (deprecated)
 - `migrate_legacy_data.py` - Migrate legacy data to new schema
 - `migrate_to_claim_centric.py` - Migrate to claim-centric architecture
 - `load_wikidata_vocab.py` - Load WikiData vocabulary into database
@@ -657,8 +656,8 @@ SQL migration files for database schema changes.
 - `add_subtitle_column.sql` - Add subtitle column to media sources
 - `2025_01_15_claim_tier_validation.sql` - Claim tier validation rules
 - `2025_01_15_quality_ratings.sql` - Quality rating system for claims
-- `2025_08_18_hce_columns.sql` - HCE system columns
-- `2025_08_18_hce_compat.sql` - HCE compatibility layer
+- `2025_08_18_hce_columns.sql` - Legacy extraction system columns (deprecated)
+- `2025_08_18_hce_compat.sql` - Legacy compatibility layer (deprecated)
 - `2025_08_31_upload_tracking.sql` - Upload tracking for cloud sync
 - `2025_10_15_partial_download_tracking.sql` - Partial download tracking
 - `2025_11_05_source_stage_status.sql` - Source stage status tracking for queue visibility
@@ -722,7 +721,7 @@ Claims-first pipeline module for extracting claims before speaker attribution.
 GUI adapters for backend integration.
 
 - `__init__.py` - Adapters module initialization
-- `hce_adapter.py` - Adapter for HCE system integration with GUI
+- `hce_adapter.py` - Legacy adapter (deprecated)
 
 #### GUI/ASSETS/ ⚠️ DEPRECATED
 
@@ -785,7 +784,7 @@ Dialog windows for various operations.
 - `ffmpeg_prompt_dialog.py` - FFmpeg installation prompt
 - `ffmpeg_setup_dialog.py` - FFmpeg setup wizard
 - `first_run_setup_dialog.py` - First run setup dialog
-- `hce_update_dialog.py` - HCE system update dialog
+- `hce_update_dialog.py` - Legacy update dialog (deprecated)
 - `model_tier_selection_dialog.py` - Model tier selection for evaluators
 - `prediction_creation_dialog.py` - **NEW (Jan 2, 2026):** Create new prediction: title, description, initial confidence (0-100%), deadline (calendar picker), privacy (Public/Private), user notes, validates required fields
 - `prediction_update_dialog.py` - **NEW (Jan 2, 2026):** Update prediction confidence and/or deadline with change reason field, shows current values, creates history entry automatically
@@ -816,7 +815,7 @@ Main application tabs (21 total) - **REPLACED by web interface at GetReceipts.or
 - `prediction_detail_page.py` - **NEW (Jan 2, 2026):** Individual prediction detail view with header (title/confidence/deadline/status), matplotlib graph showing confidence/deadline history, evidence tabs (Claims/Jargon/People/Concepts) with Pro/Con/Neutral badges and double-click to edit stance, user notes section, and action buttons (Update/Add Evidence/Resolve/Delete)
 - `predictions_tab.py` - **NEW (Jan 2, 2026):** Predictions list view with sortable table (Title/Confidence/Deadline/Status columns), filter bar (Privacy/Status/Search), color-coded confidence (green/orange/red), deadline highlighting (red for overdue), double-click to open detail page, New Prediction button
 - `process_tab.py` - Processing pipeline control tab
-- `prompts_tab.py` - Prompt template management tab with dynamic prompt selection display for Unified Miner (shows content-type-specific, selectivity-based, and fallback prompts) and standard assignment for Flagship Evaluator and Skimmer
+- `prompts_tab.py` - Prompt template management tab (legacy - two-pass system uses fixed prompts)
 - `question_review_tab.py` - Question mapping review and approval tab (NEW: Nov 2025)
 - `queue_tab.py` - Queue tab for real-time pipeline status visualization
 - `review_tab_system2.py` - Review tab for System 2 processing results and claim evaluation
@@ -885,73 +884,62 @@ Media processing and transformation.
 - ~~`diarization.py`~~ - Replaced by claims-first pipeline (restore from `speaker-first-archive` branch if needed)
 - ~~`speaker_processor.py`~~ - Replaced by claims-first pipeline
 
-#### PROCESSORS/HCE/
+#### PROCESSORS/HCE/ ⚠️ DEPRECATED
 
-Hybrid Claim Extraction system.
+**Legacy extraction system - replaced by two-pass architecture (see PROCESSORS/TWO_PASS/).**
 
-- `__init__.py` - HCE module initialization and public API exports
-- `config_flex.py` - Flexible configuration for HCE pipeline
-- `context_expansion.py` - Context expansion for claims
-- `discourse.py` - Discourse analysis and structure
-- `entity_converters.py` - Entity type converters
-- `export.py` - Export HCE results to various formats
-- `flagship_evaluator.py` - Flagship claim evaluator for ranking and filtering claims
-- `global_index.py` - Global index for cross-document references
-- `health.py` - Health checks for HCE system
-- `io_utils.py` - I/O utilities for HCE
-- `model_uri_parser.py` - Parse model URIs (ollama://, openai://, local://, etc.)
-- `parallel_processor.py` - Parallel processing infrastructure for HCE with auto-scaling workers
-- `relations.py` - Relationship extraction between entities (currently disabled, returns empty list)
-- `schema_validator.py` - Validate and repair HCE output against JSON schemas
-- `sqlite_schema.sql` - SQLite schema for HCE storage tables
-- `storage_sqlite.py` - SQLite storage layer for HCE results with bulk insert optimization
-- `structured_categories.py` - WikiData-based structured category assignment
-- `temporal_numeric.py` - Temporal and numeric data extraction
-- `temporality.py` - Temporality analysis for claims
-- `types.py` - Type definitions for HCE system (EpisodeBundle, ScoredClaim, PipelineOutputs, etc.)
-- `unified_miner.py` - **ACTIVE:** Unified mining engine that extracts all entity types (claims, jargon, people, concepts) in a single pass; now supports injecting synced refinements from GetReceipts.org to prevent previously-identified extraction mistakes
-- `unified_pipeline.py` - **ACTIVE:** Main HCE pipeline orchestrating mining → evaluation → summarization → categorization
+This directory contains the deprecated segment-based extraction system. The two-pass whole-document approach is now the active system.
 
-##### PROCESSORS/HCE/EVALUATORS/
+- `__init__.py` - Module initialization (legacy)
+- `config_flex.py` - Flexible configuration (legacy)
+- `context_expansion.py` - Context expansion (legacy)
+- `discourse.py` - Discourse analysis (legacy)
+- `entity_converters.py` - Entity type converters (legacy)
+- `export.py` - Export results (legacy)
+- `flagship_evaluator.py` - Claim evaluator (legacy - replaced by extraction_pass.txt)
+- `global_index.py` - Global index (legacy)
+- `health.py` - Health checks (legacy)
+- `io_utils.py` - I/O utilities (legacy)
+- `model_uri_parser.py` - Parse model URIs (legacy)
+- `parallel_processor.py` - Parallel processing (legacy)
+- `relations.py` - Relationship extraction (legacy)
+- `schema_validator.py` - Schema validation (legacy)
+- `sqlite_schema.sql` - SQLite schema (legacy)
+- `storage_sqlite.py` - SQLite storage (legacy)
+- `structured_categories.py` - WikiData categorization (legacy)
+- `temporal_numeric.py` - Temporal/numeric extraction (legacy)
+- `temporality.py` - Temporality analysis (legacy)
+- `types.py` - Type definitions (legacy)
+- `unified_miner.py` - **DEPRECATED:** Segment-based mining (replaced by extraction_pass.py)
+- `unified_pipeline.py` - **DEPRECATED:** Segment-based pipeline (replaced by TwoPassPipeline)
 
-Claim evaluators for quality assessment.
+##### PROCESSORS/HCE/EVALUATORS/ ⚠️ DEPRECATED
 
-- `__init__.py` - Evaluators module initialization
-- `concepts_evaluator.py` - Evaluate concept quality
-- `jargon_evaluator.py` - Evaluate jargon definitions
-- `people_evaluator.py` - Evaluate people/entity extractions
+Legacy evaluators (replaced by two-pass extraction).
 
-##### PROCESSORS/HCE/MODELS/
+- `__init__.py` - Module initialization (legacy)
+- `concepts_evaluator.py` - Concept evaluation (legacy)
+- `jargon_evaluator.py` - Jargon evaluation (legacy)
+- `people_evaluator.py` - People evaluation (legacy)
 
-ML models for HCE.
+##### PROCESSORS/HCE/MODELS/ ⚠️ DEPRECATED
 
-- `__init__.py` - Models module initialization
-- `cross_encoder.py` - Cross-encoder for semantic similarity
-- `embedder.py` - Sentence embeddings for semantic search
-- `llm_system2.py` - LLM integration for System 2 processing
+Legacy ML models (replaced by two-pass extraction).
 
-##### PROCESSORS/HCE/PROMPTS/
+- `__init__.py` - Module initialization (legacy)
+- `cross_encoder.py` - Cross-encoder (legacy)
+- `embedder.py` - Sentence embeddings (legacy)
+- `llm_system2.py` - LLM integration (legacy)
 
-Prompt templates for legacy HCE system (15 prompt files - DEPRECATED).
+##### PROCESSORS/HCE/PROMPTS/ ⚠️ DEPRECATED
 
-**LEGACY PROMPTS (Segment-Based Architecture - Being Phased Out):**
-- `concepts_evaluator.txt` - Concepts evaluation prompt (legacy)
-- `flagship_evaluator.txt` - Flagship evaluation prompt (legacy - functionality merged into two-pass extraction_pass.txt)
-- `jargon_evaluator.txt` - Jargon evaluation prompt (legacy)
-- `long_summary.txt` - Long-form summary generation prompt (legacy - superseded by two-pass synthesis_pass.txt)
-- `people_evaluator.txt` - People/entity evaluation prompt (legacy)
-- `short_summary.txt` - Short summary generation prompt (legacy)
-- `unified_miner_conservative.txt` - Conservative mining prompt (legacy)
-- `unified_miner_document.txt` - Document-specific mining prompt (legacy)
-- `unified_miner_liberal.txt` - Liberal mining prompt (legacy)
-- `unified_miner_moderate.txt` - Moderate mining prompt (legacy)
-- `unified_miner_transcript_own.txt` - Own-transcript mining prompt V1 (legacy)
-- `unified_miner_transcript_own_V2.txt` - Own-transcript mining prompt V2 (legacy)
-- `unified_miner_transcript_own_V3.txt` - Own-transcript mining prompt V3 (legacy)
-- `unified_miner_transcript_third_party.txt` - Third-party transcript mining prompt (legacy)
-- `unified_miner.txt` - Base unified mining prompt (legacy)
+**All 15 prompt files in this directory are DEPRECATED and replaced by the two-pass architecture.**
 
-**Note:** These prompts are being phased out in favor of the two-pass architecture (see PROCESSORS/TWO_PASS/ below).
+The segment-based extraction approach has been replaced by whole-document extraction using:
+- `extraction_pass.txt` (replaces all mining and evaluation prompts)
+- `synthesis_pass.txt` (replaces summary generation prompts)
+
+See PROCESSORS/TWO_PASS/ for the active system.
 
 #### PROCESSORS/TWO_PASS/
 
@@ -976,7 +964,7 @@ Question mapping system (NEW: November 2025) - Optional post-processing feature.
 - `__init__.py` - Question mapper module initialization
 - `assignment.py` - Claim-to-question assignment stage (Stage 3)
 - `discovery.py` - Question discovery from claims (Stage 1)
-- `hce_integration.py` - Integration with HCE pipeline
+- `hce_integration.py` - Legacy integration (deprecated)
 - `merger.py` - Question deduplication and merging (Stage 2)
 - `models.py` - Pydantic data models for question mapper
 - `orchestrator.py` - Question mapper pipeline orchestrator
