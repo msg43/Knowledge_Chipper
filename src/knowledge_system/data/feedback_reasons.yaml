@@ -1,0 +1,45 @@
+# Feedback Reasons Configuration
+# Adding a new reason here automatically propagates to:
+# - GET /config/feedback-reasons API
+# - Dynamic prompt injection labels
+# - TasteEngine validation
+#
+# Structure: entity_type -> verdict -> reason_key: "Human Label"
+
+schema_version: "1.0.0"
+
+claim:
+  reject:
+    trivial: "Trivial/Common Knowledge"
+    too_vague: "Too Vague"
+    topic_only: "Just a Topic, Not a Claim"
+    hallucination: "Not in Text"
+  accept:
+    novel_insight: "Novel Insight"
+    high_utility: "High Utility"
+    core_argument: "Core Argument"
+
+person:
+  reject:
+    title_role: "Title/Role, Not Name"
+    group_org: "Group/Org, Not Person"
+    common_noun: "Common Noun"
+  accept:
+    key_speaker: "Speaker/Host"
+    cited_expert: "Cited Authority"
+
+jargon:
+  reject:
+    common_word: "Common Word"
+    proper_noun: "Proper Noun, Not Term"
+    is_concept: "This is a Mental Model (Concept)"
+  accept:
+    domain_term: "Domain Terminology"
+
+concept:
+  reject:
+    generic: "Too Generic"
+    is_jargon: "This is Jargon, Not Concept"
+  accept:
+    framework: "Framework/Model"
+    heuristic: "Heuristic"

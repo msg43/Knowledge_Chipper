@@ -23,8 +23,11 @@ Usage:
     result = sync.upload_entities('claims', [claim1, claim2, claim3])
 """
 
+import json
+import sqlite3
 from datetime import datetime
-from typing import Any
+from pathlib import Path
+from typing import Any, Optional
 from uuid import uuid4
 
 from ..database.connection import DatabaseConnection
@@ -33,6 +36,10 @@ from ..logger import get_logger
 from .device_auth import get_device_auth
 
 logger = get_logger(__name__)
+
+
+# Default database path for feedback queue
+DEFAULT_DB_PATH = Path.home() / "Library" / "Application Support" / "SkipThePodcast" / "knowledge_system.db"
 
 
 class EntitySyncService:
@@ -46,16 +53,18 @@ class EntitySyncService:
     - Any future entity types
     """
 
-    def __init__(self, use_production: bool = True):
+    def __init__(self, use_production: bool = True, db_path: Optional[Path] = None):
         """
         Initialize the entity sync service.
         
         Args:
             use_production: Whether to use production API (default: True)
+            db_path: Path to SQLite database for feedback queue
         """
         self.use_production = use_production
         self.device_auth = get_device_auth()
         self.db = DatabaseConnection()
+        self.feedback_db_path = db_path or DEFAULT_DB_PATH
 
     def is_sync_enabled(self) -> bool:
         """Check if sync is enabled for this device."""
@@ -259,6 +268,191 @@ class EntitySyncService:
         except Exception as e:
             logger.error(f"❌ Failed to sync issue: {e}")
             return {"success": False, "reason": "error", "error": str(e)}
+
+    # ========================================
+    # FEEDBACK SYNC (Dynamic Learning System)
+    # ========================================
+
+    def sync_feedback_from_web(self, api_url: str = None) -> dict[str, Any]:
+        """
+        Fetch feedback from GetReceipts.org and push to pending queue.
+        
+        This is the async-safe method that does NOT calculate embeddings.
+        Raw JSON is pushed to pending_feedback queue for background processing.
+        
+        Args:
+            api_url: Optional API URL override for testing
+            
+        Returns:
+            Dict with sync result
+        """
+        if not self.is_sync_enabled():
+            logger.info("Sync disabled - feedback not synced")
+            return {"success": False, "reason": "sync_disabled"}
+        
+        try:
+            # Fetch feedback from web API
+            feedback_items = self._fetch_feedback_from_web(api_url)
+            
+            if not feedback_items:
+                logger.info("No new feedback to sync")
+                return {"success": True, "synced": 0}
+            
+            # Push to pending queue (async-safe)
+            queued = self._queue_feedback_items(feedback_items)
+            
+            # Update sync metadata
+            self._update_feedback_sync_metadata(queued)
+            
+            logger.info(f"✅ Queued {queued} feedback items for processing")
+            return {"success": True, "synced": queued}
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to sync feedback: {e}")
+            return {"success": False, "reason": "error", "error": str(e)}
+    
+    def _fetch_feedback_from_web(self, api_url: str = None) -> list[dict]:
+        """
+        Fetch feedback items from GetReceipts.org API.
+        
+        Returns list of feedback items (raw JSON).
+        """
+        import requests
+        
+        # Get device credentials
+        device_id, device_key = self.device_auth.get_credentials()
+        if not device_id or not device_key:
+            raise ValueError("Device not authenticated")
+        
+        # Build API URL
+        if api_url is None:
+            base_url = "https://getreceipts.org" if self.use_production else "http://localhost:3000"
+            api_url = f"{base_url}/api/feedback/sync"
+        
+        # Get last sync timestamp
+        last_sync = self._get_last_feedback_sync()
+        
+        # Make request
+        headers = {
+            "X-Device-ID": device_id,
+            "X-Device-Key": device_key,
+            "Content-Type": "application/json"
+        }
+        
+        params = {}
+        if last_sync:
+            params["since"] = last_sync
+        
+        response = requests.get(api_url, headers=headers, params=params, timeout=30)
+        response.raise_for_status()
+        
+        data = response.json()
+        return data.get("feedback", [])
+    
+    def _queue_feedback_items(self, items: list[dict]) -> int:
+        """
+        Push feedback items to the pending_feedback queue.
+        
+        Does NOT calculate embeddings - that's done by the background worker.
+        """
+        if not items:
+            return 0
+        
+        # Ensure database exists
+        self.feedback_db_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        conn = sqlite3.connect(str(self.feedback_db_path))
+        cursor = conn.cursor()
+        
+        # Ensure table exists
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS pending_feedback (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                raw_json TEXT NOT NULL,
+                source TEXT DEFAULT 'web',
+                received_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                processed_at TIMESTAMP,
+                error_message TEXT,
+                retry_count INTEGER DEFAULT 0
+            )
+        """)
+        
+        queued = 0
+        for item in items:
+            try:
+                # Check if already queued (by web_feedback_id if present)
+                web_id = item.get("web_feedback_id")
+                if web_id:
+                    cursor.execute("""
+                        SELECT id FROM pending_feedback 
+                        WHERE raw_json LIKE ?
+                    """, (f'%"web_feedback_id": "{web_id}"%',))
+                    if cursor.fetchone():
+                        continue  # Already queued
+                
+                # Insert into queue
+                cursor.execute("""
+                    INSERT INTO pending_feedback (raw_json, source)
+                    VALUES (?, 'web')
+                """, (json.dumps(item),))
+                queued += 1
+                
+            except Exception as e:
+                logger.warning(f"Failed to queue feedback item: {e}")
+        
+        conn.commit()
+        conn.close()
+        
+        return queued
+    
+    def _get_last_feedback_sync(self) -> Optional[str]:
+        """Get the timestamp of the last feedback sync."""
+        if not self.feedback_db_path.exists():
+            return None
+        
+        try:
+            conn = sqlite3.connect(str(self.feedback_db_path))
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                SELECT last_sync_at FROM feedback_sync_metadata WHERE id = 1
+            """)
+            row = cursor.fetchone()
+            conn.close()
+            
+            return row[0] if row else None
+            
+        except Exception:
+            return None
+    
+    def _update_feedback_sync_metadata(self, count: int):
+        """Update the feedback sync metadata."""
+        conn = sqlite3.connect(str(self.feedback_db_path))
+        cursor = conn.cursor()
+        
+        # Ensure table exists
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS feedback_sync_metadata (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                last_sync_at TIMESTAMP,
+                last_sync_count INTEGER DEFAULT 0,
+                total_synced INTEGER DEFAULT 0,
+                last_error TEXT
+            )
+        """)
+        
+        # Upsert metadata
+        cursor.execute("""
+            INSERT INTO feedback_sync_metadata (id, last_sync_at, last_sync_count, total_synced)
+            VALUES (1, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                last_sync_at = excluded.last_sync_at,
+                last_sync_count = excluded.last_sync_count,
+                total_synced = total_synced + excluded.last_sync_count
+        """, (datetime.utcnow().isoformat(), count, count))
+        
+        conn.commit()
+        conn.close()
 
 
 # Singleton instance

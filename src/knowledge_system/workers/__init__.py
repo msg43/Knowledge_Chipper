@@ -1,6 +1,15 @@
 """
-Standalone worker processes for crash-isolated batch processing.
-
-This module contains worker processes that run in separate Python processes
-to prevent crashes from affecting the main GUI application.
+Workers module for background processing tasks.
 """
+
+from .feedback_processor import (
+    FeedbackProcessor,
+    start_feedback_processor,
+    stop_feedback_processor,
+)
+
+__all__ = [
+    "FeedbackProcessor",
+    "start_feedback_processor",
+    "stop_feedback_processor",
+]

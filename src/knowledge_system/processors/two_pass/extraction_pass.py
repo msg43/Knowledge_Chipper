@@ -210,8 +210,11 @@ class ExtractionPass:
             transcript=transcript,
         )
         
-        # Inject synced refinements from GetReceipts.org
+        # Inject synced refinements from GetReceipts.org (legacy system)
         prompt = self._inject_refinements(prompt)
+        
+        # Inject dynamic examples from TasteEngine (new Dynamic Learning System)
+        prompt = self._inject_dynamic_examples(prompt, transcript, metadata)
         
         return prompt
     
@@ -289,6 +292,167 @@ class ExtractionPass:
             logger.warning(f"Could not load refinements: {e} - continuing with base prompt")
         
         return prompt
+    
+    def _inject_dynamic_examples(self, prompt: str, transcript: str, metadata: dict) -> str:
+        """
+        Inject dynamic few-shot examples from TasteEngine into the prompt.
+        
+        Queries the TasteEngine for semantically similar past feedback
+        and injects them as examples to guide extraction.
+        
+        Args:
+            prompt: The base extraction prompt
+            transcript: The transcript being processed
+            metadata: Source metadata
+            
+        Returns:
+            Prompt with dynamic examples injected
+        """
+        try:
+            from ...services.taste_engine import get_taste_engine
+            from ...services.feedback_config import get_feedback_config
+            
+            taste_engine = get_taste_engine()
+            feedback_config = get_feedback_config()
+            
+            # Build context aggregate using signal hierarchy
+            context_aggregate = self._build_context_aggregate(metadata)
+            
+            if not context_aggregate:
+                logger.debug("No context aggregate available - skipping dynamic injection")
+                return prompt
+            
+            # Query for similar examples (both accept and reject)
+            reject_examples = taste_engine.query_similar(
+                text=context_aggregate,
+                verdict="reject",
+                n_results=5
+            )
+            
+            accept_examples = taste_engine.query_similar(
+                text=context_aggregate,
+                verdict="accept",
+                n_results=3
+            )
+            
+            if not reject_examples and not accept_examples:
+                logger.debug("No similar examples found in TasteEngine")
+                return prompt
+            
+            # Build examples section
+            examples_section = "\n\n# 🎯 DYNAMIC EXAMPLES (From Past Feedback)\n\n"
+            examples_section += "Learn from these real examples of what to AVOID and what to INCLUDE.\n\n"
+            
+            if reject_examples:
+                examples_section += "## AVOID THESE PATTERNS (Past Rejections):\n\n"
+                for ex in reject_examples:
+                    # Get human-readable label from config
+                    reason_key = ex.metadata.get('reason_category', 'other')
+                    entity_type = ex.metadata.get('entity_type', 'claim')
+                    
+                    # Look up label, fall back to key if not found
+                    human_label = feedback_config.get_label(entity_type, 'reject', reason_key)
+                    if not human_label:
+                        human_label = reason_key.replace('_', ' ').title()
+                    
+                    examples_section += f"<rejected_example>\n"
+                    examples_section += f"  <type>{entity_type}</type>\n"
+                    examples_section += f"  <content>{ex.text}</content>\n"
+                    examples_section += f"  <reason>REJECTED: {human_label}</reason>\n"
+                    examples_section += f"</rejected_example>\n\n"
+            
+            if accept_examples:
+                examples_section += "## INCLUDE THESE PATTERNS (Past Acceptances):\n\n"
+                for ex in accept_examples:
+                    reason_key = ex.metadata.get('reason_category', 'other')
+                    entity_type = ex.metadata.get('entity_type', 'claim')
+                    
+                    human_label = feedback_config.get_label(entity_type, 'accept', reason_key)
+                    if not human_label:
+                        human_label = reason_key.replace('_', ' ').title()
+                    
+                    examples_section += f"<accepted_example>\n"
+                    examples_section += f"  <type>{entity_type}</type>\n"
+                    examples_section += f"  <content>{ex.text}</content>\n"
+                    examples_section += f"  <reason>ACCEPTED: {human_label}</reason>\n"
+                    examples_section += f"</accepted_example>\n\n"
+            
+            # Insert before EXTRACTION INSTRUCTIONS section
+            if "# EXTRACTION INSTRUCTIONS" in prompt:
+                prompt = prompt.replace(
+                    "# EXTRACTION INSTRUCTIONS",
+                    examples_section + "# EXTRACTION INSTRUCTIONS"
+                )
+                logger.info(
+                    f"✅ Injected {len(reject_examples)} reject + {len(accept_examples)} accept "
+                    f"dynamic examples into extraction prompt"
+                )
+            elif "# OUTPUT FORMAT" in prompt:
+                prompt = prompt.replace(
+                    "# OUTPUT FORMAT",
+                    examples_section + "# OUTPUT FORMAT"
+                )
+                logger.info(
+                    f"✅ Injected dynamic examples (fallback position)"
+                )
+            else:
+                logger.warning("Could not find insertion point for dynamic examples")
+        
+        except ImportError as e:
+            logger.debug(f"TasteEngine not available - skipping dynamic injection: {e}")
+        except Exception as e:
+            logger.warning(f"Could not inject dynamic examples: {e}")
+        
+        return prompt
+    
+    def _build_context_aggregate(self, metadata: dict) -> str:
+        """
+        Build a context aggregate from metadata using signal hierarchy.
+        
+        Signal Hierarchy (highest to lowest):
+        1. Tags & Categories (Highest Signal)
+        2. Local LLM Summary (High Density)
+        3. YouTube AI Summary (High Density - if available)
+        4. Video Title (Medium Signal)
+        
+        EXCLUDES: Video Description (too noisy - links, merch, etc.)
+        
+        Args:
+            metadata: Source metadata dict
+            
+        Returns:
+            Aggregated context string for TasteEngine query
+        """
+        parts = []
+        
+        # 1. Tags & Categories (Highest Signal)
+        tags = metadata.get('tags', [])
+        if tags:
+            parts.append(f"Topics: {', '.join(tags[:10])}")
+        
+        categories = metadata.get('categories', [])
+        if categories:
+            parts.append(f"Categories: {', '.join(categories[:5])}")
+        
+        # 2. Local LLM Summary (High Density)
+        local_summary = metadata.get('short_summary') or metadata.get('long_summary')
+        if local_summary:
+            # Take first 200 chars of summary
+            parts.append(f"Summary: {local_summary[:200]}")
+        
+        # 3. YouTube AI Summary (High Density - if available)
+        yt_ai_summary = metadata.get('youtube_ai_summary')
+        if yt_ai_summary:
+            parts.append(f"YouTube Summary: {yt_ai_summary[:200]}")
+        
+        # 4. Video Title (Medium Signal)
+        title = metadata.get('title')
+        if title:
+            parts.append(f"Title: {title}")
+        
+        # NOTE: Explicitly EXCLUDING description - too noisy
+        
+        return " | ".join(parts) if parts else ""
     
     def _parse_response(self, response: str) -> ExtractionResult:
         """Parse LLM response into ExtractionResult."""

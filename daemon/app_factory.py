@@ -50,12 +50,41 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Auto-update scheduler failed to start (non-critical): {e}")
     
+    # Start feedback processor (Dynamic Learning System)
+    feedback_processor = None
+    try:
+        from src.knowledge_system.workers.feedback_processor import start_feedback_processor
+        feedback_processor = start_feedback_processor(
+            poll_interval=settings.feedback_processor_poll_interval
+        )
+        logger.info("Feedback processor started (Dynamic Learning System)")
+    except Exception as e:
+        logger.warning(f"Feedback processor failed to start (non-critical): {e}")
+    
+    # Initialize TasteEngine (triggers backup and golden set loading)
+    try:
+        from src.knowledge_system.services.taste_engine import get_taste_engine
+        taste_engine = get_taste_engine()
+        stats = taste_engine.get_stats()
+        logger.info(f"TasteEngine initialized: {stats['total_examples']} examples ({stats['golden_examples']} golden)")
+    except Exception as e:
+        logger.warning(f"TasteEngine initialization failed (non-critical): {e}")
+    
     yield  # Application runs
     
     # Shutdown
     if update_scheduler:
         await update_scheduler.stop()
         logger.info("Auto-update scheduler stopped")
+    
+    # Stop feedback processor
+    if feedback_processor:
+        try:
+            from src.knowledge_system.workers.feedback_processor import stop_feedback_processor
+            stop_feedback_processor()
+            logger.info("Feedback processor stopped")
+        except Exception as e:
+            logger.warning(f"Feedback processor stop failed: {e}")
     
     logger.info("Daemon shutdown complete")
 

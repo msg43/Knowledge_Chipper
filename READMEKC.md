@@ -94,21 +94,21 @@ The daemon automatically keeps itself up-to-date by checking GitHub releases eve
 - Podcaster-provided PDF transcripts
 
 **2. Automatic Processing** (local daemon)
-Claims-first pipeline:
+Two-pass extraction pipeline:
 
 ```
-URL Input → Fetch Metadata → Fetch Transcript → Mine Claims → Evaluate → Timestamps → Speakers
-    ↓            ↓                 ↓               ↓            ↓           ↓           ↓
- YouTube    YT Metadata      YouTube API     UnifiedMiner   Flagship    Evidence   A/B Claims
- Playlist    + AI Summary    (or Whisper)   (configurable)  Evaluator    Matching     Only
+URL Input → Fetch Metadata → Fetch Transcript → Extract & Score → Synthesize Summary
+    ↓            ↓                 ↓                    ↓                  ↓
+ YouTube    YT Metadata      YouTube API         Pass 1: Extract    Pass 2: Synthesize
+ Playlist    + AI Summary    (or Whisper)      (whole document)   (long summary)
 ```
 
-*Speaker attribution is applied only to high-value (A/B-tier) claims, using LLM context analysis.*
+*Speaker attribution is inferred during extraction using LLM context analysis.*
 
 **Processing Features:**
-- 📊 **6-stage pipeline** - Download → Transcribe → Extract → Evaluate → Attribute → Upload
-- 🔧 **Configurable models** - Choose provider/model for each stage
-- ✏️ **Quality assessment** - Acceptance rate, transcript quality, improvement suggestions
+- 📊 **Two-pass pipeline** - Extract all entities in one pass, then synthesize summary
+- 🔧 **Configurable models** - Choose provider/model for extraction and synthesis
+- ✏️ **Quality assessment** - Transcript quality, improvement suggestions
 - 🔄 **Automatic fallback** - Re-run with Whisper if transcript quality is low
 - ⚡ **Batch processing** - Handle multiple items simultaneously
 - 📈 **Progress tracking** - Real-time status updates in web interface
@@ -202,6 +202,54 @@ When you process new content, the two-pass extraction system automatically:
 ```
 
 This closes the learning loop - your web corrections automatically improve all future extractions!
+
+### Dynamic Learning System (January 2026)
+
+The Entity Refinement system has been upgraded to a **Dynamic Learning System** that learns from your feedback in real-time using vector embeddings.
+
+**Architecture: "Sandwich" Validation**
+
+```
+Pass 1: Extraction (with dynamic few-shot injection)
+    ↓
+Pass 1.5a: Taste Filter (vector similarity - catches style errors)
+    ↓
+Pass 1.5b: Truth Critic (LLM - catches logic errors)
+    ↓
+Pass 2: Synthesis
+```
+
+**Key Components:**
+
+1. **Taste Engine (ChromaDB)** - Stores all Accept/Reject feedback as vector embeddings
+   - Location: `~/Library/Application Support/KnowledgeChipper/taste_engine/`
+   - Automatic backup on every daemon startup (keeps 5 copies)
+   
+2. **Taste Filter** - Fast vector similarity check (~50ms/entity)
+   - >95% similar to past rejection → Auto-discard
+   - 80-95% similar → Flag for review
+   - >95% similar to past acceptance → +2.0 importance boost (Positive Echo)
+
+3. **Truth Critic** - LLM logic validation for novel entities
+   - Catches misclassifications: "Washington University" as Person
+   - Only reviews high-importance entities (≥7.0) for efficiency
+   - Uses entity-local context (not transcript beginning)
+
+4. **Dynamic Prompt Injection** - Injects relevant past feedback into extraction prompts
+   - Uses signal hierarchy: Tags > Summaries > Title (excludes Description)
+   - Shows human-readable rejection reasons to the LLM
+
+**Configurable Feedback Reasons:**
+
+Feedback reasons are soft-coded in `feedback_reasons.yaml`. Adding a new reason automatically propagates to:
+- Web UI buttons (via `/config/feedback-reasons` API)
+- Prompt injection labels
+- TasteEngine validation
+
+**API Endpoints:**
+- `GET /api/feedback/stats` - TasteEngine statistics
+- `POST /api/feedback/sync` - Trigger feedback sync from web
+- `GET /api/config/feedback-reasons` - Get all reason categories for Web UI
 
 ---
 
@@ -375,9 +423,9 @@ The daemon can use local AI (offline, free) or cloud AI (requires API key):
 The daemon will:
 - Download the video (audio only)
 - Transcribe with timestamps
-- Extract claims, people, concepts (claims-first mode)
+- Extract claims, people, concepts (two-pass whole-document extraction)
 - Score claims by importance (A/B/C tiers)
-- Attribute speakers to high-value claims
+- Infer speakers from context
 - Auto-upload to GetReceipts
 
 **Step 3: Monitor Progress**
@@ -943,9 +991,8 @@ Research shows sudden capability jumps at specific model scales...
 **Key Tables:**
 - `media_sources`: Videos, podcasts, documents
 - `transcripts`: Transcription data with timestamps
-- `claims`: Extracted knowledge claims (HCE pipeline)
+- `claims`: Extracted knowledge claims (two-pass pipeline)
 - `people`, `concepts`, `jargon`: Knowledge graph entities
-- `speaker_fingerprints`: Voice identification data
 - `summaries`: Analysis results with metrics
 
 **Querying Your Data:**
@@ -963,39 +1010,32 @@ LIMIT 10;
 
 ---
 
-### Hybrid Claim Extraction (HCE)
+### Two-Pass Extraction System
 
-**What Is HCE?**
-The app uses a sophisticated pipeline to extract high-quality claims:
+**What Is Two-Pass Extraction?**
+The app uses a whole-document extraction approach:
 
 **Pipeline Stages:**
 
-1. **Mining** (Parallel)
-   - Breaks transcript into segments
-   - Extracts claims from each segment in parallel
-   - 3-8x faster than sequential processing
+1. **Pass 1: Extraction & Scoring** (Single API Call)
+   - Processes entire transcript in one pass
+   - Extracts all entities: claims, jargon, people, concepts
+   - Scores each claim with 6-dimension system
+   - Assigns A/B/C tiers based on importance
+   - Infers speakers from context
+   - Learns from previous corrections via refinement injection
 
-2. **Evaluation** (Flagship Model)
-   - Scores each claim with flagship model (best available)
-   - Assigns A/B/C tiers based on:
-     - Importance (how significant?)
-     - Novelty (how new?)
-     - Confidence (how well-supported?)
-     - Controversy (how disputed?)
-
-3. **Categorization**
-   - Assigns domain categories (science, politics, business, etc.)
-   - Uses Wikidata taxonomy (506 categories)
-
-4. **Storage**
-   - Unified SQLite database
-   - Full provenance tracking
-   - Version history
+2. **Pass 2: Synthesis** (Single API Call)
+   - Generates world-class long summary
+   - Synthesizes high-importance claims (≥7.0)
+   - Integrates all entity types thematically
+   - Dynamic length based on content complexity
 
 **Why This Matters:**
-- Higher quality claims than simple LLM extraction
+- Faster than segment-based processing (2 API calls vs dozens)
+- Better context understanding (whole document vs fragments)
+- Learning system improves over time via web corrections
 - Importance scores help you focus on what matters
-- Tiers make it easy to filter (show only A-tier)
 
 ---
 

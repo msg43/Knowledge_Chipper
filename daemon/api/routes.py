@@ -1648,3 +1648,96 @@ async def update_status():
         "update_available": checker.update_available,
         "latest_version": checker.latest_version
     }
+
+
+# ============================================
+# Dynamic Learning System - Feedback Endpoints
+# ============================================
+@router.get("/feedback/stats")
+async def get_feedback_stats():
+    """
+    Get TasteEngine statistics.
+    
+    Returns counts of feedback examples, accepts, rejects, etc.
+    """
+    try:
+        from src.knowledge_system.services.taste_engine import get_taste_engine
+        
+        engine = get_taste_engine()
+        return engine.get_stats()
+    
+    except Exception as e:
+        logger.exception("Failed to get feedback stats")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/feedback/sync")
+async def sync_feedback():
+    """
+    Trigger feedback sync from GetReceipts.org.
+    
+    Fetches new feedback from web and queues for async processing.
+    Does NOT block on embedding calculation.
+    """
+    try:
+        from src.knowledge_system.services.entity_sync import get_entity_sync_service
+        
+        sync_service = get_entity_sync_service()
+        result = sync_service.sync_feedback_from_web()
+        
+        return result
+    
+    except Exception as e:
+        logger.exception("Failed to sync feedback")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/feedback/queue-status")
+async def get_feedback_queue_status():
+    """
+    Get the status of the pending feedback queue.
+    
+    Returns counts of pending, failed, and processed items.
+    """
+    try:
+        from src.knowledge_system.workers.feedback_processor import get_feedback_processor
+        
+        processor = get_feedback_processor()
+        if processor:
+            return processor.get_queue_status()
+        else:
+            return {
+                "pending": 0,
+                "failed": 0,
+                "processed_today": 0,
+                "is_running": False
+            }
+    
+    except Exception as e:
+        logger.exception("Failed to get queue status")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/config/feedback-reasons")
+async def get_feedback_reasons():
+    """
+    Get all feedback reasons for Web UI.
+    
+    Returns full config so UI can dynamically generate
+    the correct accept/reject buttons for each entity type.
+    
+    Adding a new reason to feedback_reasons.yaml automatically
+    appears here without code changes.
+    """
+    try:
+        from src.knowledge_system.services.feedback_config import get_feedback_config
+        
+        config = get_feedback_config()
+        return {
+            "reasons": config.get_all_reasons(),
+            "schema_version": "1.0.0"
+        }
+    
+    except Exception as e:
+        logger.exception("Failed to get feedback reasons")
+        raise HTTPException(status_code=500, detail=str(e))

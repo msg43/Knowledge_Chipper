@@ -46,6 +46,12 @@ class Settings(BaseSettings):
 
     # Feature Flags
     bypass_device_auth: bool = True  # Set to False to re-enable device authentication
+    
+    # Dynamic Learning System
+    enable_taste_filter: bool = True  # Pass 1.5a: Vector-based style validation
+    enable_truth_critic: bool = True  # Pass 1.5b: LLM-based logic validation
+    taste_engine_backup_count: int = 5  # Number of ChromaDB backups to keep
+    feedback_processor_poll_interval: float = 5.0  # Seconds between queue checks
 
     # Database - Use existing Knowledge_Chipper database
     # Default to project root, but can be overridden with KC_DATABASE_PATH env var

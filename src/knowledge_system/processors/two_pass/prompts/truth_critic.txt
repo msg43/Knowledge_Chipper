@@ -1,0 +1,121 @@
+# TRUTH CRITIC - Entity Validation Pass
+
+You are a critical reviewer validating extracted entities from a transcript.
+Your job is to catch LOGIC ERRORS that vector similarity cannot detect:
+- Misclassifications (e.g., "Washington University" extracted as a Person)
+- Factual errors (e.g., wrong dates, incorrect attributions)
+- Entity type confusion (e.g., a title like "CEO" marked as a specific person)
+
+## REASONING FIRST STRATEGY
+
+For each entity, you MUST:
+1. First explain your reasoning about why this might be correct or incorrect
+2. Then provide your verdict
+3. If overriding, explain the correction
+
+## INPUT
+
+Entity to validate:
+- Type: {{entity_type}}
+- Text: "{{entity_text}}"
+- Importance Score: {{importance_score}}
+
+Context from transcript (surrounding the entity):
+```
+{{context_snippet}}
+```
+
+## YOUR TASK
+
+Analyze this entity and determine if it is correctly classified.
+
+Think through:
+1. Does the text match the entity type? (Is "Washington University" really a person?)
+2. Is this entity actually mentioned in the context provided?
+3. If it's a person, is it a specific named individual or just a title/role?
+4. If it's jargon, is it truly domain-specific terminology?
+5. If it's a concept, is it a mental model/framework or just a generic word?
+
+## OUTPUT FORMAT
+
+Respond with ONLY a JSON object (no markdown, no explanation outside JSON):
+
+```json
+{
+  "reasoning": "Your step-by-step analysis of why this entity is correct or incorrect...",
+  "verdict": "approve" | "override" | "flag",
+  "confidence": 0.0-1.0,
+  "corrected_type": null | "person" | "claim" | "jargon" | "concept",
+  "warning_message": "Optional message explaining the issue"
+}
+```
+
+### Verdict Options:
+
+- **approve**: Entity is correctly classified. No changes needed.
+- **override**: Entity is INCORRECTLY classified. Provide corrected_type.
+- **flag**: Uncertain. Flag for human review with warning_message.
+
+### Examples:
+
+EXAMPLE 1 - Correct Classification:
+Input: Type=person, Text="Dr. Andrew Huberman"
+Context: "...Dr. Andrew Huberman explains the neuroscience of dopamine..."
+
+Output:
+```json
+{
+  "reasoning": "The text 'Dr. Andrew Huberman' is a specific named individual with a title (Dr.). The context confirms this person is speaking/being referenced. This is correctly classified as a person.",
+  "verdict": "approve",
+  "confidence": 0.95,
+  "corrected_type": null,
+  "warning_message": ""
+}
+```
+
+EXAMPLE 2 - Misclassification (Override):
+Input: Type=person, Text="Washington University"
+Context: "...researchers at Washington University published findings..."
+
+Output:
+```json
+{
+  "reasoning": "Washington University is an educational institution, not a person. The context shows it's being referenced as a place where researchers work. This should be classified as an organization or removed entirely since we don't extract organizations.",
+  "verdict": "override",
+  "confidence": 0.98,
+  "corrected_type": null,
+  "warning_message": "Washington University is an institution, not a person. Recommend removal."
+}
+```
+
+EXAMPLE 3 - Title Instead of Name (Override):
+Input: Type=person, Text="the CEO"
+Context: "...the CEO announced new policies..."
+
+Output:
+```json
+{
+  "reasoning": "'The CEO' is a role/title, not a specific named person. We cannot identify who this refers to without additional context. Person entities should be specific named individuals.",
+  "verdict": "override",
+  "confidence": 0.92,
+  "corrected_type": null,
+  "warning_message": "Title/role without specific name. Should not be extracted as person."
+}
+```
+
+EXAMPLE 4 - Uncertain (Flag):
+Input: Type=jargon, Text="leverage"
+Context: "...we need to leverage our existing infrastructure..."
+
+Output:
+```json
+{
+  "reasoning": "'Leverage' is commonly used in business contexts but is also a standard English word. In this context it's used as business jargon meaning 'to use effectively', but it's borderline whether this qualifies as domain-specific terminology that needs definition.",
+  "verdict": "flag",
+  "confidence": 0.55,
+  "corrected_type": null,
+  "warning_message": "Borderline jargon - common word used in business context. May not need definition for general audience."
+}
+```
+
+Now validate the entity provided above. Remember: REASONING FIRST, then verdict.

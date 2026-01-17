@@ -25,7 +25,7 @@ Complete inventory of all files in the Knowledge Chipper codebase with descripti
 - `pyrightconfig.json` - Pyright static type checker configuration with strict type checking rules
 - `pytest.ini` - Pytest configuration for main test suite (markers, coverage, warnings)
 - `pytest.ini.gui_testing` - Separate pytest configuration for GUI tests with xvfb support
-- `requirements.txt` - Production Python dependencies with pinned versions
+- `requirements.txt` - Production Python dependencies with pinned versions; **UPDATED (Jan 2026):** Added chromadb>=0.4.0 for Dynamic Learning vector storage
 - `requirements-dev.txt` - Development dependencies (testing, linting, type checking tools)
 
 ### Build and Deployment
@@ -443,17 +443,17 @@ Comprehensive project documentation (128+ files).
 
 - `__init__.py` - Package init with version
 - `main.py` - **ENHANCED (Jan 8, 2026):** Decoupled entry point for PyInstaller compatibility; imports app from app_factory and runs uvicorn with proper settings (reload=False, workers=1, factory=False) and multiprocessing.freeze_support()
-- `app_factory.py` - **NEW (Jan 8, 2026):** FastAPI application factory; creates and configures the app instance independently to prevent circular imports in PyInstaller; includes CORS configuration, lifespan handlers, and all route registration
+- `app_factory.py` - **NEW (Jan 8, 2026):** FastAPI application factory; creates and configures the app instance independently to prevent circular imports in PyInstaller; includes CORS configuration, lifespan handlers, and all route registration; **ENHANCED (Jan 2026):** Integrates FeedbackProcessor start/stop into lifespan for async feedback processing
 
 ### config/
 
 - `__init__.py` - Config module init
-- `settings.py` - **ENHANCED (Dec 27, 2025):** Pydantic-based settings with environment variable support (KC_ prefix); includes processing defaults (whisper_model, llm_provider, auto_upload), config file persistence (save_config/load_config), and device linking status methods (get_device_id, is_device_linked)
+- `settings.py` - **ENHANCED (Dec 27, 2025):** Pydantic-based settings with environment variable support (KC_ prefix); includes processing defaults (whisper_model, llm_provider, auto_upload), config file persistence (save_config/load_config), and device linking status methods (get_device_id, is_device_linked); **ENHANCED (Jan 2026):** Added `DynamicLearningConfig` nested settings for Taste Filter, Truth Critic, ChromaDB (persist_dir, backup_count), and dynamic injection configuration
 
 ### api/
 
 - `__init__.py` - API module init
-- `routes.py` - **ENHANCED (Jan 8, 2026):** REST endpoints: /health, /process, /process/batch, /jobs (with filters), /jobs/{id}, /jobs/{id}/retry, /jobs/{id}/cancel, /jobs/bulk/retry, /jobs/bulk/delete, /config, /config/api-keys, /config/whisper-models, /config/device-status, /monitor/status, /monitor/start, /monitor/stop, /monitor/config, /monitor/events, /monitor/browse, /admin/database (viewer), /admin/database/summary, /admin/database/table/{name}, /updates/check, /updates/install, /updates/status
+- `routes.py` - **ENHANCED (Jan 2026):** REST endpoints: /health, /process, /process/batch, /jobs (with filters), /jobs/{id}, /jobs/{id}/retry, /jobs/{id}/cancel, /jobs/bulk/retry, /jobs/bulk/delete, /config, /config/api-keys, /config/whisper-models, /config/device-status, /config/feedback-reasons (NEW), /monitor/status, /monitor/start, /monitor/stop, /monitor/config, /monitor/events, /monitor/browse, /admin/database (viewer), /admin/database/summary, /admin/database/table/{name}, /updates/check, /updates/install, /updates/status, /feedback/stats (NEW), /feedback/sync (NEW), /feedback/queue-status (NEW)
 - `database_viewer.py` - **NEW (Dec 28, 2025):** Read-only SQLite database viewer service for admin page; provides table browsing, pagination (100 records per load), smart sorting by most recent, and database summary stats
 
 ### models/
@@ -628,14 +628,14 @@ Core orchestration and processing coordination.
 Database models, migrations, and service layer.
 
 - `__init__.py` - Database module initialization
-- `models.py` - SQLAlchemy models for all database tables, defining the comprehensive schema including Question* models and ReviewQueueItem; **UPDATED (Jan 2, 2026):** Added Prediction, PredictionHistory, and PredictionEvidence models for personal forecasting system; **UPDATED (Dec 22, 2025):** Added speaker attribution fields (Claim.speaker, JargonTerm.introduced_by, Concept.advocated_by), added web-based claim merging fields (Claim.cluster_id, Claim.is_canonical_instance), removed Segment.speaker (deprecated)
+- `models.py` - SQLAlchemy models for all database tables, defining the comprehensive schema including Question* models and ReviewQueueItem; **UPDATED (Jan 2026):** Added FeedbackExample and PendingFeedback models for Dynamic Learning system; **UPDATED (Jan 2, 2026):** Added Prediction, PredictionHistory, and PredictionEvidence models for personal forecasting system; **UPDATED (Dec 22, 2025):** Added speaker attribution fields (Claim.speaker, JargonTerm.introduced_by, Concept.advocated_by), added web-based claim merging fields (Claim.cluster_id, Claim.is_canonical_instance), removed Segment.speaker (deprecated)
 - `service.py` - Database service layer with high-level operations including question management methods and prediction CRUD methods (Jan 2, 2026); includes extraction checkpoint methods (Dec 2025) for auth failure recovery persistence
 - `review_queue_service.py` - Service for managing review queue items: load/save/update pending items for bulk review workflow persistence across sessions
 - `claim_store.py` - Claim-centric storage operations; **UPDATED (Dec 22, 2025):** Added _extract_speaker_from_claim_data() method to populate claims.speaker from Pass 1 LLM inference (priority) or segments.speaker (fallback)
 - `speaker_models.py` - Speaker and voice fingerprint models, re-exported from the unified models.py for backward compatibility
 - `system2_models.py` - System 2 processing job and checkpoint models for orchestration and LLM tracking
 - `alembic_migrations.py` - Alembic migration management
-- `apply_hce_migrations.py` - Apply legacy database migrations (deprecated)
+- `apply_hce_migrations.py` - Apply database migrations; **UPDATED (Jan 2026):** Added 2026_01_feedback_system.sql to migration list
 - `migrate_legacy_data.py` - Migrate legacy data to new schema
 - `migrate_to_claim_centric.py` - Migrate to claim-centric architecture
 - `load_wikidata_vocab.py` - Load WikiData vocabulary into database
@@ -680,6 +680,14 @@ SQL migration files for database schema changes.
 - `2025_12_22_review_queue.sql` - Review queue table for bulk review workflow persistence: stores pending/accepted/rejected items across sessions until synced to GetReceipts
 - `add_health_tracking.sql` - **NEW (Jan 2, 2026):** Health tracking system tables (web-canonical pattern): health_interventions, health_metrics, and health_issues tables with privacy_status, sync tracking (synced_to_web, web_id, last_synced_at), Peter Attia categorization framework; local is ephemeral, web is source of truth
 - `add_pdf_transcript_support.sql` - **NEW (Dec 25, 2025):** PDF transcript support: adds quality_score, has_speaker_labels, has_timestamps, source_file_path, extraction_metadata to transcripts table; adds preferred_transcript_id to media_sources for multi-transcript management
+- `2026_01_feedback_system.sql` - **NEW (Jan 2026):** Dynamic Learning feedback system tables: feedback_examples (audit trail for accepted/rejected entities with reason_category and is_golden flag), pending_feedback (async queue for web sync with status tracking)
+
+### DATA/ (January 2026)
+
+Configuration and seed data files for the Dynamic Learning System.
+
+- `feedback_reasons.yaml` - **NEW (Jan 2026):** Configurable feedback reasons hierarchy (entity_type → verdict → reason_key: "Human Label"); supports Claim, Person, Jargon, Concept with cross-entity misclassification reasons; editable without code changes
+- `golden_feedback.json` - **NEW (Jan 2026):** Versioned "golden set" of ~20 starter feedback examples for cold start; auto-ingested on daemon startup if TasteEngine is empty; schema_version field triggers re-ingestion on updates
 
 ### EXAMPLES/
 
@@ -944,18 +952,22 @@ See PROCESSORS/TWO_PASS/ for the active system.
 #### PROCESSORS/TWO_PASS/
 
 **NEW ARCHITECTURE (December 2025):** Two-pass whole-document processing system.
+**ENHANCED (January 2026):** "Sandwich" validation with Taste Filter (Pass 1.5a) and Truth Critic (Pass 1.5b).
 
 - `__init__.py` - Two-pass module initialization and public API exports
-- `pipeline.py` - TwoPassPipeline orchestrator: coordinates extraction → synthesis passes
-- `extraction_pass.py` - Pass 1: Extract and score all entities from complete document in one API call; **ENHANCED (Jan 2026):** automatically injects synced refinements from GetReceipts.org into extraction prompts to prevent previously-identified mistakes (e.g., extracting "US President" as a person instead of actual names)
+- `pipeline.py` - TwoPassPipeline orchestrator: coordinates extraction → taste filter → truth critic → synthesis passes; **ENHANCED (Jan 2026):** integrates Pass 1.5a (TasteFilter) and Pass 1.5b (TruthCritic) with configurable enable flags
+- `extraction_pass.py` - Pass 1: Extract and score all entities from complete document in one API call; **ENHANCED (Jan 2026):** automatically injects synced refinements from GetReceipts.org AND dynamic few-shot examples from TasteEngine based on context aggregate (Tags, Categories, Summaries, Title - excluding Description)
 - `synthesis_pass.py` - Pass 2: Generate world-class long summary from Pass 1 results; **ENHANCED (Jan 2026):** dynamically calculates synthesis length (5 paragraphs to 2 pages) based on content duration and claim density
+- `taste_filter.py` - **NEW (Jan 2026):** Pass 1.5a: Vector-based "Taste Filter" for style validation; auto-discards entities >0.95 similarity to rejected examples, flags 0.80-0.95 as suspicious, boosts >0.95 similarity to accepted examples (+2.0 importance)
+- `truth_critic.py` - **NEW (Jan 2026):** Pass 1.5b: LLM-based "Truth Critic" for logic validation; selectively reviews high-importance entities (≥7.0, max 10/run) for factual accuracy and correct categorization; uses "Reasoning First" prompt strategy with entity-local context extraction
 
 ##### PROCESSORS/TWO_PASS/PROMPTS/
 
-**ACTIVE PROMPTS (2 prompts - this is the current system):**
+**ACTIVE PROMPTS (3 prompts - this is the current system):**
 
 - `extraction_pass.txt` - **ACTIVE:** Pass 1 extraction prompt; processes entire transcripts in one API call; extracts and scores all entities (claims, jargon, people, mental models); includes 6-dimension scoring with weighted formula, speaker inference with confidence, rejection proposals, evidence spans for all entities, and 5 worked examples; replaces 11 old segment-based prompts; enhanced December 2025
 - `synthesis_pass.txt` - **ACTIVE:** Pass 2 synthesis prompt; generates world-class summary from high-importance claims (≥7.0) with flexible length (5 paragraphs to 2 pages based on content complexity); integrates all entity types thematically; uses YouTube AI summary as reference; sophisticated analytical prose with thematic organization; **ENHANCED (Jan 2026):** uses `{synthesis_length}` variable for dynamic length adjustment
+- `truth_critic.txt` - **NEW (Jan 2026):** Pass 1.5b prompt template for Truth Critic; defines "Reasoning First" instructions requiring step-by-step justification before JSON verdict; includes examples for type override, factual error flagging, and approval
 
 #### PROCESSORS/QUESTION_MAPPER/
 
@@ -1008,7 +1020,9 @@ High-level service layer.
 - `podcast_episode_searcher.py` - Search for podcast episodes
 - `podcast_rss_downloader.py` - Download podcast episodes from RSS feeds
 - `prompt_sync.py` - **NEW (Dec 2025):** Syncs approved prompt refinements from GetReceipts.org to local files; refinements are bad_example entries that prevent previously-identified extraction mistakes; **ACTIVE (Jan 2026):** now automatically injected into extraction prompts by extraction_pass.py
-- `entity_sync.py` - **NEW (Jan 2, 2026):** UNIFIED sync service for ALL entity types (NO REDUNDANCY); handles batch sync (extraction: claims/jargon/people/concepts) and individual sync (predictions, health tracking); uses existing GetReceiptsUploader infrastructure; web-canonical pattern with device authentication; convenience methods for health entities (sync_health_intervention, sync_health_metric, sync_health_issue)
+- `entity_sync.py` - **NEW (Jan 2, 2026):** UNIFIED sync service for ALL entity types (NO REDUNDANCY); handles batch sync (extraction: claims/jargon/people/concepts) and individual sync (predictions, health tracking); uses existing GetReceiptsUploader infrastructure; web-canonical pattern with device authentication; convenience methods for health entities (sync_health_intervention, sync_health_metric, sync_health_issue); **UPDATED (Jan 2026):** Added `sync_feedback_from_web()` method for async feedback sync to pending queue
+- `feedback_config.py` - **NEW (Jan 2026):** Singleton configuration loader for entity-specific feedback reasons from `data/feedback_reasons.yaml`; provides `get_reasons(entity_type, verdict)` method for dynamic UI generation and prompt injection; graceful fallback to minimal defaults if config missing
+- `taste_engine.py` - **NEW (Jan 2026):** Core Dynamic Learning component using ChromaDB for semantic feedback storage; handles embedding generation (sentence-transformers all-MiniLM-L6-v2), cold start via versioned golden set, automatic backup on startup (keeps last 5), and similarity queries for Taste Filter and prompt injection; validates reason_category against feedback_config
 - `queue_snapshot_service.py` - Queue snapshot service for pipeline status
 - `session_based_scheduler.py` - Session-based download scheduler for anti-bot; includes authentication failure checkpoint methods (Dec 2025) for save/resume on 401/403/bot detection
 - `speaker_learning_service.py` - Speaker learning and adaptation service
@@ -1100,7 +1114,8 @@ Voice fingerprinting and speaker verification. **DEPRECATED in v4.0.0 - replaced
 
 Background worker processes.
 
-- Background worker implementations for asynchronous processing
+- `__init__.py` - Workers module initialization
+- `feedback_processor.py` - **NEW (Jan 2026):** Background worker for asynchronous feedback processing; polls `pending_feedback` SQLite queue, generates embeddings, and updates ChromaDB; runs as daemon thread with configurable interval; graceful start/stop lifecycle
 
 ---
 
@@ -1118,6 +1133,10 @@ Key test files:
 - `test_multi_profile_scorer.py` - Multi-profile scoring system unit tests (6-dimension validation, profile weights, max-scoring)
 - `test_flagship_evaluator_v2.py` - Flagship evaluator V2 integration tests (dimension processing, backward compatibility)
 - `test_health_tracking.py` - **NEW (Jan 2, 2026):** Health tracking system unit tests: creating interventions/metrics/issues, active toggle, querying by category, filtering active items
+- `test_taste_engine.py` - **NEW (Jan 2026):** TasteEngine unit tests: ChromaDB initialization, embedding generation, feedback storage, similarity queries, golden set loading, backup rotation
+- `test_taste_filter.py` - **NEW (Jan 2026):** TasteFilter integration tests: discard/flag/boost thresholds, entity type filtering, statistics tracking
+- `test_truth_critic.py` - **NEW (Jan 2026):** TruthCritic unit tests: entity selection, context extraction, LLM verdict parsing, type override handling
+- `test_feedback_processor.py` - **NEW (Jan 2026):** FeedbackProcessor integration tests: queue processing, ChromaDB updates, error handling, worker lifecycle
 - `test_question_mapper.py` - Question mapper system tests (14 tests, all passing)
 - `test_database_imports.py` - Database export validation
 - `test_basic.py` - Basic functionality tests

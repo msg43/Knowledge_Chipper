@@ -1,0 +1,146 @@
+{
+  "schema_version": "1.0.0",
+  "description": "Golden set of feedback examples for cold start. These are loaded into the TasteEngine on first startup to ensure vector search works immediately.",
+  "examples": [
+    {
+      "entity_type": "claim",
+      "entity_text": "Money is used to buy things.",
+      "verdict": "reject",
+      "reason_category": "trivial",
+      "user_notes": "Universal knowledge, provides zero value."
+    },
+    {
+      "entity_type": "claim",
+      "entity_text": "People need to eat food to survive.",
+      "verdict": "reject",
+      "reason_category": "trivial",
+      "user_notes": "Basic biological fact known to everyone."
+    },
+    {
+      "entity_type": "claim",
+      "entity_text": "Technology is changing.",
+      "verdict": "reject",
+      "reason_category": "too_vague",
+      "user_notes": "No specific insight, too general to be useful."
+    },
+    {
+      "entity_type": "claim",
+      "entity_text": "There are many factors to consider.",
+      "verdict": "reject",
+      "reason_category": "too_vague",
+      "user_notes": "Empty statement with no concrete information."
+    },
+    {
+      "entity_type": "claim",
+      "entity_text": "Artificial intelligence",
+      "verdict": "reject",
+      "reason_category": "topic_only",
+      "user_notes": "This is a topic, not a claim about anything."
+    },
+    {
+      "entity_type": "claim",
+      "entity_text": "The speaker mentioned that aliens built the pyramids in 3000 BC.",
+      "verdict": "reject",
+      "reason_category": "hallucination",
+      "user_notes": "This was never stated in the transcript."
+    },
+    {
+      "entity_type": "claim",
+      "entity_text": "Dopamine regulates motivation, not pleasure - this is a common misconception in neuroscience.",
+      "verdict": "accept",
+      "reason_category": "novel_insight",
+      "user_notes": "Challenges popular belief with scientific backing."
+    },
+    {
+      "entity_type": "claim",
+      "entity_text": "Compound interest at 7% doubles your money every 10 years (Rule of 72).",
+      "verdict": "accept",
+      "reason_category": "high_utility",
+      "user_notes": "Actionable financial principle with practical application."
+    },
+    {
+      "entity_type": "claim",
+      "entity_text": "The central thesis is that consciousness emerges from integrated information processing.",
+      "verdict": "accept",
+      "reason_category": "core_argument",
+      "user_notes": "Main argument of the discussion, high epistemic value."
+    },
+    {
+      "entity_type": "person",
+      "entity_text": "the CEO",
+      "verdict": "reject",
+      "reason_category": "title_role",
+      "user_notes": "Role/title without specific identity."
+    },
+    {
+      "entity_type": "person",
+      "entity_text": "US President",
+      "verdict": "reject",
+      "reason_category": "title_role",
+      "user_notes": "Title, not a specific named person."
+    },
+    {
+      "entity_type": "person",
+      "entity_text": "the research team",
+      "verdict": "reject",
+      "reason_category": "group_org",
+      "user_notes": "Group reference, not an individual person."
+    },
+    {
+      "entity_type": "person",
+      "entity_text": "investors",
+      "verdict": "reject",
+      "reason_category": "common_noun",
+      "user_notes": "Generic category of people, not a specific person."
+    },
+    {
+      "entity_type": "person",
+      "entity_text": "Andrew Huberman",
+      "verdict": "accept",
+      "reason_category": "key_speaker",
+      "user_notes": "Named host of the podcast."
+    },
+    {
+      "entity_type": "person",
+      "entity_text": "Dr. Robert Sapolsky",
+      "verdict": "accept",
+      "reason_category": "cited_expert",
+      "user_notes": "Named expert cited for authority on topic."
+    },
+    {
+      "entity_type": "jargon",
+      "entity_text": "important",
+      "verdict": "reject",
+      "reason_category": "common_word",
+      "user_notes": "Common English word, not domain-specific terminology."
+    },
+    {
+      "entity_type": "jargon",
+      "entity_text": "Google",
+      "verdict": "reject",
+      "reason_category": "proper_noun",
+      "user_notes": "Company name, not a technical term."
+    },
+    {
+      "entity_type": "jargon",
+      "entity_text": "neuroplasticity",
+      "verdict": "accept",
+      "reason_category": "domain_term",
+      "user_notes": "Neuroscience term requiring definition for general audience."
+    },
+    {
+      "entity_type": "concept",
+      "entity_text": "things",
+      "verdict": "reject",
+      "reason_category": "generic",
+      "user_notes": "Too generic to be a meaningful concept."
+    },
+    {
+      "entity_type": "concept",
+      "entity_text": "Second-order thinking",
+      "verdict": "accept",
+      "reason_category": "framework",
+      "user_notes": "Mental model for decision-making."
+    }
+  ]
+}

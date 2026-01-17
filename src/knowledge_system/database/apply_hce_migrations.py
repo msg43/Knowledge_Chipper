@@ -49,6 +49,7 @@ def main():
         "2025_08_18_hce_compat.sql",
         "2025_08_18_hce_columns.sql",
         "2025_12_20_claims_first_support.sql",  # Claims-first architecture support
+        "2026_01_feedback_system.sql",  # Dynamic Learning System feedback tables
     ]
 
     success = True
