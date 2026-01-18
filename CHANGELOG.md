@@ -4,6 +4,72 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed - MAJOR CODEBASE CLEANUP (January 17, 2026)
+
+**Comprehensive cleanup removing 177 files (66,563 lines, 2.2MB) and deprecated dependencies.**
+
+#### Files Deleted
+
+**_deprecated/ Directory (131 files)**
+- All PyQt6 GUI components, tabs, dialogs, workers
+- Layer cake GUI implementation  
+- Old extractors and prompts
+- GUI-related documentation
+
+**Deprecated Processing Systems (46 files)**
+- `processors/hce/` - Legacy HCE extraction system (33 files)
+- `processors/question_mapper/` - Question mapper system (10 files, GUI-only feature)
+- `voice/` - Voice fingerprinting system (1 file)
+- `core/segment_processor.py` - Segment processor (replaced by two-pass)
+- `core/system2_orchestrator.py` - Old orchestrator (replaced by two-pass version)
+
+**Experimental/Unused Code (4 files)**
+- `dual_summary_processor.py` - Never completed experimental feature
+- `compare_youtube_summaries.py` - Test script for dual summary
+- Stub proxy providers: anyip, brightdata, gonzoproxy, oxylabs (never implemented)
+
+#### Dependencies Removed
+
+**From pyproject.toml:**
+- Streamlit and streamlit-option-menu (deprecated web UI)
+- PyQt6 extras group (GUI deprecated)
+- Diarization extras group (torch, transformers, pyannote.audio - replaced by claims-first)
+- HCE extras group (sentence-transformers - replaced by two-pass)
+- Full extras group now only includes [cuda]
+
+**Impact:** Reduced from 206 to ~34 direct dependencies (68% reduction)
+
+#### TODO Markers Addressed (23 markers)
+
+- 12 markers deleted with deprecated code (HCE, segment processor, proxy stubs)
+- 8 markers removed as punted future enhancements (non-critical)
+- 3 markers deleted with experimental code (dual_summary, old orchestrator, question_mapper)
+- See `TODO_MARKERS_MEMORIAL.md` for complete analysis
+
+#### Code Quality Improvements
+
+- Removed unused Netscape cookie parser method from browser_cookie_manager.py
+- Cleaned up TODO comments in active code
+- Removed unreachable code and unused imports (per vulture analysis)
+
+#### Architecture Clarification
+
+This cleanup enforces the **daemon-only architecture**:
+- **KEEP:** daemon/, installer/, core processing, services, database, utils
+- **REMOVED:** All GUI code, desktop-specific utilities, legacy pipelines
+
+#### Breaking Changes
+
+- GUI entry points removed from pyproject.toml
+- Optional dependencies reduced to [cuda] only
+- Question mapper system removed (was GUI-only feature)
+
+#### Documentation Added
+
+- `TODO_MARKERS_MEMORIAL.md` - Historical record of addressed TODO markers
+- `CLEANUP_ANALYSIS_REPORT.md` - Vulture and depcheck analysis results
+- Comprehensive MANIFEST.md rewrite reflecting daemon-only architecture
+
 ### Fixed
 - **PKG Installer Desktop Shortcut** (`installer/scripts/postinstall`, `installer/build_pkg.sh`): Fixed PKG installer to create proper desktop control app
   - Postinstall script now calls `create_desktop_shortcut.sh` instead of creating basic `.command` file
