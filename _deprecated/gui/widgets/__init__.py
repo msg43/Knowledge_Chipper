@@ -1,1 +1,0 @@
-"""GUI widgets for the Knowledge System."""

@@ -618,8 +618,7 @@ Now analyze this claim:
 
             if similarity_diff < 0.1:  # Too close to call
                 # Use LLM to choose between top candidates
-                # Note: Passing None for llm_generate_func will skip this (for now)
-                # TODO: Implement LLM tiebreaker when needed
+                # Note: Passing None for llm_generate_func will skip this
                 logger.info(
                     f"Close call: top candidates within 0.1 similarity "
                     f"({candidates[0]['category_name']} vs {candidates[1]['category_name']})"

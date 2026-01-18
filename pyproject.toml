@@ -38,10 +38,6 @@ dependencies = [
     "loguru>=0.7.0",
     "rich>=13.0.0",
 
-    # Web UI
-    "streamlit>=1.28.0",
-    "streamlit-option-menu>=0.3.0",
-
     # File processing
     "watchdog>=3.0.0",
     "pypdf2>=3.0.0",
@@ -89,43 +85,18 @@ dev = [
     "twine>=4.0.0",
 ]
 
-# GUI extras deprecated - daemon is now controlled via web interface
-# Kept for backwards compatibility only (will be removed in future version)
-gui = [
-    # PyQt6>=6.9.0  # DEPRECATED - No longer needed
-]
-
 cuda = [
     "nvidia-ml-py>=12.550.0",  # pynvml for detailed GPU info
 ]
 
-# Lazy-loaded diarization dependencies (saves ~377MB initial install)
-diarization = [
-    "torch>=2.1.0",
-    "transformers>=4.35.0",
-    "pyannote.audio>=4.0.1",  # v4.0+ fixes Python 3.13 syntax warnings, 4.0.1 adds community-1 model
-    "pyannote-whisper @ git+https://github.com/yinruiqing/pyannote-whisper.git",  # Battle-tested word-driven alignment
-    # NOTE: Do NOT install torchcodec - it segfaults with PyTorch 2.8.0
-    "huggingface_hub>=0.20.0",  # Required for model downloads
-    "librosa>=0.10.0",  # Required for voice fingerprinting
-]
-
-# HCE (Hybrid Claim Extractor) heavy ML dependencies (saves ~500MB initial install)
-hce = [
-    "torch>=2.1.0",
-    "transformers>=4.35.0",
-    "sentence-transformers>=2.2.0",
-]
-
 # Full installation including all optional features
 full = [
-    "knowledge-system[gui,diarization,hce,cuda]",
+    "knowledge-system[cuda]",
 ]
 
 [project.scripts]
-# Desktop GUI deprecated - daemon is now controlled via web interface
-# Entry points removed (daemon runs via LaunchAgent, controlled at GetReceipts.org)
-# Legacy: knowledge-chipper = "knowledge_system.gui:main" (DEPRECATED)
+# Daemon runs via LaunchAgent, controlled at GetReceipts.org
+# No CLI entry points needed
 
 [project.urls]
 "Homepage" = "https://github.com/msg43/skipthepodcast.com"

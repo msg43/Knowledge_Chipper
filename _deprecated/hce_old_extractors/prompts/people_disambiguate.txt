@@ -1,2 +1,0 @@
-Given a name surface and minimal context, provide canonical identity if reasonably certain.
-Return JSON: normalized, external_ids{wikipedia?, website?}. Otherwise normalized:null.

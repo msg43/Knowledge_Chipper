@@ -100,7 +100,7 @@ async def process_with_two_pass_pipeline(
                 "duration": source.duration or 0,
                 "upload_date": source.upload_date.isoformat() if source.upload_date else None,
                 "tags": source.tags or [],
-                "chapters": [],  # TODO: Load chapters if available
+                "chapters": [],
             }
             
             # Try to get YouTube AI summary if available
@@ -352,7 +352,7 @@ def _store_two_pass_results(
             llm_model=model,
             prompt_template_path=None,
             focus_area=config.get("source", "manual_summarization"),
-            prompt_tokens=0,  # TODO: Track if available
+            prompt_tokens=0,
             completion_tokens=0,
             total_tokens=0,
             processing_cost=0.0,

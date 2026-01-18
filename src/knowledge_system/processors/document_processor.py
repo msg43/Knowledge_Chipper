@@ -307,14 +307,14 @@ class DocumentProcessor(BaseProcessor):
                     description=metadata.abstract,
                     author=", ".join(metadata.authors) if metadata.authors else None,
                     organization=metadata.organization,
-                    language="en",  # TODO: Detect language
+                    language="en",
                 )
 
             # Create transcript record with full text
             transcript_record = db.create_transcript(
                 source_id=source_id,
                 text=text,
-                language="en",  # TODO: Detect language
+                language="en",
                 source="document",
                 metadata={
                     "word_count": len(text.split()),

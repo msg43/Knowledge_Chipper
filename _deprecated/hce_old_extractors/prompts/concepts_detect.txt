@@ -1,2 +1,0 @@
-Detect explicit or implicit mental models.
-Return JSON list: name, aliases[], definition (1–2 sentences), t0, t1, evidence[] (verbatim quotes).

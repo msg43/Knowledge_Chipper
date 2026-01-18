@@ -133,14 +133,6 @@ class BrowserCookieManager:
         
         return playwright_cookies
     
-    def _load_cookie_file_for_playwright(self, cookie_file: str) -> List[Dict[str, Any]]:
-        """Load cookies from Netscape format file and convert to Playwright."""
-        # For now, just log that we got a cookie file
-        # This would need full Netscape cookie file parsing
-        logger.info(f"Cookie file provided: {cookie_file}")
-        # TODO: Implement Netscape cookie file parsing if needed
-        return []
-    
     def _validate_playwright_cookie(self, cookie: Dict[str, Any]) -> None:
         """
         Validate a cookie dict before passing to Playwright.

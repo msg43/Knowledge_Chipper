@@ -216,9 +216,7 @@ class ClaimEvolutionDetector:
         if not new_claim or not old_claim:
             return False
         
-        # Simple heuristic-based check for now
-        # TODO: Integrate with existing LLM adapter for more sophisticated detection
-        
+        # Simple heuristic-based check using negation patterns
         # Check for negation patterns
         negations = [
             'not', 'never', 'no longer', 'opposite', 'contrary', 
