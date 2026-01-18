@@ -50,6 +50,16 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Auto-update scheduler failed to start (non-critical): {e}")
     
+    # Start feedback sync scheduler
+    feedback_sync_scheduler = None
+    try:
+        from daemon.services.feedback_sync_service import get_feedback_sync_scheduler
+        feedback_sync_scheduler = get_feedback_sync_scheduler(settings)
+        await feedback_sync_scheduler.start()
+        logger.info("Feedback sync scheduler enabled (syncs every 24 hours)")
+    except Exception as e:
+        logger.warning(f"Feedback sync scheduler failed to start (non-critical): {e}")
+    
     # Start feedback processor (Dynamic Learning System)
     feedback_processor = None
     try:
@@ -70,12 +80,30 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"TasteEngine initialization failed (non-critical): {e}")
     
+    # Sync shared feedback from GetReceipts.org on startup
+    try:
+        from daemon.services.feedback_sync_service import FeedbackSyncService
+        import asyncio
+        
+        sync_service = FeedbackSyncService(settings)
+        if sync_service.should_sync():
+            logger.info("Triggering feedback sync on startup (>24h since last sync)...")
+            asyncio.create_task(sync_service.sync_feedback())
+        else:
+            logger.info("Skipping feedback sync (synced recently)")
+    except Exception as e:
+        logger.warning(f"Feedback sync on startup failed (non-critical): {e}")
+    
     yield  # Application runs
     
     # Shutdown
     if update_scheduler:
         await update_scheduler.stop()
         logger.info("Auto-update scheduler stopped")
+    
+    if feedback_sync_scheduler:
+        await feedback_sync_scheduler.stop()
+        logger.info("Feedback sync scheduler stopped")
     
     # Stop feedback processor
     if feedback_processor:

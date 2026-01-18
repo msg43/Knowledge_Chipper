@@ -1724,19 +1724,50 @@ async def sync_feedback():
     """
     Trigger feedback sync from GetReceipts.org.
     
-    Fetches new feedback from web and queues for async processing.
-    Does NOT block on embedding calculation.
+    Downloads Matt's shared feedback (is_shared=TRUE) and loads into local TasteEngine.
+    This runs asynchronously and returns immediately.
     """
     try:
-        from src.knowledge_system.services.entity_sync import get_entity_sync_service
+        from daemon.services.feedback_sync_service import FeedbackSyncService
+        import asyncio
         
-        sync_service = get_entity_sync_service()
-        result = sync_service.sync_feedback_from_web()
+        sync_service = FeedbackSyncService(settings)
         
-        return result
+        # Run sync in background
+        asyncio.create_task(sync_service.sync_feedback())
+        
+        return {
+            "status": "started",
+            "message": "Feedback sync started in background"
+        }
     
     except Exception as e:
         logger.exception("Failed to sync feedback")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/feedback/sync-status")
+async def get_feedback_sync_status():
+    """
+    Get status of last feedback sync.
+    
+    Returns when the last sync occurred and whether it's time to sync again.
+    """
+    try:
+        from daemon.services.feedback_sync_service import FeedbackSyncService, SYNC_INTERVAL_HOURS
+        
+        sync_service = FeedbackSyncService(settings)
+        last_sync = sync_service._get_last_sync_timestamp()
+        should_sync = sync_service.should_sync()
+        
+        return {
+            "last_sync": last_sync.isoformat() if last_sync else None,
+            "should_sync": should_sync,
+            "sync_interval_hours": SYNC_INTERVAL_HOURS
+        }
+    
+    except Exception as e:
+        logger.exception("Failed to get sync status")
         raise HTTPException(status_code=500, detail=str(e))
 
 
