@@ -4,6 +4,77 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added - SHARED TASTE MODEL DISTRIBUTION (January 18, 2026)
+
+**Implemented system for distributing Matt's curated taste model to all users via daemon updates.**
+
+#### Daemon Changes (Knowledge_Chipper)
+
+**New Files:**
+- `daemon/services/feedback_sync_service.py` - Complete feedback sync service with scheduler
+  - `FeedbackSyncService` class downloads shared feedback from GetReceipts.org API
+  - Incremental sync support using `since` parameter (only fetches new feedback)
+  - Duplicate detection prevents re-adding existing examples to TasteEngine
+  - Persistent last sync timestamp tracking in Application Support
+  - `FeedbackSyncScheduler` class for periodic background syncs (every 24 hours)
+  - Global singleton instances for service and scheduler
+
+**Modified Files:**
+- `daemon/api/routes.py` - Updated feedback sync endpoints
+  - `POST /feedback/sync` - Trigger manual sync (runs in background, non-blocking)
+  - `GET /feedback/sync-status` - Check last sync time and whether sync is needed
+  - Now uses new `FeedbackSyncService` instead of old entity_sync service
+- `daemon/app_factory.py` - Integrated feedback sync into daemon lifecycle
+  - Automatic sync on daemon startup (if >24h since last sync)
+  - Periodic background sync scheduler (every 24 hours)
+  - Proper startup and shutdown lifecycle management
+  - Non-blocking async execution with graceful error handling
+
+#### Web Changes (GetReceipts)
+
+**Modified Files:**
+- `src/app/api/feedback/route.ts` - Conditional feedback sharing based on user role
+  - Matt's feedback (Matt@rainfall.llc) → `is_shared=TRUE` → synced to all daemons
+  - Regular user feedback → `is_shared=FALSE` → stored privately for future review
+  - Enables selective incorporation of user feedback by curator
+- `src/db/schema.ts` - Added entityFeedback table definition for Drizzle ORM
+  - Matches existing Supabase migration (104_entity_feedback.sql)
+  - Includes all fields: entity_type, entity_text, verdict, reason_key, is_shared, synced_at
+
+#### Architecture
+
+**Hybrid Distribution Model:**
+1. **Golden Set** - 20 static examples bundled with daemon (cold start protection)
+2. **Dynamic Sync** - Matt's curated feedback synced from GetReceipts.org
+3. **User Feedback** - Stored separately in Supabase for future selective incorporation
+
+**Data Flow:**
+- Matt reviews entities on GetReceipts.org → Accept/Reject → `is_shared=TRUE`
+- Daemon syncs via `/api/feedback/sync` → Loads into TasteEngine (ChromaDB)
+- Users get Matt's latest taste model automatically (no cold start)
+- User feedback stored privately for Matt to review and selectively incorporate
+
+#### Key Features
+
+- **Daily Automatic Sync**: Every 24 hours + on daemon startup if needed
+- **Incremental Updates**: Only fetches new feedback after last sync timestamp
+- **Role-Based Sharing**: Only curator's feedback is shared with all users
+- **Non-Blocking Operations**: All sync operations run asynchronously
+- **Duplicate Detection**: TasteEngine checks before adding to prevent bloat
+- **Graceful Degradation**: Sync failures don't crash daemon (logged as warnings)
+
+#### Documentation
+
+**New Files:**
+- `SHARED_TASTE_MODEL_IMPLEMENTATION.md` - Complete implementation details, testing checklist, and next steps
+
+#### Impact
+
+- Users now receive curator's latest taste model automatically via daemon updates
+- No more cold starts - all users benefit from accumulated learning
+- User feedback preserved for future analysis and selective incorporation
+- Continuous improvement of extraction quality across all users
+
 ### Changed - MAJOR CODEBASE CLEANUP (January 17, 2026)
 
 **Comprehensive cleanup removing 177 files (66,563 lines, 2.2MB) and deprecated dependencies.**

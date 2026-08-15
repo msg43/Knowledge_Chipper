@@ -302,3 +302,7 @@ config/packetstream.yaml
 
 # Staging area for files to delete
 _to_delete/
+
+# SQLite runtime sidecars — never meaningful to commit
+*.db-wal
+*.db-shm

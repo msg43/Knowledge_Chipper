@@ -2,8 +2,8 @@
 
 **Complete inventory of all files in the Knowledge_Chipper daemon codebase**
 
-**Last Updated:** January 17, 2026  
-**Version:** 4.1.0 (Daemon-Only Architecture)  
+**Last Updated:** January 18, 2026  
+**Version:** 4.1.0 (Daemon-Only Architecture + Shared Taste Model)  
 **Architecture:** Web-first with local daemon processing
 
 ---
@@ -78,6 +78,7 @@ Knowledge_Chipper is a **macOS daemon** that transforms videos, audio, and docum
 
 - `TODO_MARKERS_MEMORIAL.md` - **NEW (Jan 17, 2026):** Historical record of 23 TODO markers addressed during cleanup
 - `CLEANUP_ANALYSIS_REPORT.md` - **NEW (Jan 17, 2026):** Analysis report from vulture and depcheck scans
+- `SHARED_TASTE_MODEL_IMPLEMENTATION.md` - **NEW (Jan 18, 2026):** Shared taste model distribution implementation details
 - `CHANGELOG.md` - Chronological record of all changes
 - `CLAUDE.md` - Guidance for Claude Code AI assistant
 - `LICENSE` - MIT License
@@ -113,7 +114,7 @@ Over 100 documentation files covering historical features, bug fixes, and archit
 
 - `__init__.py` - Package init with version
 - `main.py` - **Entry point** for PyInstaller (imports app from app_factory)
-- `app_factory.py` - **FastAPI application factory** (CORS, lifespan, routes, FeedbackProcessor integration)
+- `app_factory.py` - **FastAPI application factory** (CORS, lifespan, routes, FeedbackProcessor integration, FeedbackSyncScheduler integration)
 
 ### config/
 
@@ -123,7 +124,7 @@ Over 100 documentation files covering historical features, bug fixes, and archit
 ### api/
 
 - `__init__.py` - API module init
-- `routes.py` - **REST endpoints** (/health, /process, /jobs, /config, /monitor, /admin, /updates, /feedback)
+- `routes.py` - **REST endpoints** (/health, /process, /jobs, /config, /monitor, /admin, /updates, /feedback, /feedback/sync, /feedback/sync-status)
 - `database_viewer.py` - Read-only SQLite database viewer for admin page
 
 ### models/
@@ -143,6 +144,13 @@ Over 100 documentation files covering historical features, bug fixes, and archit
 - `youtube_matcher.py` - YouTube search and video matching
 - `simple_llm_wrapper.py` - Synchronous LLM wrapper for TwoPassPipeline
 - `api_key_store.py` - **NEW (Jan 12, 2026):** Module-level API key storage for daemon
+- `feedback_sync_service.py` - **NEW (Jan 18, 2026):** Shared taste model distribution service
+  - `FeedbackSyncService` class downloads Matt's curated feedback from GetReceipts.org
+  - Incremental sync with `since` parameter (only fetches new feedback)
+  - Duplicate detection prevents re-adding existing examples
+  - Persistent last sync timestamp tracking
+  - `FeedbackSyncScheduler` class for periodic background syncs (every 24 hours)
+  - Global singleton instances for service and scheduler
 
 ---
 
