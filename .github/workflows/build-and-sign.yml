@@ -207,7 +207,7 @@ jobs:
         echo "🎉 Successfully created signed and notarized package: dist/KnowledgeChipper-$VERSION.pkg"
 
     - name: Upload signed PKG as artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v5
       with:
         name: signed-pkg-${{ steps.version.outputs.VERSION }}
         path: dist/KnowledgeChipper-${{ steps.version.outputs.VERSION }}.pkg
