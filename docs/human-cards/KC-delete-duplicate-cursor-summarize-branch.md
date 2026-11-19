@@ -13,10 +13,10 @@ order: 64
 flag: null
 added: null          # not recorded (the page has no added date)
 updated: "2026-10-27"
-verified_on: "2026-11-16"
-verified_by: "agent:verification-run-2026-11-16"
+verified_on: "2026-11-19"
+verified_by: "agent:checklist-refresh-2026-11-19"
 verified_result: "current"
-verified_against: {"GTTP": {"local": "2d1bb776", "remote": "b76f4570"}, "KC": {"local": "a38e3d04", "remote": "de7009b7"}}
+verified_against: {"KC": {"local": "dda7e142", "remote": "f353146e"}}
 owner_repo: "KC"
 home_repo: "KC"
 cross_repo: []
