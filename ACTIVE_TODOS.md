@@ -1,3 +1,5 @@
+> Historical, not current status. Current status: GAMEPLAN.md.
+
 # Active TODOs - Knowledge Chipper
 
 **Last Updated:** October 27, 2025

@@ -1,3 +1,5 @@
+> Historical, not current status. Current status: GAMEPLAN.md.
+
 # Current Architecture Status - ACTUAL CODE PATHS
 
 **Date:** December 22, 2025  

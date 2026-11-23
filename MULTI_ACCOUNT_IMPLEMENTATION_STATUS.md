@@ -1,3 +1,5 @@
+> Historical, not current status. Current status: GAMEPLAN.md.
+
 # Multi-Account Implementation Status
 
 **Date**: October 27, 2025  

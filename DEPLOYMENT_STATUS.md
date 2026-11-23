@@ -1,3 +1,5 @@
+> Historical, not current status. Current status: GAMEPLAN.md.
+
 # 🚀 Deployment Status
 
 **Date:** November 21, 2025, 9:38 PM

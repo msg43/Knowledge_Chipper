@@ -1,3 +1,5 @@
+> Historical, not current status. Current status: GAMEPLAN.md.
+
 # Final Integration Status - Multi-Account Downloads
 
 **Date**: October 27, 2025  
