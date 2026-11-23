@@ -6,7 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added - GAMEPLAN.md and documentation corrections (November 23, 2026)
 
-`GAMEPLAN.md` is now the single status document, as `CLAUDE.md` has said since de7009b. `CLAUDE.md` now matches the repo (daemon only, no README.md to sync, `.cursor/` is gitignored). Five root status files (`ACTIVE_TODOS.md`, `CURRENT_ARCHITECTURE_STATUS.md`, `DEPLOYMENT_STATUS.md`, `FINAL_INTEGRATION_STATUS.md`, `MULTI_ACCOUNT_IMPLEMENTATION_STATUS.md`) carry a "historical, not current status" banner. The closed checklist card for the duplicate-branch cleanup was re-verified and now lists its evidence.
+`GAMEPLAN.md` is now the single status document, as `CLAUDE.md` has said since de7009b. `CLAUDE.md` now matches the repo (daemon only, no README.md to sync, `.cursor/` is gitignored). Five root status files (`ACTIVE_TODOS.md`, `CURRENT_ARCHITECTURE_STATUS.md`, `DEPLOYMENT_STATUS.md`, `FINAL_INTEGRATION_STATUS.md`, `MULTI_ACCOUNT_IMPLEMENTATION_STATUS.md`) carry a "historical, not current status" banner. The closed checklist card for the duplicate-branch cleanup was re-verified and now lists its evidence. A line reference in `GAMEPLAN.md` that had gone stale now names the changelog entry it points to.
 
 ### Added - Human checklist cards for this repo (November 16 and 19, 2026)
 

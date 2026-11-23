@@ -26,7 +26,7 @@ Version 4.1.0 (pyproject.toml:7). yt-dlp is pinned at 2025.11.12 and needs the D
 ## Decisions taken
 
 - 2026-01-11 Desktop GUI deprecated, daemon only (DESKTOP_APP_DEPRECATION.md).
-- 2026-01-11 Legacy HCE (Hybrid Claim Extraction), diarization and model bundling removed from the build (CHANGELOG.md:542).
+- 2026-01-11 Legacy HCE (Hybrid Claim Extraction), diarization and model bundling removed from the build (CHANGELOG.md, entry "Removed Legacy HCE, Diarization, and Model Bundling (January 11, 2026)", line 562 on 2026-11-23).
 - 2026-10-26 Duplicate local branch `cursor/summarize-large-documents-beyond-context-window-fabe` deleted after a verified bundle backup; the GitHub copy was left (`docs/human-cards/KC-delete-duplicate-cursor-summarize-branch.md`).
 
 ## Where to look
