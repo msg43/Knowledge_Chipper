@@ -1,15 +1,15 @@
 # Knowledge_Chipper
 
-Skipthepodcast.com (formerly Knowledge_Chipper) is a macOS PyQt6 desktop app that turns videos, audio and documents into a searchable database of claims. The CLI was removed; the GUI is the only interface. Commands are in the Makefile (`make help`).
+Skipthepodcast.com (formerly Knowledge_Chipper) is a macOS background daemon that turns videos, audio and documents into claims uploaded to GetReceipts.org. The CLI was removed in October 2025 and the PyQt6 desktop app in January 2026 (`DESKTOP_APP_DEPRECATION.md`); `daemon/` is the only product. Commands are in the Makefile (`make help`).
 
 ## Constraints
 
 - **Claims are the primary record.** Write "claims attributed to a source", never "a source contains claims". Queries start from `claims` and JOIN `media_sources` for context. Details: `.cursor/rules/claim-centric-architecture.mdc`.
 - **The database is the source of truth, not files.** Output files are regenerated from it. Look up metadata in the database, never by parsing filenames.
 - **No graceful fallbacks.** Before adding a fallback or suppressing a warning, ask the owner. Fix the root cause instead of masking it. (`.cursor/rules/no-graceful-fallback.mdc` has no body, so this line is the only copy of the rule.)
-- **The version lives only in `pyproject.toml`.** Bump it before significant changes with `python3 scripts/bump_version.py --part patch|minor|major`, then run `bash scripts/update_build_date.sh` to sync README.md.
+- **The version lives only in `pyproject.toml`.** Bump it before significant changes with `python3 scripts/bump_version.py --part patch|minor|major`. (`scripts/update_build_date.sh` targets README.md, which no longer exists; skip it.)
 - **yt-dlp is pinned in `pyproject.toml`**, and the pinned version needs the Deno runtime (bundled into the DMG by `scripts/silent_deno_installer.py`). Change the pin only by following `docs/YT_DLP_UPGRADE_PROCEDURE.md`.
-- The other Cursor rules in `.cursor/rules/` are not loaded automatically. Read the relevant one before touching that area, for example `hce-workflow.mdc` for the legacy-to-HCE (Hybrid Claim Extraction) cut-over.
+- The other Cursor rules in `.cursor/rules/` are not loaded automatically. Read the relevant one before touching that area, for example `hce-workflow.mdc` for the legacy-to-HCE (Hybrid Claim Extraction) cut-over. (`.cursor/` is gitignored, so these rule files exist only on Matt's machine, not in a clone.)
 
 ## Gotchas
 
