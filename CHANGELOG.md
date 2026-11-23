@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added - GAMEPLAN.md and documentation corrections (November 23, 2026)
+
+`GAMEPLAN.md` is now the single status document, as `CLAUDE.md` has said since de7009b. `CLAUDE.md` now matches the repo (daemon only, no README.md to sync, `.cursor/` is gitignored). Five root status files (`ACTIVE_TODOS.md`, `CURRENT_ARCHITECTURE_STATUS.md`, `DEPLOYMENT_STATUS.md`, `FINAL_INTEGRATION_STATUS.md`, `MULTI_ACCOUNT_IMPLEMENTATION_STATUS.md`) carry a "historical, not current status" banner. The closed checklist card for the duplicate-branch cleanup was re-verified and now lists its evidence.
+
+### Added - Human checklist cards for this repo (November 16 and 19, 2026)
+
+Commits f353146 and 8623ca7 add and refresh `docs/human-cards/KC-delete-duplicate-cursor-summarize-branch.md`. Other cards for this repo are kept privately. Format: `docs/CARD-SPEC.md` in the checklist tooling.
+
+### Changed - CLAUDE.md cold-start rules (November 10, 2026)
+
+Commit de7009b adds the GAMEPLAN.md, changelog-size and recovery rules to `CLAUDE.md`. `GAMEPLAN.md` itself landed on November 23, 2026 (entry above).
+
+### Changed - CLAUDE.md slimmed (October 3, 2026)
+
+Commit a38e3d0 slims `CLAUDE.md` to what the repo cannot show (13 insertions, 306 deletions).
+
+### Added - API contract audit and obsolete-code reports (January 18, 2026)
+
+Commit 0bb3de8 adds `API_CONTRACT_AUDIT.md` and `OBSOLETE_CODE_REPORT.md` beside the shared-taste-model code logged below.
+
 ### Added - SHARED TASTE MODEL DISTRIBUTION (January 18, 2026)
 
 **Implemented system for distributing Matt's curated taste model to all users via daemon updates.**
