@@ -12,7 +12,7 @@
 ```
 PacketStream credentials available: True
 PacketStream username: msg43
-PacketStream proxy URL: http://msg43:TnVrSqzHMKp9Ol7S@proxy.packetstream.io:31112
+PacketStream proxy URL: http://msg43:<your-packetstream-auth-key>@proxy.packetstream.io:31112
 ```
 
 ### 2. Playlist Expansion with PacketStream ✅

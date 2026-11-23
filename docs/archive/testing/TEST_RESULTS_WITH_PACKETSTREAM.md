@@ -112,11 +112,11 @@ Three new System 2 tests were included in this run:
 ```bash
 # Test PacketStream proxy directly
 curl --proxy proxy.packetstream.io:31112 \
-     --proxy-user msg43:TnVrSqzHMKp9Ol7S \
+     --proxy-user msg43:<your-packetstream-auth-key> \
      https://www.youtube.com/watch?v=VIDEO_ID
 
 # Test yt-dlp with proxy
-yt-dlp --proxy socks5://msg43:TnVrSqzHMKp9Ol7S@proxy.packetstream.io:31113 \
+yt-dlp --proxy socks5://msg43:<your-packetstream-auth-key>@proxy.packetstream.io:31113 \
        VIDEO_URL
 ```
 

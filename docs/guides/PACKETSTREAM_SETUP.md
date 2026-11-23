@@ -62,7 +62,7 @@ If the YAML config isn't being loaded, you can set environment variables:
 
 ```bash
 export PACKETSTREAM_USERNAME="msg43"
-export PACKETSTREAM_AUTH_KEY="TnVrSqzHMKp9Ol7S"
+export PACKETSTREAM_AUTH_KEY="<your-packetstream-auth-key>"
 ```
 
 ---
