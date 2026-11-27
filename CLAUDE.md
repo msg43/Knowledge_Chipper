@@ -38,6 +38,24 @@ A new session should get the project's direction from `GAMEPLAN.md` for a few th
 
 **Size check:** if the file is past about 200 lines or 30K tokens, archive per the test above before doing anything else. Each time you archive, read what you removed once and confirm nothing that still shapes future work went with it.
 
+### Decisions file and GAMEPLAN size limit
+
+- **`docs/decisions.md`** holds every decision in full: date, who decided,
+  the decision, the reason and what was built, newest first. Write the
+  entry in the same change the decision is made. Never trim it; a reversed
+  decision keeps its entry and gains a line naming the later one. Search
+  it before reopening a settled question.
+- **`GAMEPLAN.md`** keeps one line per decision still shaping work,
+  pointing to that file, and stays under 30,000 characters
+  (`wc -m GAMEPLAN.md`). Past that, archive by this test before anything
+  else: what still shapes future work (strategy, constraints, a decision's
+  reason, an unresolved item, a pitfall that could recur) stays; finished
+  work, evidence and superseded material move to `CHANGELOG.md` or
+  `docs/archive/`. Reread what you removed once.
+- **`CHANGELOG.md`** entries are about five lines; the file is never
+  trimmed. Read only the top of it and of `docs/decisions.md`, and grep
+  the rest.
+
 # Keep sessions cheap to start and to run
 
 Every turn re-reads the whole conversation, so a session that starts small and stays small costs far less.
